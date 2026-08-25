@@ -22,8 +22,10 @@ export function createServer() {
         'http://127.0.0.1:5175'
       ];
       
-      // Verifica se a origem está na lista de permitidas
-      if (allowedOrigins.includes(origin) || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      // Verifica se a origem está na lista de permitidas (comparação exata,
+      // nunca por substring — "evil.com/?127.0.0.1" ou "mylocalhost.io" não
+      // podem ser aceitos só por conterem esses trechos na string da origem)
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       
