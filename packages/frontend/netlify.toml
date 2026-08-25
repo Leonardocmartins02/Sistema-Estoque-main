@@ -1,0 +1,16 @@
+[build]
+  base = "."
+  command = "pnpm install && pnpm --filter @simplestock/frontend build"
+  publish = "dist"
+
+# Substitua a URL abaixo após publicar o backend no Render
+# Ex.: https://simplestock-backend.onrender.com
+[template.environment]
+  VITE_API_BASE = "https://SUA-API-RENDER.aqui"
+
+# Proxy opcional: permite que chamadas para /api/* sejam redirecionadas para a API pública
+# ATENÇÃO: o Netlify só aplica isso em produção após o deploy; localmente use VITE_API_BASE
+[[redirects]]
+  from = "/api/*"
+  to = "https://SUA-API-RENDER.aqui/:splat"
+  status = 200
