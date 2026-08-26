@@ -1,79 +1,91 @@
-import express from 'express';
 import cors from 'cors';
+import express from 'express';
+import { rateLimit } from 'express-rate-limit';
+import helmet from 'helmet';
+import pinoHttp from 'pino-http';
+import { ZodError } from 'zod';
+
 import routes from './routes';
+import { env, corsAllowedOrigins } from './shared/env';
+import { HttpError } from './shared/httpError';
+import { logger } from './shared/logger';
 
 export function createServer() {
   const app = express();
 
-  // Configuração detalhada do CORS
-  const corsOptions = {
-    origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-      // Permite requisições sem origem (como aplicativos móveis ou curl)
+  app.use(helmet());
+
+  const corsOptions: cors.CorsOptions = {
+    origin(origin, callback) {
+      // Requisições sem header Origin (curl, apps mobile, testes de integração)
+      // não têm política de mesma origem para aplicar — não são o alvo do CORS.
       if (!origin) return callback(null, true);
-      
-      // Lista de origens permitidas
-      const allowedOrigins = [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://localhost:4000',
-        'http://localhost:5174',
-        'http://localhost:5175',
-        'http://127.0.0.1:5174',
-        'http://127.0.0.1:5175'
-      ];
-      
-      // Verifica se a origem está na lista de permitidas (comparação exata,
-      // nunca por substring — "evil.com/?127.0.0.1" ou "mylocalhost.io" não
-      // podem ser aceitos só por conterem esses trechos na string da origem)
-      if (allowedOrigins.includes(origin)) {
+
+      if (corsAllowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      
-      // Para desenvolvimento, permitir qualquer origem
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('Aviso: Permitindo origem não autorizada em desenvolvimento:', origin);
-        return callback(null, true);
-      }
-      
-      // Em produção, negar origens não listadas
-      return callback(new Error('Not allowed by CORS'));
+
+      logger.warn({ origin }, 'Origem bloqueada por CORS');
+      return callback(new HttpError(403, 'Origem não permitida.'));
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
     optionsSuccessStatus: 204,
-    preflightContinue: false
   };
-  
-  // Aplica o CORS a todas as rotas
+
   app.use(cors(corsOptions));
-  
-  // Habilita pre-flight para todas as rotas
-  app.options('*', cors(corsOptions));
   app.use(express.json());
+  app.use(
+    pinoHttp({
+      logger,
+      autoLogging: {
+        ignore: (req) => req.url === '/health',
+      },
+    }),
+  );
 
-  // Rota de health check
-  app.get('/health', (_req, res) => res.json({ 
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
-  }));
+  // Rate limit global — protege a API inteira de abuso; a rota de login tem
+  // um limite adicional, mais restrito, definido em routes/auth.ts.
+  app.use(
+    '/api',
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 300,
+      standardHeaders: true,
+      legacyHeaders: false,
+    }),
+  );
 
-  // Log de requisições para debug
-  app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-    next();
-  });
+  app.get('/health', (_req, res) =>
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      environment: env.NODE_ENV,
+    }),
+  );
 
-  // Rotas da API
   app.use('/api', routes);
 
-  // Error handler
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error(err);
-    const status = err.status || 500;
-    res.status(status).json({ message: err.message || 'Internal Server Error' });
-  });
+  app.use(
+    (err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      if (err instanceof ZodError) {
+        res.status(400).json({ message: 'Dados inválidos.', errors: err.issues });
+        return;
+      }
+
+      if (err instanceof HttpError) {
+        res.status(err.status).json({ message: err.message });
+        return;
+      }
+
+      // Erro não esperado: detalhe completo só no log do servidor, nunca na
+      // resposta — evita vazar stack trace / mensagem interna do driver do
+      // banco para quem chamou a API.
+      (req.log ?? logger).error({ err }, 'Erro não tratado');
+      res.status(500).json({ message: 'Erro interno do servidor.' });
+    },
+  );
 
   return app;
 }

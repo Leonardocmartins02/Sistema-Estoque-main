@@ -1,12 +1,21 @@
-import dotenv from 'dotenv';
 import { createServer } from './app';
-
-dotenv.config();
-
-const port = Number(process.env.PORT) || 4000;
+import { env } from './shared/env';
+import { logger } from './shared/logger';
+import { prisma } from './shared/prisma';
 
 const app = createServer();
 
-app.listen(port, () => {
-  console.log(`SimpleStock API running on http://localhost:${port}`);
+const server = app.listen(env.PORT, () => {
+  logger.info(`SimpleStock API rodando em http://localhost:${env.PORT}`);
 });
+
+async function shutdown(signal: string) {
+  logger.info(`Recebido ${signal}, encerrando graciosamente...`);
+  server.close(async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));

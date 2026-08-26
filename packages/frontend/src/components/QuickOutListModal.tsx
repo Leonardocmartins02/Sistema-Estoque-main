@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useState } from 'react';
-import Card from './ui/Card';
+
+import { fetchProducts } from '../api/products';
+import type { ProductWithBalance } from '../api/types';
+
 import Badge from './ui/Badge';
 import Button from './ui/Button';
-import type { ProductWithBalance } from '../api/types';
-import { fetchProducts } from '../api/products';
+
 
 export type QuickOutListModalProps = {
   open: boolean;
@@ -15,7 +17,18 @@ export type QuickOutListModalProps = {
   onOpenHistory?: () => void;
 };
 
-export default function QuickOutListModal({ open, onOpenChange, items, onPick, loading, onOpenHistory }: QuickOutListModalProps) {
+export default function QuickOutListModal({
+  open,
+  onOpenChange,
+  // O modal busca seus próprios dados (ver useEffect abaixo) em vez de usar
+  // `items`/`loading` do pai — duplicação de fetch conhecida, registrada no
+  // backlog de consolidação de data-fetching (ver CLAUDE.md). Mantido no
+  // tipo da prop para não quebrar quem já chama este componente passando-as.
+  items: _items,
+  onPick,
+  loading: _loading,
+  onOpenHistory,
+}: QuickOutListModalProps) {
   if (!open) return null;
 
   const [query, setQuery] = useState('');

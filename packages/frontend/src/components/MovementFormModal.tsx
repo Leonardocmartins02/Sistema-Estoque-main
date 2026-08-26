@@ -1,11 +1,13 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
+
 import { createMovement } from '../api/movements';
-import { useToast } from './ui/ToastProvider';
-import Modal from './ui/Modal';
+
 import Button from './ui/Button';
+import Modal from './ui/Modal';
+import { useToast } from './ui/ToastProvider';
 
 const schema = z.object({
   type: z.enum(['IN', 'OUT'], { required_error: 'Selecione o tipo' }),

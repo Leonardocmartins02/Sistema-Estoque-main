@@ -16,6 +16,33 @@ type ToastContextValue = {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
+function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
+  return (
+    <div
+      className={`pointer-events-auto flex items-start gap-2 rounded-lg border p-3 shadow-sm ring-1 ring-black/5 transition ${
+        toast.type === 'success'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+          : toast.type === 'error'
+          ? 'border-rose-200 bg-rose-50 text-rose-900'
+          : 'border-gray-200 bg-white text-gray-800'
+      }`}
+    >
+      <div className="flex-1">
+        {toast.title && <div className="text-sm font-medium">{toast.title}</div>}
+        <div className="text-sm">{toast.message}</div>
+      </div>
+      <button
+        type="button"
+        aria-label={`Fechar notificação: ${toast.message}`}
+        className="rounded-md px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+        onClick={() => onDismiss(toast.id)}
+      >
+        Fechar
+      </button>
+    </div>
+  );
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -23,16 +50,27 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const show = useCallback((t: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).slice(2);
-    const toast: Toast = { id, type: 'info', durationMs: 3500, ...t };
-    setToasts((prev) => [...prev, toast]);
-    if (toast.durationMs && toast.durationMs > 0) {
-      setTimeout(() => dismiss(id), toast.durationMs);
-    }
-  }, [dismiss]);
+  const show = useCallback(
+    (t: Omit<Toast, 'id'>) => {
+      const id = Math.random().toString(36).slice(2);
+      const toast: Toast = { id, type: 'info', durationMs: 3500, ...t };
+      setToasts((prev) => [...prev, toast]);
+      if (toast.durationMs && toast.durationMs > 0) {
+        setTimeout(() => dismiss(id), toast.durationMs);
+      }
+    },
+    [dismiss],
+  );
 
   const value = useMemo(() => ({ toasts, show, dismiss }), [toasts, show, dismiss]);
+
+  // Toasts são o único feedback de várias ações assíncronas (excluir, movimentar,
+  // baixa rápida). Sem uma live region eles são silenciosos para leitor de tela.
+  // Duas regiões separadas e SEMPRE montadas (uma região montada junto com o
+  // conteúdo costuma não ser anunciada): `status`/polite para sucesso e info,
+  // `alert`/assertive para erros.
+  const politeToasts = toasts.filter((t) => t.type !== 'error');
+  const errorToasts = toasts.filter((t) => t.type === 'error');
 
   return (
     <ToastContext.Provider value={value}>
@@ -40,29 +78,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {/* Container */}
       <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-end p-4">
         <div className="flex w-full max-w-sm flex-col gap-2">
-          {toasts.map((t) => (
-            <div
-              key={t.id}
-              className={`pointer-events-auto flex items-start gap-2 rounded-lg border p-3 shadow-sm ring-1 ring-black/5 transition ${
-                t.type === 'success'
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : t.type === 'error'
-                  ? 'border-rose-200 bg-rose-50 text-rose-800'
-                  : 'border-gray-200 bg-white text-gray-800'
-              }`}
-            >
-              <div className="flex-1">
-                {t.title && <div className="text-sm font-medium">{t.title}</div>}
-                <div className="text-sm">{t.message}</div>
-              </div>
-              <button
-                className="rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
-                onClick={() => dismiss(t.id)}
-              >
-                Fechar
-              </button>
-            </div>
-          ))}
+          <div role="status" aria-live="polite" aria-relevant="additions text" className="flex flex-col gap-2">
+            {politeToasts.map((t) => (
+              <ToastItem key={t.id} toast={t} onDismiss={dismiss} />
+            ))}
+          </div>
+          <div role="alert" aria-live="assertive" aria-relevant="additions text" className="flex flex-col gap-2">
+            {errorToasts.map((t) => (
+              <ToastItem key={t.id} toast={t} onDismiss={dismiss} />
+            ))}
+          </div>
         </div>
       </div>
     </ToastContext.Provider>

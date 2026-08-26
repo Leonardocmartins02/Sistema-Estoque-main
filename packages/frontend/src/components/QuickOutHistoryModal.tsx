@@ -1,7 +1,10 @@
-import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useState } from 'react';
-import Button from './ui/Button';
+import { createPortal } from 'react-dom';
+
 import { fetchQuickOutHistory, type QuickOutHistoryItem } from '../api/quickOut';
+
+import Button from './ui/Button';
+
 
 export type QuickOutHistoryModalProps = {
   open: boolean;
@@ -12,7 +15,7 @@ export default function QuickOutHistoryModal({ open, onOpenChange }: QuickOutHis
   const [items, setItems] = useState<QuickOutHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState('');
   const [from, setFrom] = useState('');

@@ -1,11 +1,13 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
+
 import { createProduct, updateProduct } from '../api/products';
-import { useToast } from './ui/ToastProvider';
-import Modal from './ui/Modal';
+
 import Button from './ui/Button';
+import Modal from './ui/Modal';
+import { useToast } from './ui/ToastProvider';
 
 const schema = z.object({
   name: z.string().min(1, 'Informe o nome'),

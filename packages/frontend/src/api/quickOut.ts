@@ -1,9 +1,4 @@
-import type { Product, ProductWithBalance } from './types';
-
-// Base da API configurável via VITE_API_BASE em produção
-// Em dev, manter vazio para usar o proxy do Vite
-const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? '';
-const API_PREFIX = `${API_BASE}/api`;
+import { apiFetch } from './httpClient';
 
 export interface QuickOutRequest {
   productId: string;
@@ -34,12 +29,8 @@ export async function fetchQuickOutHistory(params: {
   if (params.q) sp.set('q', params.q);
   if (params.from) sp.set('from', params.from);
   if (params.to) sp.set('to', params.to);
-  const res = await fetch(`${API_PREFIX}/quick-out/history?${sp.toString()}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.message || 'Falha ao carregar histórico de baixas');
-  }
-  return res.json();
+
+  return apiFetch(`/quick-out/history?${sp.toString()}`);
 }
 
 export interface QuickOutResponse {
@@ -62,18 +53,5 @@ export interface QuickOutResponse {
 }
 
 export async function quickOutProduct(data: QuickOutRequest): Promise<QuickOutResponse> {
-  const response = await fetch(`${API_PREFIX}/quick-out`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || 'Falha ao processar baixa rápida');
-  }
-
-  return response.json();
+  return apiFetch('/quick-out', { method: 'POST', body: JSON.stringify(data) });
 }

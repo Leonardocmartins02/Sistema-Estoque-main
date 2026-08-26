@@ -1,13 +1,14 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
+
 import { quickOutProduct } from '../api/quickOut';
-import { useToast } from './ui/ToastProvider';
-import Modal from './ui/Modal';
+
 import Button from './ui/Button';
 import Input from './ui/Input';
+import { useToast } from './ui/ToastProvider';
 
 const schema = z.object({
   quantity: z.coerce.number().int().positive('Quantidade deve ser maior que zero'),

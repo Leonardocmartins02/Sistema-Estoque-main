@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { prisma } from '../shared/prisma';
 import { z } from 'zod';
+
+import { prisma } from '../shared/prisma';
 
 const router = Router();
 

@@ -1,26 +1,25 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery , useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, MoreHorizontal, Search, Plus, ArrowDownToLine, Check } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { fetchProducts } from '../api/products';
+import { createPortal } from 'react-dom';
+
+import { createMovement } from '../api/movements';
+import { fetchProducts , deleteProduct } from '../api/products';
 import type { ProductWithBalance, Paged } from '../api/types';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { ProductFormModal } from './ProductFormModal';
+
 import { MovementFormModal } from './MovementFormModal';
 import { MovementHistoryModal } from './MovementHistoryModal';
-import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from './ui/ToastProvider';
-import { createMovement } from '../api/movements';
-import { deleteProduct, createProduct } from '../api/products';
-import { ChevronDown, MoreHorizontal, Search, ArrowUpDown, ArrowDownNarrowWide, ArrowUpWideNarrow, Filter, Plus, ArrowDownToLine, Check } from 'lucide-react';
-import { DataTable, type Column, type Sort } from './ui/DataTable';
-import Button from './ui/Button';
-import Input from './ui/Input';
-import { Select } from './ui/Select';
-import Card from './ui/Card';
-import Badge from './ui/Badge';
-import { createPortal } from 'react-dom';
+import { ProductFormModal } from './ProductFormModal';
 import { QuickOutModal } from './QuickOutModal';
+import Badge from './ui/Badge';
+import Card from './ui/Card';
+import { DataTable, type Column, type Sort } from './ui/DataTable';
+import Input from './ui/Input';
 import QuickOutListModal from './QuickOutListModal';
 import QuickOutHistoryModal from './QuickOutHistoryModal';
+import Button from './ui/Button';
+import { useToast } from './ui/ToastProvider';
 
 export function ProductDashboard() {
   const [search, setSearch] = useState('');
@@ -28,8 +27,8 @@ export function ProductDashboard() {
   const [openCreate, setOpenCreate] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [page, setPage] = useState(1);
-  // Paginação padrão: 10 itens por página
-  const [pageSize, setPageSize] = useState(10);
+  // Paginação padrão: 10 itens por página (sem UI para alterar hoje)
+  const [pageSize] = useState(10);
   const [sortBy, setSortBy] = useState<'name' | 'sku' | 'balance'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [tableSorts, setTableSorts] = useState<Sort[]>([{ by: 'name', dir: 'asc' }]);
@@ -182,15 +181,8 @@ export function ProductDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusKey[]>([]); // vazio = Todos
   const toggleStatus = (val: StatusKey) =>
     setStatusFilter((prev) => (prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]));
-  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [editInitial, setEditInitial] = useState<Partial<ProductWithBalance> | null>(null);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
-
-  // Função para abrir o modal de baixa rápida
-  const handleOpenQuickOut = (product: ProductWithBalance) => {
-    setSelectedProduct(product);
-    setOpenQuickOut(true);
-  };
 
   const toggleExpanded = (id: string) => setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
 
@@ -650,8 +642,6 @@ export function ProductDashboard() {
               },
             },
           ];
-
-          const sort: Sort = { by: sortBy, dir: sortDir } as Sort;
 
           // Usar a ordem já calculada em viewItems (respeita A→Z e Z→A conforme cabeçalho)
           const itemsForTable = viewItems;

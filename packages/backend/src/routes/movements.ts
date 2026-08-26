@@ -1,6 +1,9 @@
+import { Prisma } from '@prisma/client';
 import { Router } from 'express';
-import { prisma } from '../shared/prisma';
 import { z } from 'zod';
+
+import { HttpError } from '../shared/httpError';
+import { prisma } from '../shared/prisma';
 
 const router = Router();
 
@@ -21,27 +24,28 @@ router.get('/:id/movements', async (req, res, next) => {
     const to = String(req.query.to || '').trim(); // ISO date
     const q = String(req.query.q || '').trim(); // substring of note
 
-    const where: any = { productId: id };
+    const where: Prisma.StockMovementWhereInput = { productId: id };
     if (type === 'IN' || type === 'OUT') {
       where.type = type;
     }
+    const dateFilter: Prisma.DateTimeFilter = {};
     if (from) {
       const d = new Date(from);
       if (!isNaN(d.getTime())) {
-        where.date = { ...(where.date || {}), gte: d };
+        dateFilter.gte = d;
       }
     }
     if (to) {
       const d = new Date(to);
       if (!isNaN(d.getTime())) {
-        where.date = { ...(where.date || {}), lte: d };
+        dateFilter.lte = d;
       }
     }
+    if (Object.keys(dateFilter).length > 0) {
+      where.date = dateFilter;
+    }
     if (q) {
-      // Sem "mode: 'insensitive'" — não é suportado pelo provider SQLite do
-      // Prisma e derrubava o processo inteiro com um único request (PrismaClientValidationError
-      // não tratado). SQLite já compara "contains" de forma case-insensitive para ASCII.
-      where.note = { contains: q };
+      where.note = { contains: q, mode: 'insensitive' };
     }
 
     const [items, total] = await Promise.all([
@@ -62,67 +66,49 @@ router.get('/:id/movements', async (req, res, next) => {
 
 router.post('/:id/movements', async (req, res, next) => {
   try {
-    console.log('Received POST request to create movement:', {
-      params: req.params,
-      body: req.body,
-      headers: req.headers
-    });
-
     const id = req.params.id;
-    console.log('Validating movement data...');
     const data = movementSchema.parse(req.body);
-    console.log('Validated movement data:', data);
 
-    // Validate product exists
-    console.log('Checking if product exists:', id);
-    const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) {
-      console.error('Product not found:', id);
-      return res.status(404).json({ message: 'Produto não encontrado' });
-    }
-    console.log('Product found:', product);
+    // Toda a sequência ler-saldo -> decidir -> escrever-movimentação roda
+    // dentro de uma transação com lock de linha (`FOR UPDATE`) no produto:
+    // duas requisições OUT concorrentes para o mesmo produto serializam
+    // aqui, a segunda só lê o saldo depois que a primeira commitou. Sem
+    // isso, ambas podiam ler o mesmo saldo e ambas passar na checagem,
+    // deixando o estoque negativo.
+    const created = await prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "Product" WHERE "id" = ${id} FOR UPDATE
+      `;
+      if (locked.length === 0) {
+        throw new HttpError(404, 'Produto não encontrado.');
+      }
 
-    // Compute current balance
-    const agg = await prisma.stockMovement.groupBy({
-      by: ['type'],
-      where: { productId: id },
-      _sum: { quantity: true },
-    });
-    const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity || 0;
-    const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity || 0;
-    const balance = sumIn - sumOut;
-
-    if (data.type === 'OUT' && data.quantity > balance) {
-      const errorMessage = `Insufficient balance. Requested: ${data.quantity}, Available: ${balance}`;
-      console.error(errorMessage);
-      return res.status(422).json({
-        message: 'Saída maior que o saldo atual do produto.',
-        details: errorMessage
+      const agg = await tx.stockMovement.groupBy({
+        by: ['type'],
+        where: { productId: id },
+        _sum: { quantity: true },
       });
-    }
+      const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity ?? 0;
+      const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity ?? 0;
+      const balance = sumIn - sumOut;
 
-    console.log('Creating movement with data:', {
-      productId: id,
-      type: data.type,
-      quantity: data.quantity,
-      date: data.date ? new Date(data.date) : new Date(),
-      note: data.note ?? undefined,
+      if (data.type === 'OUT' && data.quantity > balance) {
+        throw new HttpError(422, 'Saída maior que o saldo atual do produto.');
+      }
+
+      return tx.stockMovement.create({
+        data: {
+          productId: id,
+          type: data.type,
+          quantity: data.quantity,
+          date: data.date ? new Date(data.date) : new Date(),
+          note: data.note ?? undefined,
+        },
+      });
     });
 
-    const created = await prisma.stockMovement.create({
-      data: {
-        productId: id,
-        type: data.type,
-        quantity: data.quantity,
-        date: data.date ? new Date(data.date) : new Date(),
-        note: data.note ?? undefined,
-      },
-    });
-
-    console.log('Movement created successfully:', created);
     res.status(201).json(created);
   } catch (err) {
-    console.error('Error in POST /:id/movements:', err);
     next(err);
   }
 });

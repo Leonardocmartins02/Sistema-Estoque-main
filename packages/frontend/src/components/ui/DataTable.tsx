@@ -94,10 +94,14 @@ export function DataTable<T>({
   return (
     <div className={`overflow-hidden rounded-lg border bg-white shadow-sm select-none ${className}`}>
       {error && (
-        <div className="border-b border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div role="alert" className="border-b border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {error}
+        </div>
       )}
       {isLoading && (
-        <div className="border-b border-gray-100 p-3 text-sm text-gray-600">Carregando...</div>
+        <div role="status" className="border-b border-gray-100 p-3 text-sm text-gray-700">
+          Carregando...
+        </div>
       )}
 
       <div className="overflow-x-auto">
@@ -182,12 +186,11 @@ export function DataTable<T>({
               items.map((row) => {
                 const id = getRowId(row);
                 return (
-                  <tr
-                    key={id}
-                    role="row"
-                    tabIndex={0}
-                    className="hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                  >
+                  // A linha NÃO é acionável: todas as ações (selecionar, expandir
+                  // descrição, movimentar, menu) são controles nativos dentro das
+                  // células. Um `tabIndex={0}` aqui só criava uma parada de tab
+                  // que não faz nada — por isso foi removido.
+                  <tr key={id} role="row" className="hover:bg-gray-50">
                     {columns.map((col) => (
                       <td
                         key={String(col.key)}
