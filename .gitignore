@@ -13,8 +13,9 @@ pnpm-debug.log*
 !.env.example
 
 # build
-/dist
-/build
+**/dist
+**/build
+*.tsbuildinfo
 
 # prisma
 packages/backend/prisma/*.db
