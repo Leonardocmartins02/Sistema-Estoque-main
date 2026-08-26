@@ -1,6 +1,25 @@
 import { PrismaClient } from '@prisma/client';
 
+import { hashPassword } from './shared/password';
+
 const prisma = new PrismaClient();
+
+const DEFAULT_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL || 'admin@simplestock.local';
+const DEFAULT_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'trocar-esta-senha-123';
+
+async function seedAdminUser() {
+  const existing = await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL } });
+  if (existing) {
+    console.log(`• Usuário admin já existe, pulando: ${DEFAULT_ADMIN_EMAIL}`);
+    return;
+  }
+
+  const passwordHash = await hashPassword(DEFAULT_ADMIN_PASSWORD);
+  await prisma.user.create({ data: { email: DEFAULT_ADMIN_EMAIL, passwordHash } });
+  console.log(
+    `• Usuário admin criado: ${DEFAULT_ADMIN_EMAIL} / senha inicial: ${DEFAULT_ADMIN_PASSWORD} (troque após o primeiro login; defina SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD para customizar)`,
+  );
+}
 
 // Utilidades
 function slugify(s: string) {
@@ -42,6 +61,8 @@ const baseItems = [
 const productNames = baseItems.slice(0, 50);
 
 async function main() {
+  await seedAdminUser();
+
   console.log('Seeding 50 produtos de papelaria...');
 
   // Distribuição de status desejada
