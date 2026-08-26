@@ -1,0 +1,699 @@
+From 43f094e20062e4c57d794a4ff0e7862f2abff844 Mon Sep 17 00:00:00 2001
+From: Sistema-Estoque Dev <dev@sistema-estoque.local>
+Date: Tue, 25 Aug 2026 18:04:10 +0000
+Subject: [PATCH 1/3] fix(backend): fecha bypass de CORS por substring match
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A checagem de origem aceitava qualquer valor que apenas contivesse
+"localhost" ou "127.0.0.1" (ex: evil.com/?127.0.0.1, mylocalhost.io),
+mesmo em produção e com credentials habilitado. Troca por comparação
+exata contra a allowlist fixa de origens de desenvolvimento.
+---
+ packages/backend/src/app.ts | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/packages/backend/src/app.ts b/packages/backend/src/app.ts
+index b1fc871..69a1ffa 100644
+--- a/packages/backend/src/app.ts
++++ b/packages/backend/src/app.ts
+@@ -22,8 +22,10 @@ export function createServer() {
+         'http://127.0.0.1:5175'
+       ];
+       
+-      // Verifica se a origem está na lista de permitidas
+-      if (allowedOrigins.includes(origin) || origin.includes('localhost') || origin.includes('127.0.0.1')) {
++      // Verifica se a origem está na lista de permitidas (comparação exata,
++      // nunca por substring — "evil.com/?127.0.0.1" ou "mylocalhost.io" não
++      // podem ser aceitos só por conterem esses trechos na string da origem)
++      if (allowedOrigins.includes(origin)) {
+         return callback(null, true);
+       }
+       
+-- 
+2.43.0
+
+
+From 1d5675aee402c4a9e0629fbb22d685138768fe8f Mon Sep 17 00:00:00 2001
+From: Sistema-Estoque Dev <dev@sistema-estoque.local>
+Date: Tue, 25 Aug 2026 18:04:10 +0000
+Subject: [PATCH 2/3] fix(backend): evita queda do servidor em rotas de leitura
+ sem tratamento de erro
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Um único GET .../movements?q=x derrubava o processo inteiro: o filtro usava
+mode: 'insensitive' do Prisma, não suportado pelo provider SQLite, e a
+rejeição não tinha try/catch para chegar ao error handler central. SQLite
+já compara "contains" de forma case-insensitive para ASCII, então a opção
+foi só removida, sem reimplementar a busca.
+
+Aproveita para envolver em try/catch -> next(err) as demais rotas GET/DELETE
+que tinham o mesmo problema (risco de unhandled rejection), seguindo o
+mesmo padrão já usado nas rotas POST/PUT do próprio arquivo: GET / e
+GET/DELETE /:id em products.ts, e GET /history em quick-out.ts.
+---
+ packages/backend/src/routes/movements.ts |  81 ++++----
+ packages/backend/src/routes/products.ts  | 230 ++++++++++++-----------
+ packages/backend/src/routes/quick-out.ts | 120 ++++++------
+ 3 files changed, 227 insertions(+), 204 deletions(-)
+
+diff --git a/packages/backend/src/routes/movements.ts b/packages/backend/src/routes/movements.ts
+index 7c68e02..c6bc89e 100644
+--- a/packages/backend/src/routes/movements.ts
++++ b/packages/backend/src/routes/movements.ts
+@@ -11,46 +11,53 @@ const movementSchema = z.object({
+   note: z.string().optional().nullable(),
+ });
+ 
+-router.get('/:id/movements', async (req, res) => {
+-  const id = req.params.id;
+-  const page = Math.max(Number(req.query.page || 1), 1);
+-  const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 1), 100);
+-  const type = String(req.query.type || '').trim(); // IN | OUT | ''
+-  const from = String(req.query.from || '').trim(); // ISO date
+-  const to = String(req.query.to || '').trim(); // ISO date
+-  const q = String(req.query.q || '').trim(); // substring of note
++router.get('/:id/movements', async (req, res, next) => {
++  try {
++    const id = req.params.id;
++    const page = Math.max(Number(req.query.page || 1), 1);
++    const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 1), 100);
++    const type = String(req.query.type || '').trim(); // IN | OUT | ''
++    const from = String(req.query.from || '').trim(); // ISO date
++    const to = String(req.query.to || '').trim(); // ISO date
++    const q = String(req.query.q || '').trim(); // substring of note
+ 
+-  const where: any = { productId: id };
+-  if (type === 'IN' || type === 'OUT') {
+-    where.type = type;
+-  }
+-  if (from) {
+-    const d = new Date(from);
+-    if (!isNaN(d.getTime())) {
+-      where.date = { ...(where.date || {}), gte: d };
++    const where: any = { productId: id };
++    if (type === 'IN' || type === 'OUT') {
++      where.type = type;
+     }
+-  }
+-  if (to) {
+-    const d = new Date(to);
+-    if (!isNaN(d.getTime())) {
+-      where.date = { ...(where.date || {}), lte: d };
++    if (from) {
++      const d = new Date(from);
++      if (!isNaN(d.getTime())) {
++        where.date = { ...(where.date || {}), gte: d };
++      }
++    }
++    if (to) {
++      const d = new Date(to);
++      if (!isNaN(d.getTime())) {
++        where.date = { ...(where.date || {}), lte: d };
++      }
++    }
++    if (q) {
++      // Sem "mode: 'insensitive'" — não é suportado pelo provider SQLite do
++      // Prisma e derrubava o processo inteiro com um único request (PrismaClientValidationError
++      // não tratado). SQLite já compara "contains" de forma case-insensitive para ASCII.
++      where.note = { contains: q };
+     }
+-  }
+-  if (q) {
+-    where.note = { contains: q, mode: 'insensitive' };
+-  }
+ 
+-  const [items, total] = await Promise.all([
+-    prisma.stockMovement.findMany({
+-      where,
+-      orderBy: { date: 'desc' },
+-      skip: (page - 1) * pageSize,
+-      take: pageSize,
+-    }),
+-    prisma.stockMovement.count({ where }),
+-  ]);
++    const [items, total] = await Promise.all([
++      prisma.stockMovement.findMany({
++        where,
++        orderBy: { date: 'desc' },
++        skip: (page - 1) * pageSize,
++        take: pageSize,
++      }),
++      prisma.stockMovement.count({ where }),
++    ]);
+ 
+-  res.json({ items, total, page, pageSize });
++    res.json({ items, total, page, pageSize });
++  } catch (err) {
++    next(err);
++  }
+ });
+ 
+ router.post('/:id/movements', async (req, res, next) => {
+@@ -60,7 +67,7 @@ router.post('/:id/movements', async (req, res, next) => {
+       body: req.body,
+       headers: req.headers
+     });
+-    
++
+     const id = req.params.id;
+     console.log('Validating movement data...');
+     const data = movementSchema.parse(req.body);
+@@ -88,7 +95,7 @@ router.post('/:id/movements', async (req, res, next) => {
+     if (data.type === 'OUT' && data.quantity > balance) {
+       const errorMessage = `Insufficient balance. Requested: ${data.quantity}, Available: ${balance}`;
+       console.error(errorMessage);
+-      return res.status(422).json({ 
++      return res.status(422).json({
+         message: 'Saída maior que o saldo atual do produto.',
+         details: errorMessage
+       });
+diff --git a/packages/backend/src/routes/products.ts b/packages/backend/src/routes/products.ts
+index 4974272..ce11f0a 100644
+--- a/packages/backend/src/routes/products.ts
++++ b/packages/backend/src/routes/products.ts
+@@ -4,100 +4,104 @@ import { z } from 'zod';
+ 
+ const router = Router();
+ 
+-router.get('/', async (req, res) => {
+-  const search = String(req.query.search || '').trim();
+-  const page = Math.max(Number(req.query.page || 1), 1);
+-  // Suporta pageSize=0 (retorna todos) e aumenta limite máximo para 1000
+-  const rawPageSize = Number(req.query.pageSize ?? 10);
+-  const pageSize = rawPageSize === 0 ? 0 : Math.min(Math.max(rawPageSize, 1), 1000);
+-  const sortByRaw = String(req.query.sortBy || 'name');
+-  const sortDirRaw = String(req.query.sortDir || 'asc');
+-  const sortBy = ['name', 'sku', 'balance'].includes(sortByRaw) ? (sortByRaw as 'name' | 'sku' | 'balance') : 'name';
+-  const sortDir = sortDirRaw === 'desc' ? 'desc' : 'asc';
+-  const statusParam = String(req.query.status || '').trim();
+-  const statusFilter = statusParam
+-    ? statusParam.split(',').map((s) => s.toUpperCase()).filter((s) => ['OK', 'ATTN', 'OUT'].includes(s)) as Array<'OK'|'ATTN'|'OUT'>
+-    : [];
+-
+-  // Normalize function to remove diacritics and lowercase
+-  const normalize = (s: string) =>
+-    s
+-      .toLowerCase()
+-      .normalize('NFD')
+-      .replace(/[\u0300-\u036f]/g, '');
+-
+-  let products = await prisma.product.findMany({ orderBy: { name: 'asc' } });
+-
+-  if (search) {
+-    const nQuery = normalize(search);
+-    products = products.filter((p) => {
+-      const nName = normalize(p.name);
+-      const nSku = normalize(p.sku);
+-      return nName.includes(nQuery) || nSku.includes(nQuery);
+-    });
+-  }
+-
+-  // Calculate balance per product
+-  const productsWithBalance = await Promise.all(
+-    products.map(async (p) => {
+-      const agg = await prisma.stockMovement.groupBy({
+-        by: ['type'],
+-        where: { productId: p.id },
+-        _sum: { quantity: true },
+-      });
+-      const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity || 0;
+-      const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity || 0;
+-      return { ...p, balance: sumIn - sumOut };
+-    })
+-  );
+-
+-  // Optional status filtering before sorting/pagination
+-  const filteredByStatus = statusFilter.length === 0
+-    ? productsWithBalance
+-    : productsWithBalance.filter((p) => {
+-        const isOut = p.balance === 0;
+-        const isAttn = p.balance > 0 && p.balance < p.minStock;
+-        const isOk = p.balance >= p.minStock;
+-        const map: Record<'OK'|'ATTN'|'OUT', boolean> = { OK: isOk, ATTN: isAttn, OUT: isOut };
+-        return statusFilter.some((s) => map[s]);
++router.get('/', async (req, res, next) => {
++  try {
++    const search = String(req.query.search || '').trim();
++    const page = Math.max(Number(req.query.page || 1), 1);
++    // Suporta pageSize=0 (retorna todos) e aumenta limite máximo para 1000
++    const rawPageSize = Number(req.query.pageSize ?? 10);
++    const pageSize = rawPageSize === 0 ? 0 : Math.min(Math.max(rawPageSize, 1), 1000);
++    const sortByRaw = String(req.query.sortBy || 'name');
++    const sortDirRaw = String(req.query.sortDir || 'asc');
++    const sortBy = ['name', 'sku', 'balance'].includes(sortByRaw) ? (sortByRaw as 'name' | 'sku' | 'balance') : 'name';
++    const sortDir = sortDirRaw === 'desc' ? 'desc' : 'asc';
++    const statusParam = String(req.query.status || '').trim();
++    const statusFilter = statusParam
++      ? statusParam.split(',').map((s) => s.toUpperCase()).filter((s) => ['OK', 'ATTN', 'OUT'].includes(s)) as Array<'OK'|'ATTN'|'OUT'>
++      : [];
++
++    // Normalize function to remove diacritics and lowercase
++    const normalize = (s: string) =>
++      s
++        .toLowerCase()
++        .normalize('NFD')
++        .replace(/[\u0300-\u036f]/g, '');
++
++    let products = await prisma.product.findMany({ orderBy: { name: 'asc' } });
++
++    if (search) {
++      const nQuery = normalize(search);
++      products = products.filter((p) => {
++        const nName = normalize(p.name);
++        const nSku = normalize(p.sku);
++        return nName.includes(nQuery) || nSku.includes(nQuery);
+       });
++    }
+ 
+-  // Sort according to sortBy/sortDir
+-  const sorted = [...filteredByStatus].sort((a, b) => {
+-    let av: string | number = '';
+-    let bv: string | number = '';
+-    if (sortBy === 'name') {
+-      av = a.name.toLowerCase();
+-      bv = b.name.toLowerCase();
+-    } else if (sortBy === 'sku') {
+-      av = a.sku.toLowerCase();
+-      bv = b.sku.toLowerCase();
++    // Calculate balance per product
++    const productsWithBalance = await Promise.all(
++      products.map(async (p) => {
++        const agg = await prisma.stockMovement.groupBy({
++          by: ['type'],
++          where: { productId: p.id },
++          _sum: { quantity: true },
++        });
++        const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity || 0;
++        const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity || 0;
++        return { ...p, balance: sumIn - sumOut };
++      })
++    );
++
++    // Optional status filtering before sorting/pagination
++    const filteredByStatus = statusFilter.length === 0
++      ? productsWithBalance
++      : productsWithBalance.filter((p) => {
++          const isOut = p.balance === 0;
++          const isAttn = p.balance > 0 && p.balance < p.minStock;
++          const isOk = p.balance >= p.minStock;
++          const map: Record<'OK'|'ATTN'|'OUT', boolean> = { OK: isOk, ATTN: isAttn, OUT: isOut };
++          return statusFilter.some((s) => map[s]);
++        });
++
++    // Sort according to sortBy/sortDir
++    const sorted = [...filteredByStatus].sort((a, b) => {
++      let av: string | number = '';
++      let bv: string | number = '';
++      if (sortBy === 'name') {
++        av = a.name.toLowerCase();
++        bv = b.name.toLowerCase();
++      } else if (sortBy === 'sku') {
++        av = a.sku.toLowerCase();
++        bv = b.sku.toLowerCase();
++      } else {
++        // balance
++        av = a.balance;
++        bv = b.balance;
++      }
++      if (av < bv) return sortDir === 'asc' ? -1 : 1;
++      if (av > bv) return sortDir === 'asc' ? 1 : -1;
++      return 0;
++    });
++
++    // Paginação em memória (para datasets pequenos). Se pageSize=0, retorna todos
++    const total = sorted.length;
++    let items = sorted;
++    let respPage = page;
++    let respPageSize = pageSize;
++    if (pageSize !== 0) {
++      const start = (page - 1) * pageSize;
++      const end = start + pageSize;
++      items = sorted.slice(start, end);
+     } else {
+-      // balance
+-      av = a.balance;
+-      bv = b.balance;
++      // quando retornando todos, padroniza page=1
++      respPage = 1;
++      respPageSize = 0;
+     }
+-    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+-    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+-    return 0;
+-  });
+-
+-  // Paginação em memória (para datasets pequenos). Se pageSize=0, retorna todos
+-  const total = sorted.length;
+-  let items = sorted;
+-  let respPage = page;
+-  let respPageSize = pageSize;
+-  if (pageSize !== 0) {
+-    const start = (page - 1) * pageSize;
+-    const end = start + pageSize;
+-    items = sorted.slice(start, end);
+-  } else {
+-    // quando retornando todos, padroniza page=1
+-    respPage = 1;
+-    respPageSize = 0;
+-  }
+ 
+-  res.json({ items, total, page: respPage, pageSize: respPageSize });
++    res.json({ items, total, page: respPage, pageSize: respPageSize });
++  } catch (err) {
++    next(err);
++  }
+ });
+ 
+ const productSchema = z.object({
+@@ -135,20 +139,24 @@ router.post('/', async (req, res, next) => {
+   }
+ });
+ 
+-router.get('/:id', async (req, res) => {
+-  const id = req.params.id;
+-  const product = await prisma.product.findUnique({ where: { id } });
+-  if (!product) return res.status(404).json({ message: 'Produto não encontrado' });
++router.get('/:id', async (req, res, next) => {
++  try {
++    const id = req.params.id;
++    const product = await prisma.product.findUnique({ where: { id } });
++    if (!product) return res.status(404).json({ message: 'Produto não encontrado' });
+ 
+-  const agg = await prisma.stockMovement.groupBy({
+-    by: ['type'],
+-    where: { productId: id },
+-    _sum: { quantity: true },
+-  });
+-  const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity || 0;
+-  const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity || 0;
++    const agg = await prisma.stockMovement.groupBy({
++      by: ['type'],
++      where: { productId: id },
++      _sum: { quantity: true },
++    });
++    const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity || 0;
++    const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity || 0;
+ 
+-  res.json({ ...product, balance: sumIn - sumOut });
++    res.json({ ...product, balance: sumIn - sumOut });
++  } catch (err) {
++    next(err);
++  }
+ });
+ 
+ router.put('/:id', async (req, res, next) => {
+@@ -169,15 +177,19 @@ router.put('/:id', async (req, res, next) => {
+   }
+ });
+ 
+-router.delete('/:id', async (req, res) => {
+-  const id = req.params.id;
+-  const product = await prisma.product.findUnique({ where: { id } });
+-  if (!product) return res.status(404).json({ message: 'Produto não encontrado' });
++router.delete('/:id', async (req, res, next) => {
++  try {
++    const id = req.params.id;
++    const product = await prisma.product.findUnique({ where: { id } });
++    if (!product) return res.status(404).json({ message: 'Produto não encontrado' });
+ 
+-  // Remover movimentações primeiro para evitar violação de FK
+-  await prisma.stockMovement.deleteMany({ where: { productId: id } });
+-  await prisma.product.delete({ where: { id } });
+-  res.status(204).send();
++    // Remover movimentações primeiro para evitar violação de FK
++    await prisma.stockMovement.deleteMany({ where: { productId: id } });
++    await prisma.product.delete({ where: { id } });
++    res.status(204).send();
++  } catch (err) {
++    next(err);
++  }
+ });
+ 
+ export default router;
+diff --git a/packages/backend/src/routes/quick-out.ts b/packages/backend/src/routes/quick-out.ts
+index e4d3d40..a4796c0 100644
+--- a/packages/backend/src/routes/quick-out.ts
++++ b/packages/backend/src/routes/quick-out.ts
+@@ -15,7 +15,7 @@ router.post('/', async (req, res) => {
+   try {
+     const data = req.body;
+     console.log('Dados recebidos:', data);
+-    
++
+     const { productId, quantity, note } = quickOutSchema.parse(data);
+     console.log('Dados validados:', { productId, quantity, note });
+ 
+@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
+ 
+     // Retorna o novo saldo
+     const newBalance = currentBalance - quantity;
+-    
++
+     res.json({
+       success: true,
+       movement,
+@@ -91,7 +91,7 @@ router.post('/', async (req, res) => {
+         errors: error.errors,
+       });
+     }
+-    res.status(500).json({ 
++    res.status(500).json({
+       message: 'Erro ao processar baixa',
+       error: error instanceof Error ? error.message : 'Erro desconhecido'
+     });
+@@ -99,64 +99,68 @@ router.post('/', async (req, res) => {
+ });
+ 
+ // Histórico geral de baixas (movimentos OUT)
+-router.get('/history', async (req, res) => {
+-  const page = Math.max(Number(req.query.page || 1), 1);
+-  const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 1), 100);
+-  const q = String(req.query.q || '').trim(); // busca por nome, sku ou note
+-  const from = String(req.query.from || '').trim();
+-  const to = String(req.query.to || '').trim();
+-
+-  // Filtro base: apenas saídas (OUT)
+-  const whereBase: any = { type: 'OUT' };
+-
+-  if (from) {
+-    const d = new Date(from);
+-    if (!isNaN(d.getTime())) {
+-      whereBase.date = { ...(whereBase.date || {}), gte: d };
++router.get('/history', async (req, res, next) => {
++  try {
++    const page = Math.max(Number(req.query.page || 1), 1);
++    const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 1), 100);
++    const q = String(req.query.q || '').trim(); // busca por nome, sku ou note
++    const from = String(req.query.from || '').trim();
++    const to = String(req.query.to || '').trim();
++
++    // Filtro base: apenas saídas (OUT)
++    const whereBase: any = { type: 'OUT' };
++
++    if (from) {
++      const d = new Date(from);
++      if (!isNaN(d.getTime())) {
++        whereBase.date = { ...(whereBase.date || {}), gte: d };
++      }
+     }
+-  }
+-  if (to) {
+-    const d = new Date(to);
+-    if (!isNaN(d.getTime())) {
+-      whereBase.date = { ...(whereBase.date || {}), lte: d };
++    if (to) {
++      const d = new Date(to);
++      if (!isNaN(d.getTime())) {
++        whereBase.date = { ...(whereBase.date || {}), lte: d };
++      }
+     }
+-  }
+ 
+-  // Se tiver termo de busca, fazemos em memória após join para nome/sku
+-  const [itemsRaw, totalRaw] = await Promise.all([
+-    prisma.stockMovement.findMany({
+-      where: whereBase,
+-      include: { product: true },
+-      orderBy: { date: 'desc' },
+-    }),
+-    prisma.stockMovement.count({ where: whereBase }),
+-  ]);
+-
+-  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+-  const filtered = q
+-    ? itemsRaw.filter((m) => {
+-        const term = normalize(q);
+-        const name = normalize(m.product?.name || '');
+-        const sku = normalize(m.product?.sku || '');
+-        const note = normalize(m.note || '');
+-        return name.includes(term) || sku.includes(term) || note.includes(term);
+-      })
+-    : itemsRaw;
+-
+-  const total = filtered.length;
+-  const start = (page - 1) * pageSize;
+-  const end = start + pageSize;
+-  const pageItems = filtered.slice(start, end).map((m) => ({
+-    id: m.id,
+-    productId: m.productId,
+-    productName: m.product?.name || '',
+-    productSku: m.product?.sku || '',
+-    quantity: m.quantity,
+-    date: m.date,
+-    note: m.note || null,
+-  }));
+-
+-  res.json({ items: pageItems, total, page, pageSize });
++    // Se tiver termo de busca, fazemos em memória após join para nome/sku
++    const [itemsRaw] = await Promise.all([
++      prisma.stockMovement.findMany({
++        where: whereBase,
++        include: { product: true },
++        orderBy: { date: 'desc' },
++      }),
++      prisma.stockMovement.count({ where: whereBase }),
++    ]);
++
++    const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
++    const filtered = q
++      ? itemsRaw.filter((m) => {
++          const term = normalize(q);
++          const name = normalize(m.product?.name || '');
++          const sku = normalize(m.product?.sku || '');
++          const note = normalize(m.note || '');
++          return name.includes(term) || sku.includes(term) || note.includes(term);
++        })
++      : itemsRaw;
++
++    const total = filtered.length;
++    const start = (page - 1) * pageSize;
++    const end = start + pageSize;
++    const pageItems = filtered.slice(start, end).map((m) => ({
++      id: m.id,
++      productId: m.productId,
++      productName: m.product?.name || '',
++      productSku: m.product?.sku || '',
++      quantity: m.quantity,
++      date: m.date,
++      note: m.note || null,
++    }));
++
++    res.json({ items: pageItems, total, page, pageSize });
++  } catch (err) {
++    next(err);
++  }
+ });
+ 
+ export default router;
+-- 
+2.43.0
+
+
+From 41084171bd68609ece11347a35f0c176240415b2 Mon Sep 17 00:00:00 2001
+From: Sistema-Estoque Dev <dev@sistema-estoque.local>
+Date: Tue, 25 Aug 2026 18:37:26 +0000
+Subject: [PATCH 3/3] feat(backend): adiciona canal de acesso somente-leitura
+ real ao SQLite
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Cria packages/backend/src/shared/readOnlyDb.ts, que abre o banco em modo
+read-only nativo do SQLite (não uma convenção de código) — qualquer INSERT/
+UPDATE/DELETE/DDL tentado por esse canal falha no próprio motor do banco
+("attempt to write a readonly database"), confirmado em teste real.
+
+Documenta DATABASE_URL_READONLY em .env.example com o parâmetro equivalente
+(?mode=ro) para quando o acesso precisar passar pelo Prisma em vez de SQL
+cru. Esse trecho via Prisma não foi testado neste ambiente por falta de
+acesso à internet para gerar o Prisma Client — validar na máquina local.
+---
+ packages/backend/.env.example             |  6 +++
+ packages/backend/src/shared/readOnlyDb.ts | 55 +++++++++++++++++++++++
+ 2 files changed, 61 insertions(+)
+ create mode 100644 packages/backend/src/shared/readOnlyDb.ts
+
+diff --git a/packages/backend/.env.example b/packages/backend/.env.example
+index e8d179e..66e4318 100644
+--- a/packages/backend/.env.example
++++ b/packages/backend/.env.example
+@@ -1,5 +1,11 @@
+ # SQLite (dev)
+ DATABASE_URL="file:./dev.db"
+ 
++# Mesmo arquivo, aberto em modo somente-leitura nativo do SQLite (?mode=ro).
++# Use para qualquer inspeção/mapeamento de schema ou dado que não precise
++# escrever — uma tentativa de escrita nessa conexão falha no próprio motor
++# do banco, não depende de disciplina de quem está consultando.
++DATABASE_URL_READONLY="file:./dev.db?mode=ro"
++
+ # Server
+ PORT=4000
+diff --git a/packages/backend/src/shared/readOnlyDb.ts b/packages/backend/src/shared/readOnlyDb.ts
+new file mode 100644
+index 0000000..ae255e9
+--- /dev/null
++++ b/packages/backend/src/shared/readOnlyDb.ts
+@@ -0,0 +1,55 @@
++/**
++ * Acesso somente-leitura de verdade ao banco SQLite do projeto.
++ *
++ * Diferente de uma convenção ("essa skill só deve rodar SELECT"), esta conexão é
++ * aberta em modo read-only nativo do próprio motor SQLite (`readOnly: true`).
++ * Qualquer tentativa de escrita (INSERT/UPDATE/DELETE/DDL) falha com um erro real
++ * do SQLite, não com uma checagem que o código de quem chama poderia esquecer de
++ * fazer. É o canal indicado para o papel "query-database" (mapeamento de schema,
++ * inspeção de dados para embasar o design de uma feature) — nunca para servir
++ * requisições da aplicação, que continuam usando o Prisma normalmente em
++ * `./prisma.ts`.
++ *
++ * Equivalente para quando a consulta precisar passar pelo Prisma (ex.: usar os
++ * mesmos helpers de tipagem gerados) em vez do SQL cru: aponte um PrismaClient
++ * separado para uma URL com o parâmetro de modo somente-leitura do SQLite, ex.:
++ *
++ *   const readOnlyPrisma = new PrismaClient({
++ *     datasourceUrl: (process.env.DATABASE_URL ?? 'file:./dev.db') + '?mode=ro',
++ *   });
++ *
++ * Esse trecho específico não foi testado neste projeto porque o ambiente onde
++ * isso foi implementado não tem acesso à internet para rodar `prisma generate`
++ * (o Prisma Client não pôde nem ser gerado aqui). Antes de confiar nele, rode a
++ * verificação da seção "Como confirmar" do PR/patch na sua máquina.
++ */
++import { DatabaseSync } from 'node:sqlite';
++
++export interface ReadOnlyDb {
++  /** Executa uma consulta de leitura e retorna todas as linhas. */
++  all<T = Record<string, unknown>>(sql: string, params?: unknown[]): T[];
++  /** Executa uma consulta de leitura e retorna a primeira linha (ou undefined). */
++  get<T = Record<string, unknown>>(sql: string, params?: unknown[]): T | undefined;
++  close(): void;
++}
++
++/**
++ * Abre o banco em `dbPath` em modo somente-leitura. Lança se o arquivo não
++ * existir (não cria um banco novo — essa função nunca deveria ter permissão
++ * de criar/alterar estrutura).
++ */
++export function openReadOnlyDb(dbPath: string): ReadOnlyDb {
++  const db = new DatabaseSync(dbPath, { readOnly: true });
++
++  return {
++    all<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T[] {
++      return db.prepare(sql).all(...params) as T[];
++    },
++    get<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T | undefined {
++      return db.prepare(sql).get(...params) as T | undefined;
++    },
++    close(): void {
++      db.close();
++    },
++  };
++}
+-- 
+2.43.0
+

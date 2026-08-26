@@ -23,5 +23,13 @@
     "eslint-plugin-unused-imports": "^3.2.0",
     "prettier": "^3.2.5",
     "typescript": "^5.4.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
   }
 }
