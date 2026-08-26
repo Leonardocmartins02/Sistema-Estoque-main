@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    # Banco de teste real para os testes de integração do backend (a
+    # condição de corrida corrigida em movements.ts/quick-out.ts depende de
+    # locks de linha do Postgres — não dá para simular isso com um mock).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: simplestock
+          POSTGRES_PASSWORD: simplestock
+          POSTGRES_DB: simplestock_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U simplestock"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://simplestock:simplestock@localhost:5432/simplestock_test?schema=public
+      DATABASE_URL_TEST: postgresql://simplestock:simplestock@localhost:5432/simplestock_test?schema=public
+      JWT_SECRET: ci-only-secret-nao-usar-em-producao-0000000000
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm -r run lint
+
+      - name: Typecheck
+        run: pnpm -r run typecheck
+
+      - name: Testes do backend (integração, contra Postgres real)
+        run: pnpm --filter @simplestock/backend test
+
+      - name: Testes do frontend
+        run: pnpm --filter @simplestock/frontend test
+
+      - name: Build
+        run: pnpm -r run build
