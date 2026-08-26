@@ -26,13 +26,28 @@ model Product {
   movements   StockMovement[]
 }
 
+/// Tipo de movimentação de estoque. Antes era `String`, com "IN"/"OUT"
+/// garantidos apenas pela camada Zod — qualquer escrita fora das rotas
+/// (seed, script, psql) podia gravar um valor fora do domínio e quebrar o
+/// cálculo de saldo silenciosamente. Agora o banco garante o domínio.
+enum MovementType {
+  IN
+  OUT
+}
+
 model StockMovement {
-  id        String        @id @default(cuid())
-  product   Product       @relation(fields: [productId], references: [id])
+  id        String       @id @default(cuid())
+  product   Product      @relation(fields: [productId], references: [id])
   productId String
-  type      String
+  type      MovementType
   quantity  Int
-  date      DateTime      @default(now())
+  date      DateTime     @default(now())
   note      String?
-  createdAt DateTime      @default(now())
+  createdAt DateTime     @default(now())
+
+  // Índices que sustentam as consultas quentes depois da Parte 3:
+  // - agregação de saldo por página de produtos (`groupBy` em productId+type);
+  // - histórico de baixas (`type = OUT` ordenado por data desc).
+  @@index([productId, type])
+  @@index([type, date])
 }
