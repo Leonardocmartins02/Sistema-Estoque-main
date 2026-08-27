@@ -4,6 +4,13 @@ import { z } from 'zod';
 
 import { HttpError } from '../shared/httpError';
 import { prisma } from '../shared/prisma';
+import {
+  optionalDateParam,
+  optionalTextParam,
+  pageParam,
+  pageSizeParam,
+} from '../shared/queryParams';
+import { normalizeForSearch } from '../shared/text';
 
 const router = Router();
 
@@ -70,74 +77,80 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// Query params validados na borda HTTP; limites preservados (pageSize 1..100,
+// default 20). Datas fora do formato agora viram 400 em vez de serem ignoradas.
+const historyQuerySchema = z.object({
+  page: pageParam,
+  pageSize: pageSizeParam({ min: 1, max: 100, default: 20 }),
+  q: optionalTextParam,
+  from: optionalDateParam,
+  to: optionalDateParam,
+});
+
 // Histórico geral de baixas (movimentos OUT)
 router.get('/history', async (req, res, next) => {
   try {
-    const page = Math.max(Number(req.query.page || 1), 1);
-    const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 1), 100);
-    const q = String(req.query.q || '').trim(); // busca por nome, sku ou note
-    const from = String(req.query.from || '').trim();
-    const to = String(req.query.to || '').trim();
+    const { page, pageSize, q, from, to } = historyQuerySchema.parse(req.query);
 
-    // Filtro base: apenas saídas (OUT)
-    const whereBase: Prisma.StockMovementWhereInput = { type: 'OUT' };
-
-    const dateFilter: Prisma.DateTimeFilter = {};
-    if (from) {
-      const d = new Date(from);
-      if (!isNaN(d.getTime())) {
-        dateFilter.gte = d;
-      }
-    }
-    if (to) {
-      const d = new Date(to);
-      if (!isNaN(d.getTime())) {
-        dateFilter.lte = d;
-      }
-    }
-    if (Object.keys(dateFilter).length > 0) {
-      whereBase.date = dateFilter;
+    // Filtro base: apenas saídas (OUT), agora com data/paginação/contagem no
+    // banco. Antes esta rota carregava TODOS os movimentos OUT com
+    // `include: { product: true }` a cada request e paginava em memória.
+    const where: Prisma.StockMovementWhereInput = { type: 'OUT' };
+    if (from || to) {
+      where.date = {
+        ...(from ? { gte: from } : {}),
+        ...(to ? { lte: to } : {}),
+      };
     }
 
-    // Se tiver termo de busca, fazemos em memória após join para nome/sku
-    const [itemsRaw] = await Promise.all([
+    if (q) {
+      // Mesma decisão de `routes/products.ts`: a busca é diacritic-insensitive
+      // ("lapis" encontra "Lápis") e o Postgres não faz isso com ILIKE. Aqui o
+      // termo ainda casa contra nome/SKU do produto E contra a nota, então o
+      // pré-filtro varre uma projeção estreita (id, nota e nome/SKU do produto)
+      // dos movimentos já restritos por tipo/data, e devolve só os ids que
+      // casam para o `where`. A partir daí `orderBy`/`skip`/`take`/`count`
+      // rodam no banco. Migrar para a extensão `unaccent` (+ índice funcional)
+      // elimina este pré-filtro — ver backlog.
+      const term = normalizeForSearch(q);
+      const candidates = await prisma.stockMovement.findMany({
+        where,
+        select: { id: true, note: true, product: { select: { name: true, sku: true } } },
+      });
+      where.id = {
+        in: candidates
+          .filter(
+            (movement) =>
+              normalizeForSearch(movement.product.name).includes(term) ||
+              normalizeForSearch(movement.product.sku).includes(term) ||
+              normalizeForSearch(movement.note ?? '').includes(term),
+          )
+          .map((movement) => movement.id),
+      };
+    }
+
+    const [rows, total] = await Promise.all([
       prisma.stockMovement.findMany({
-        where: whereBase,
-        include: { product: true },
+        where,
+        include: { product: { select: { name: true, sku: true } } },
         orderBy: { date: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
       }),
-      prisma.stockMovement.count({ where: whereBase }),
+      prisma.stockMovement.count({ where }),
     ]);
 
-    const normalize = (s: string) =>
-      s
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '');
-    const filtered = q
-      ? itemsRaw.filter((m) => {
-          const term = normalize(q);
-          const name = normalize(m.product?.name || '');
-          const sku = normalize(m.product?.sku || '');
-          const note = normalize(m.note || '');
-          return name.includes(term) || sku.includes(term) || note.includes(term);
-        })
-      : itemsRaw;
-
-    const total = filtered.length;
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const pageItems = filtered.slice(start, end).map((m) => ({
-      id: m.id,
-      productId: m.productId,
-      productName: m.product?.name || '',
-      productSku: m.product?.sku || '',
-      quantity: m.quantity,
-      date: m.date,
-      note: m.note || null,
+    const items = rows.map((movement) => ({
+      id: movement.id,
+      productId: movement.productId,
+      productName: movement.product.name,
+      productSku: movement.product.sku,
+      quantity: movement.quantity,
+      date: movement.date,
+      note: movement.note || null,
     }));
 
-    res.json({ items: pageItems, total, page, pageSize });
+    res.json({ items, total, page, pageSize });
   } catch (err) {
     next(err);
   }

@@ -1,105 +1,184 @@
+import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 
 import { prisma } from '../shared/prisma';
+import { optionalTextParam, pageParam, pageSizeParam } from '../shared/queryParams';
+import { normalizeForSearch } from '../shared/text';
 
 const router = Router();
 
+const STOCK_STATUSES = ['OK', 'ATTN', 'OUT'] as const;
+type StockStatus = (typeof STOCK_STATUSES)[number];
+
+const listQuerySchema = z.object({
+  search: optionalTextParam,
+  page: pageParam,
+  // `0` significa "traga todos" — contrato já consumido pelo frontend. Acima
+  // disso o limite continua sendo 1000 itens por página, como antes; a
+  // diferença é que agora um valor fora da faixa vira 400 em vez de ser
+  // silenciosamente truncado.
+  pageSize: pageSizeParam({ min: 0, max: 1000, default: 10 }),
+  sortBy: z.enum(['name', 'sku', 'balance']).default('name'),
+  sortDir: z.enum(['asc', 'desc']).default('asc'),
+  status: z
+    .string()
+    .optional()
+    .transform((value) =>
+      (value ?? '')
+        .split(',')
+        .map((part) => part.trim().toUpperCase())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.enum(STOCK_STATUSES))),
+});
+
+/**
+ * Saldo de vários produtos em UMA ida ao banco.
+ *
+ * Antes isto era um `stockMovement.groupBy` por produto dentro de um
+ * `Promise.all` — 1 + N queries por request de listagem. Agora é um único
+ * `groupBy` por `['productId', 'type']` restrito aos ids pedidos, com a
+ * subtração IN - OUT feita em memória sobre o resultado agregado.
+ */
+async function balancesFor(productIds: string[]): Promise<Map<string, number>> {
+  const balances = new Map<string, number>(productIds.map((id) => [id, 0]));
+  if (productIds.length === 0) return balances;
+
+  const grouped = await prisma.stockMovement.groupBy({
+    by: ['productId', 'type'],
+    where: { productId: { in: productIds } },
+    _sum: { quantity: true },
+  });
+
+  for (const row of grouped) {
+    const quantity = row._sum.quantity ?? 0;
+    const signed = row.type === 'IN' ? quantity : -quantity;
+    balances.set(row.productId, (balances.get(row.productId) ?? 0) + signed);
+  }
+
+  return balances;
+}
+
+function matchesStatus(
+  product: { balance: number; minStock: number },
+  statuses: StockStatus[],
+): boolean {
+  if (statuses.length === 0) return true;
+  const map: Record<StockStatus, boolean> = {
+    OUT: product.balance === 0,
+    ATTN: product.balance > 0 && product.balance < product.minStock,
+    OK: product.balance >= product.minStock,
+  };
+  return statuses.some((status) => map[status]);
+}
+
 router.get('/', async (req, res, next) => {
   try {
-    const search = String(req.query.search || '').trim();
-    const page = Math.max(Number(req.query.page || 1), 1);
-    // Suporta pageSize=0 (retorna todos) e aumenta limite máximo para 1000
-    const rawPageSize = Number(req.query.pageSize ?? 10);
-    const pageSize = rawPageSize === 0 ? 0 : Math.min(Math.max(rawPageSize, 1), 1000);
-    const sortByRaw = String(req.query.sortBy || 'name');
-    const sortDirRaw = String(req.query.sortDir || 'asc');
-    const sortBy = ['name', 'sku', 'balance'].includes(sortByRaw) ? (sortByRaw as 'name' | 'sku' | 'balance') : 'name';
-    const sortDir = sortDirRaw === 'desc' ? 'desc' : 'asc';
-    const statusParam = String(req.query.status || '').trim();
-    const statusFilter = statusParam
-      ? statusParam.split(',').map((s) => s.toUpperCase()).filter((s) => ['OK', 'ATTN', 'OUT'].includes(s)) as Array<'OK'|'ATTN'|'OUT'>
-      : [];
+    const { search, page, pageSize, sortBy, sortDir, status } = listQuerySchema.parse(req.query);
+    // `pageSize=0` = "todos": a resposta padroniza `page: 1`, como antes.
+    const respPage = pageSize === 0 ? 1 : page;
 
-    // Normalize function to remove diacritics and lowercase
-    const normalize = (s: string) =>
-      s
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
-
-    let products = await prisma.product.findMany({ orderBy: { name: 'asc' } });
+    const where: Prisma.ProductWhereInput = {};
 
     if (search) {
-      const nQuery = normalize(search);
-      products = products.filter((p) => {
-        const nName = normalize(p.name);
-        const nSku = normalize(p.sku);
-        return nName.includes(nQuery) || nSku.includes(nQuery);
+      // DECISÃO — busca insensível a acentos.
+      // O comportamento histórico (e esperado pelo frontend) é diacritic-
+      // insensitive: "lapis" encontra "Lápis". O Postgres não faz isso com
+      // `contains`/`mode: 'insensitive'` — ILIKE resolve só caixa, não acento.
+      // As opções eram:
+      //   (a) trocar por `mode: 'insensitive'` puro — empurraria tudo para o
+      //       banco, mas QUEBRARIA a busca sem acento (regressão visível);
+      //   (b) extensão `unaccent` + índice funcional — é a solução correta a
+      //       longo prazo, mas exige `CREATE EXTENSION` (privilégio que nem
+      //       todo Postgres gerenciado concede ao owner) e não pôde ser
+      //       validada contra um banco real neste ambiente;
+      //   (c) manter a normalização em memória APENAS para o caso de busca.
+      // Escolhemos (c): o caminho quente (listagem sem busca) fica 100% no
+      // banco, e quando há termo de busca varremos só uma projeção estreita
+      // (id/name/sku, sem movimentações) para resolver os ids que casam,
+      // devolvendo-os ao `where`. Filtro, ordenação, `skip`/`take` e `count`
+      // continuam no banco. Item de backlog: migrar para (b) quando houver um
+      // Postgres onde a extensão possa ser validada.
+      const term = normalizeForSearch(search);
+      const candidates = await prisma.product.findMany({
+        select: { id: true, name: true, sku: true },
       });
+      const matchingIds = candidates
+        .filter(
+          (candidate) =>
+            normalizeForSearch(candidate.name).includes(term) ||
+            normalizeForSearch(candidate.sku).includes(term),
+        )
+        .map((candidate) => candidate.id);
+
+      if (matchingIds.length === 0) {
+        res.json({ items: [], total: 0, page: respPage, pageSize });
+        return;
+      }
+      where.id = { in: matchingIds };
     }
 
-    // Calculate balance per product
-    const productsWithBalance = await Promise.all(
-      products.map(async (p) => {
-        const agg = await prisma.stockMovement.groupBy({
-          by: ['type'],
-          where: { productId: p.id },
-          _sum: { quantity: true },
-        });
-        const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity || 0;
-        const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity || 0;
-        return { ...p, balance: sumIn - sumOut };
-      })
-    );
+    // `status` filtra por saldo e `sortBy=balance` ordena por saldo — ambos são
+    // valores derivados das movimentações, que o Prisma não sabe expressar em
+    // `where`/`orderBy` sem uma coluna/view materializada (item de backlog
+    // "saldo como coluna computada"). Só nesses dois casos caímos no caminho
+    // em memória — e mesmo lá o saldo sai de UMA agregação, nunca de N.
+    const needsDerivedValue = status.length > 0 || sortBy === 'balance';
 
-    // Optional status filtering before sorting/pagination
-    const filteredByStatus = statusFilter.length === 0
-      ? productsWithBalance
-      : productsWithBalance.filter((p) => {
-          const isOut = p.balance === 0;
-          const isAttn = p.balance > 0 && p.balance < p.minStock;
-          const isOk = p.balance >= p.minStock;
-          const map: Record<'OK'|'ATTN'|'OUT', boolean> = { OK: isOk, ATTN: isAttn, OUT: isOut };
-          return statusFilter.some((s) => map[s]);
-        });
+    if (!needsDerivedValue) {
+      // Ordenação por `name`/`sku` agora é do banco. Nuance conhecida e
+      // aceita: a ordenação em memória anterior comparava `toLowerCase()`, o
+      // que era case-insensitive; no banco a ordem passa a seguir a collation
+      // da coluna. O container do projeto usa `postgres:16-alpine` (musl), cuja
+      // collation é efetivamente byte-order — "Zebra" vem antes de "abacaxi" e
+      // acentuados vêm depois de "Z". Se isso incomodar na UI, a correção certa
+      // é uma collation ICU não determinística (ou `citext`) na coluna, não
+      // voltar a ordenar em memória.
+      const orderBy: Prisma.ProductOrderByWithRelationInput =
+        sortBy === 'sku' ? { sku: sortDir } : { name: sortDir };
 
-    // Sort according to sortBy/sortDir
-    const sorted = [...filteredByStatus].sort((a, b) => {
-      let av: string | number = '';
-      let bv: string | number = '';
-      if (sortBy === 'name') {
-        av = a.name.toLowerCase();
-        bv = b.name.toLowerCase();
-      } else if (sortBy === 'sku') {
-        av = a.sku.toLowerCase();
-        bv = b.sku.toLowerCase();
-      } else {
-        // balance
-        av = a.balance;
-        bv = b.balance;
-      }
-      if (av < bv) return sortDir === 'asc' ? -1 : 1;
-      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      const [total, pageProducts] = await Promise.all([
+        prisma.product.count({ where }),
+        prisma.product.findMany({
+          where,
+          orderBy,
+          ...(pageSize === 0 ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
+        }),
+      ]);
+
+      const balances = await balancesFor(pageProducts.map((product) => product.id));
+      const items = pageProducts.map((product) => ({
+        ...product,
+        balance: balances.get(product.id) ?? 0,
+      }));
+
+      res.json({ items, total, page: respPage, pageSize });
+      return;
+    }
+
+    const candidates = await prisma.product.findMany({ where, orderBy: { name: 'asc' } });
+    const balances = await balancesFor(candidates.map((product) => product.id));
+    const withBalance = candidates.map((product) => ({
+      ...product,
+      balance: balances.get(product.id) ?? 0,
+    }));
+
+    const filtered = withBalance.filter((product) => matchesStatus(product, status));
+    const direction = sortDir === 'asc' ? 1 : -1;
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === 'balance') return (a.balance - b.balance) * direction;
+      const av = sortBy === 'sku' ? a.sku.toLowerCase() : a.name.toLowerCase();
+      const bv = sortBy === 'sku' ? b.sku.toLowerCase() : b.name.toLowerCase();
+      if (av < bv) return -direction;
+      if (av > bv) return direction;
       return 0;
     });
 
-    // Paginação em memória (para datasets pequenos). Se pageSize=0, retorna todos
-    const total = sorted.length;
-    let items = sorted;
-    let respPage = page;
-    let respPageSize = pageSize;
-    if (pageSize !== 0) {
-      const start = (page - 1) * pageSize;
-      const end = start + pageSize;
-      items = sorted.slice(start, end);
-    } else {
-      // quando retornando todos, padroniza page=1
-      respPage = 1;
-      respPageSize = 0;
-    }
+    const start = (page - 1) * pageSize;
+    const items = pageSize === 0 ? sorted : sorted.slice(start, start + pageSize);
 
-    res.json({ items, total, page: respPage, pageSize: respPageSize });
+    res.json({ items, total: filtered.length, page: respPage, pageSize });
   } catch (err) {
     next(err);
   }
@@ -129,7 +208,7 @@ router.post('/', async (req, res, next) => {
         data: {
           productId: created.id,
           type: 'IN',
-          quantity: initialStock!,
+          quantity: initialStock,
           date: new Date(),
         },
       });
@@ -146,15 +225,9 @@ router.get('/:id', async (req, res, next) => {
     const product = await prisma.product.findUnique({ where: { id } });
     if (!product) return res.status(404).json({ message: 'Produto não encontrado' });
 
-    const agg = await prisma.stockMovement.groupBy({
-      by: ['type'],
-      where: { productId: id },
-      _sum: { quantity: true },
-    });
-    const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity || 0;
-    const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity || 0;
+    const balances = await balancesFor([id]);
 
-    res.json({ ...product, balance: sumIn - sumOut });
+    res.json({ ...product, balance: balances.get(id) ?? 0 });
   } catch (err) {
     next(err);
   }

@@ -4,6 +4,12 @@ import { z } from 'zod';
 
 import { HttpError } from '../shared/httpError';
 import { prisma } from '../shared/prisma';
+import {
+  optionalDateParam,
+  optionalTextParam,
+  pageParam,
+  pageSizeParam,
+} from '../shared/queryParams';
 
 const router = Router();
 
@@ -14,35 +20,32 @@ const movementSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
+// Query params validados na borda HTTP (antes eram `String()`/`Number()` na
+// mão, que engoliam entrada inválida em silêncio). Limites preservados:
+// pageSize entre 1 e 100, default 20.
+const movementListQuerySchema = z.object({
+  page: pageParam,
+  pageSize: pageSizeParam({ min: 1, max: 100, default: 20 }),
+  type: z.enum(['IN', 'OUT']).optional(),
+  from: optionalDateParam,
+  to: optionalDateParam,
+  q: optionalTextParam,
+});
+
 router.get('/:id/movements', async (req, res, next) => {
   try {
     const id = req.params.id;
-    const page = Math.max(Number(req.query.page || 1), 1);
-    const pageSize = Math.min(Math.max(Number(req.query.pageSize || 20), 1), 100);
-    const type = String(req.query.type || '').trim(); // IN | OUT | ''
-    const from = String(req.query.from || '').trim(); // ISO date
-    const to = String(req.query.to || '').trim(); // ISO date
-    const q = String(req.query.q || '').trim(); // substring of note
+    const { page, pageSize, type, from, to, q } = movementListQuerySchema.parse(req.query);
 
     const where: Prisma.StockMovementWhereInput = { productId: id };
-    if (type === 'IN' || type === 'OUT') {
+    if (type) {
       where.type = type;
     }
-    const dateFilter: Prisma.DateTimeFilter = {};
-    if (from) {
-      const d = new Date(from);
-      if (!isNaN(d.getTime())) {
-        dateFilter.gte = d;
-      }
-    }
-    if (to) {
-      const d = new Date(to);
-      if (!isNaN(d.getTime())) {
-        dateFilter.lte = d;
-      }
-    }
-    if (Object.keys(dateFilter).length > 0) {
-      where.date = dateFilter;
+    if (from || to) {
+      where.date = {
+        ...(from ? { gte: from } : {}),
+        ...(to ? { lte: to } : {}),
+      };
     }
     if (q) {
       where.note = { contains: q, mode: 'insensitive' };
