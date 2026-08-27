@@ -6,6 +6,97 @@ import { resetDb } from './helpers/db';
 import { createTestUser, loginAndGetToken } from './helpers/auth';
 
 /**
+ * Task 2 do implementation-plan.md: GET /:id/movements passa a aceitar
+ * ADJUSTMENT (e INITIAL_STOCK, mesma lacuna) no filtro de tipo, e a devolver
+ * o e-mail de quem fez a movimentação — quando existir.
+ */
+describe('GET /api/products/:id/movements — ADJUSTMENT no filtro e autor', () => {
+  const app = createServer();
+  let token: string;
+  let userId: string;
+  let userEmail: string;
+  let productId: string;
+
+  beforeAll(async () => {
+    await resetDb();
+    userEmail = 'autor-ajuste@example.com';
+    const { user, password } = await createTestUser(userEmail, 'senha-forte-123');
+    userId = user.id;
+    token = await loginAndGetToken(app, user.email, password);
+
+    const product = await prisma.product.create({
+      data: { name: 'Caneta com Ajuste', sku: `MOV-ADJ-${Date.now()}`, minStock: 0 },
+    });
+    productId = product.id;
+
+    await prisma.stockMovement.createMany({
+      data: [
+        { productId, type: 'IN', quantity: 10, previousQuantity: 0, newQuantity: 10, userId },
+        {
+          productId,
+          type: 'ADJUSTMENT',
+          quantity: 2,
+          previousQuantity: 10,
+          newQuantity: 8,
+          note: 'Contagem física mensal',
+          userId,
+        },
+        {
+          productId,
+          type: 'INITIAL_STOCK',
+          quantity: 5,
+          previousQuantity: 0,
+          newQuantity: 5,
+          userId,
+        },
+      ],
+    });
+
+    // Simula um registro legado sem userId (anterior à Fase 1 de auditoria).
+    await prisma.stockMovement.create({
+      data: { productId, type: 'ADJUSTMENT', quantity: 1, previousQuantity: 8, newQuantity: 7, note: 'Ajuste antigo' },
+    });
+  });
+
+  const movements = (qs: string) =>
+    request(app)
+      .get(`/api/products/${productId}/movements?${qs}`)
+      .set('Authorization', `Bearer ${token}`);
+
+  it('filtra por type=ADJUSTMENT e devolve só movimentações de ajuste', async () => {
+    const res = await movements('type=ADJUSTMENT');
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(2);
+    expect(res.body.items.every((m: { type: string }) => m.type === 'ADJUSTMENT')).toBe(true);
+  });
+
+  it('filtra por type=INITIAL_STOCK', async () => {
+    const res = await movements('type=INITIAL_STOCK');
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.items[0].type).toBe('INITIAL_STOCK');
+  });
+
+  it('devolve o e-mail do autor quando userId está preenchido', async () => {
+    const res = await movements('type=IN');
+
+    expect(res.status).toBe(200);
+    expect(res.body.items[0].userEmail).toBe(userEmail);
+  });
+
+  it('devolve userEmail nulo para movimentação sem userId, sem quebrar a resposta', async () => {
+    const res = await movements('type=ADJUSTMENT');
+
+    expect(res.status).toBe(200);
+    const legacy = res.body.items.find((m: { note: string }) => m.note === 'Ajuste antigo');
+    expect(legacy).toBeDefined();
+    expect(legacy.userEmail).toBeNull();
+  });
+});
+
+/**
  * `GET /api/products/:id/movements` parseava `page`/`pageSize`/`type`/`from`/
  * `to`/`q` na mão com `String()`/`Number()`, engolindo silenciosamente valores
  * inválidos. Agora tudo passa por Zod e vira 400 no handler de erro global.

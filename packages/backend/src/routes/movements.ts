@@ -26,7 +26,7 @@ const movementSchema = z.object({
 const movementListQuerySchema = z.object({
   page: pageParam,
   pageSize: pageSizeParam({ min: 1, max: 100, default: 20 }),
-  type: z.enum(['IN', 'OUT']).optional(),
+  type: z.enum(['IN', 'OUT', 'ADJUSTMENT', 'INITIAL_STOCK']).optional(),
   from: optionalDateParam,
   to: optionalDateParam,
   q: optionalTextParam,
@@ -51,15 +51,22 @@ router.get('/:id/movements', async (req, res, next) => {
       where.note = { contains: q, mode: 'insensitive' };
     }
 
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.stockMovement.findMany({
         where,
         orderBy: { date: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: { user: { select: { email: true } } },
       }),
       prisma.stockMovement.count({ where }),
     ]);
+
+    // Achata `user: { email }` em `userEmail` — mesmo padrão de exposição
+    // mínima de `routes/auth.ts` (nunca o registro completo do usuário).
+    // `null` quando a movimentação não tem `userId` (registro anterior à
+    // Fase 1 de auditoria), nunca omitido silenciosamente.
+    const items = rows.map(({ user, ...movement }) => ({ ...movement, userEmail: user?.email ?? null }));
 
     res.json({ items, total, page, pageSize });
   } catch (err) {
