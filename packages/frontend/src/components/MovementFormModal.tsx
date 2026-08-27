@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -9,18 +10,23 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { useToast } from './ui/ToastProvider';
 
-const schema = z.object({
+export const movementSchema = z.object({
   type: z.enum(['IN', 'OUT'], { required_error: 'Selecione o tipo' }),
   quantity: z.coerce.number().int().positive('Quantidade deve ser > 0'),
+  // O input é `datetime-local`, que produz "2027-05-10T15:31" — sem segundos e
+  // sem offset. `z.string().datetime()` exige ISO-8601 completo em UTC, então
+  // rejeitava TODO valor preenchido com o erro cru "Invalid datetime", deixando
+  // um campo "opcional" impossível de usar. Aqui validamos que é uma data
+  // reconhecível (mensagem em pt-BR) e convertemos para ISO no envio — o
+  // backend continua estrito em ISO, como deve ser.
   date: z
     .string()
-    .datetime()
     .optional()
-    .or(z.literal('')),
+    .refine((value) => !value || !Number.isNaN(new Date(value).getTime()), 'Data inválida'),
   note: z.string().optional().or(z.literal('')),
 });
 
-export type MovementFormValues = z.infer<typeof schema>;
+export type MovementFormValues = z.infer<typeof movementSchema>;
 
 type Props = {
   open: boolean;
@@ -36,31 +42,35 @@ export function MovementFormModal({ open, onOpenChange, productId, onSuccess }: 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
     reset,
   } = useForm<MovementFormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(movementSchema),
     defaultValues: { type: 'IN', quantity: 1, date: '', note: '' },
   });
 
-  async function onSubmit(values: MovementFormValues) {
-    setServerError(null);
-    try {
-      await createMovement(productId, {
+  const mutation = useMutation({
+    mutationFn: (values: MovementFormValues) =>
+      createMovement(productId, {
         type: values.type,
         quantity: values.quantity,
-        date: values.date || undefined,
+        // `datetime-local` é hora local; `toISOString()` normaliza para UTC.
+        date: values.date ? new Date(values.date).toISOString() : undefined,
         note: values.note || undefined,
-      });
+      }),
+    onSuccess: () => {
       reset();
+      setServerError(null);
       onOpenChange(false);
       onSuccess?.();
       showToast({ type: 'success', message: 'Movimentação lançada com sucesso.' });
-    } catch (e: any) {
-      setServerError(e?.message || 'Falha ao lançar movimentação');
-      showToast({ type: 'error', message: e?.message || 'Falha ao lançar movimentação' });
-    }
-  }
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error && error.message ? error.message : 'Falha ao lançar movimentação';
+      setServerError(message);
+      showToast({ type: 'error', message });
+    },
+  });
 
   return (
     <Modal
@@ -69,83 +79,97 @@ export function MovementFormModal({ open, onOpenChange, productId, onSuccess }: 
       title="Movimentar Estoque"
       description="Lance uma entrada (IN) ou saída (OUT) para este produto."
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-            <div>
-              <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-                Tipo*
-              </label>
-              <select
-                id="type"
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('type')}
-              >
-                <option value="IN">Entrada (IN)</option>
-                <option value="OUT">Saída (OUT)</option>
-              </select>
-              {errors.type && (
-                <p className="mt-1 text-xs text-red-700" role="alert">
-                  {errors.type.message}
-                </p>
-              )}
-            </div>
+      <form
+        onSubmit={handleSubmit((values) => {
+          setServerError(null);
+          mutation.mutate(values);
+        })}
+        className="space-y-3"
+      >
+        <div>
+          <label htmlFor="movement-type" className="block text-sm font-medium text-gray-700">
+            Tipo*
+          </label>
+          <select
+            id="movement-type"
+            aria-invalid={!!errors.type}
+            aria-describedby={errors.type ? 'movement-type-error' : undefined}
+            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
+            {...register('type')}
+          >
+            <option value="IN">Entrada (IN)</option>
+            <option value="OUT">Saída (OUT)</option>
+          </select>
+          {errors.type && (
+            <p id="movement-type-error" className="mt-1 text-xs text-red-700" role="alert">
+              {errors.type.message}
+            </p>
+          )}
+        </div>
 
-            <div>
-              <label htmlFor="quantity" className="block text-sm font-medium text-gray-700">
-                Quantidade*
-              </label>
-              <input
-                id="quantity"
-                type="number"
-                min={1}
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('quantity')}
-              />
-              {errors.quantity && (
-                <p className="mt-1 text-xs text-red-700" role="alert">
-                  {errors.quantity.message}
-                </p>
-              )}
-            </div>
+        <div>
+          <label htmlFor="movement-quantity" className="block text-sm font-medium text-gray-700">
+            Quantidade*
+          </label>
+          <input
+            id="movement-quantity"
+            type="number"
+            min={1}
+            aria-invalid={!!errors.quantity}
+            aria-describedby={errors.quantity ? 'movement-quantity-error' : undefined}
+            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
+            {...register('quantity')}
+          />
+          {errors.quantity && (
+            <p id="movement-quantity-error" className="mt-1 text-xs text-red-700" role="alert">
+              {errors.quantity.message}
+            </p>
+          )}
+        </div>
 
-            <div>
-              <label htmlFor="date" className="block text-sm font-medium text-gray-700">
-                Data (opcional)
-              </label>
-              <input
-                id="date"
-                type="datetime-local"
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('date')}
-              />
-              {errors.date && (
-                <p className="mt-1 text-xs text-red-700" role="alert">
-                  {errors.date.message}
-                </p>
-              )}
-            </div>
+        <div>
+          <label htmlFor="movement-date" className="block text-sm font-medium text-gray-700">
+            Data (opcional)
+          </label>
+          <input
+            id="movement-date"
+            type="datetime-local"
+            aria-invalid={!!errors.date}
+            aria-describedby={errors.date ? 'movement-date-error' : undefined}
+            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
+            {...register('date')}
+          />
+          {errors.date && (
+            <p id="movement-date-error" className="mt-1 text-xs text-red-700" role="alert">
+              {errors.date.message}
+            </p>
+          )}
+        </div>
 
-            <div>
-              <label htmlFor="note" className="block text-sm font-medium text-gray-700">
-                Observação (opcional)
-              </label>
-              <textarea
-                id="note"
-                rows={3}
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('note')}
-              />
-            </div>
+        <div>
+          <label htmlFor="movement-note" className="block text-sm font-medium text-gray-700">
+            Observação (opcional)
+          </label>
+          <textarea
+            id="movement-note"
+            rows={3}
+            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
+            {...register('note')}
+          />
+        </div>
 
-            {serverError && (
-              <p className="text-sm text-red-700" role="alert">
-                {serverError}
-              </p>
-            )}
+        {serverError && (
+          <p className="text-sm text-red-700" role="alert">
+            {serverError}
+          </p>
+        )}
 
         <div className="mt-4 flex items-center justify-end gap-2">
-          <Button type="button" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting}>
-            {isSubmitting ? 'Lançando...' : 'Lançar'}
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button type="submit" variant="primary" disabled={mutation.isPending} isLoading={mutation.isPending}>
+            {mutation.isPending ? 'Lançando...' : 'Lançar'}
           </Button>
         </div>
       </form>

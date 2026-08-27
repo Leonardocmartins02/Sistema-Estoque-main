@@ -32,30 +32,32 @@ describe('Modal (primitivo único do design system)', () => {
   });
 
   it('gera ids únicos por instância (nunca "modal-title" hardcoded)', async () => {
-    // O Radix aplica `pointer-events: none` no body enquanto um modal está
-    // aberto; em jsdom isso bloqueia o clique simulado no segundo gatilho.
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
       <>
-        <Harness title="Primeiro" />
-        <Harness title="Segundo" />
+        <Modal open onClose={() => {}} title="Primeiro" description="Desc 1">
+          conteúdo 1
+        </Modal>
+        <Modal open onClose={() => {}} title="Segundo" description="Desc 2">
+          conteúdo 2
+        </Modal>
       </>,
     );
-
-    const [abrirA, abrirB] = screen.getAllByRole('button', { name: 'abrir' });
-    await user.click(abrirA);
-    await user.click(abrirB);
 
     // Consulta direta no DOM: com dois diálogos modais montados, o de baixo fica
     // `aria-hidden` e sairia de `getAllByRole` — mas os ids precisam ser únicos
     // no documento de qualquer forma.
     await waitFor(() => expect(document.querySelectorAll('[role="dialog"]').length).toBe(2));
     const dialogs = Array.from(document.querySelectorAll('[role="dialog"]'));
-    const ids = dialogs.map((d) => d.getAttribute('aria-labelledby'));
-    expect(ids[0]).toBeTruthy();
-    expect(ids[0]).not.toBe('modal-title');
-    expect(ids[0]).not.toBe(ids[1]);
-    expect(document.querySelectorAll('#modal-title').length).toBe(0);
+    const labelIds = dialogs.map((d) => d.getAttribute('aria-labelledby'));
+    const descIds = dialogs.map((d) => d.getAttribute('aria-describedby'));
+
+    expect(labelIds[0]).toBeTruthy();
+    expect(labelIds[0]).not.toBe('modal-title');
+    expect(labelIds[0]).not.toBe(labelIds[1]);
+    expect(descIds[0]).toBeTruthy();
+    expect(descIds[0]).not.toBe('modal-desc');
+    expect(descIds[0]).not.toBe(descIds[1]);
+    expect(document.querySelectorAll('#modal-title, #modal-desc')).toHaveLength(0);
   });
 
   it('move o foco para dentro do diálogo ao abrir e o devolve ao gatilho ao fechar', async () => {

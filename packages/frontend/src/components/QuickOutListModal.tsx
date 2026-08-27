@@ -8,25 +8,20 @@ import Badge from './ui/Badge';
 import Button from './ui/Button';
 
 
+// Este modal busca a própria lista de produtos (ver useEffect abaixo), com
+// paginação/ordenação próprias — por isso não recebe `items`/`loading` do pai.
+// A migração deste fetch manual para React Query segue no backlog (CLAUDE.md).
 export type QuickOutListModalProps = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  items: ProductWithBalance[];
   onPick: (p: ProductWithBalance) => void;
-  loading?: boolean;
   onOpenHistory?: () => void;
 };
 
 export default function QuickOutListModal({
   open,
   onOpenChange,
-  // O modal busca seus próprios dados (ver useEffect abaixo) em vez de usar
-  // `items`/`loading` do pai — duplicação de fetch conhecida, registrada no
-  // backlog de consolidação de data-fetching (ver CLAUDE.md). Mantido no
-  // tipo da prop para não quebrar quem já chama este componente passando-as.
-  items: _items,
   onPick,
-  loading: _loading,
   onOpenHistory,
 }: QuickOutListModalProps) {
   if (!open) return null;
