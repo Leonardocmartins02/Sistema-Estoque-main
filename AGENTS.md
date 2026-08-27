@@ -8,7 +8,7 @@ Monorepo pnpm (`workspaces: packages/*`):
 
 ## Time de agentes
 
-Este projeto usa subagentes especializados em `.claude/agents/`. Ao pedir uma mudança, o Claude Code deve delegar para o especialista certo em vez de fazer tudo no mesmo contexto:
+Este projeto usa subagentes especializados em `.Codex/agents/`. Ao pedir uma mudança, o Codex deve delegar para o especialista certo em vez de fazer tudo no mesmo contexto:
 
 | Agente | Responsabilidade |
 |---|---|
