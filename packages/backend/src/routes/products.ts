@@ -3,7 +3,7 @@ import type { ProductStockSummary } from '@simplestock/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { recordMovementInTx } from '../services/stockService';
+import { recordMovementInTx, sumAdjustmentDeltas } from '../services/stockService';
 import { prisma } from '../shared/prisma';
 import { optionalTextParam, pageParam, pageSizeParam } from '../shared/queryParams';
 import { normalizeForSearch } from '../shared/text';
@@ -36,12 +36,17 @@ const listQuerySchema = z.object({
 });
 
 /**
- * Saldo de vários produtos em UMA ida ao banco.
+ * Saldo de vários produtos em UMA ida ao banco (mais uma para ADJUSTMENT).
  *
- * Antes isto era um `stockMovement.groupBy` por produto dentro de um
- * `Promise.all` — 1 + N queries por request de listagem. Agora é um único
- * `groupBy` por `['productId', 'type']` restrito aos ids pedidos, com a
- * subtração IN - OUT feita em memória sobre o resultado agregado.
+ * `IN`/`OUT`/`INITIAL_STOCK` continuam num único `groupBy` por
+ * `['productId', 'type']` — comutativos, soma direta no banco. `ADJUSTMENT`
+ * NÃO tem sinal fixo por tipo (pode subir ou descer o saldo com o mesmo
+ * `type`) — por isso NUNCA deve ser tratado como "tudo que não é IN é
+ * negativo" (esse era o bug: `INITIAL_STOCK` e `ADJUSTMENT` ficavam com
+ * sinal invertido). O efeito de cada ADJUSTMENT é `newQuantity -
+ * previousQuantity`, somado via `sumAdjustmentDeltas` (mesma função usada
+ * por `stockService.currentBalance`, ver lá a explicação completa e a
+ * decisão registrada para ADJUSTMENT incompleto/legado).
  */
 async function balancesFor(productIds: string[]): Promise<Map<string, number>> {
   const balances = new Map<string, number>(productIds.map((id) => [id, 0]));
@@ -49,14 +54,28 @@ async function balancesFor(productIds: string[]): Promise<Map<string, number>> {
 
   const grouped = await prisma.stockMovement.groupBy({
     by: ['productId', 'type'],
-    where: { productId: { in: productIds } },
+    where: { productId: { in: productIds }, type: { in: ['IN', 'OUT', 'INITIAL_STOCK'] } },
     _sum: { quantity: true },
   });
 
   for (const row of grouped) {
     const quantity = row._sum.quantity ?? 0;
-    const signed = row.type === 'IN' ? quantity : -quantity;
+    const signed = row.type === 'OUT' ? -quantity : quantity;
     balances.set(row.productId, (balances.get(row.productId) ?? 0) + signed);
+  }
+
+  const adjustments = await prisma.stockMovement.findMany({
+    where: { productId: { in: productIds }, type: 'ADJUSTMENT' },
+    select: { productId: true, previousQuantity: true, newQuantity: true },
+  });
+  const adjustmentsByProduct = new Map<string, typeof adjustments>();
+  for (const adjustment of adjustments) {
+    const list = adjustmentsByProduct.get(adjustment.productId) ?? [];
+    list.push(adjustment);
+    adjustmentsByProduct.set(adjustment.productId, list);
+  }
+  for (const [productId, rows] of adjustmentsByProduct) {
+    balances.set(productId, (balances.get(productId) ?? 0) + sumAdjustmentDeltas(rows));
   }
 
   return balances;

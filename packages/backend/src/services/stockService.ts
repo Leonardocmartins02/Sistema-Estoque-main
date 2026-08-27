@@ -1,6 +1,7 @@
 import { Prisma, StockMovement } from '@prisma/client';
 
 import { HttpError } from '../shared/httpError';
+import { logger } from '../shared/logger';
 import { prisma } from '../shared/prisma';
 
 /**
@@ -36,39 +37,68 @@ const SIGNED_DIRECTION: Record<RecordableMovementType, 1 | -1> = {
   OUT: -1,
 };
 
+export type AdjustmentDeltaRow = {
+  productId?: string;
+  previousQuantity: number | null;
+  newQuantity: number | null;
+};
+
 /**
- * Saldo atual do produto. `IN`/`OUT`/`INITIAL_STOCK` são comutativos — a
- * ordem não importa, soma é soma. `ADJUSTMENT` NÃO é: ele fixa um saldo
- * absoluto num ponto no tempo (`newQuantity`), então qualquer soma de
- * quantidades assinadas que ignore esse ponto de corte conta duas vezes (ou
- * zero vezes) o que o ajuste já corrigiu. Por isso: acha o `ADJUSTMENT` mais
- * recente (se houver) e usa `newQuantity` dele como baseline, somando só as
- * movimentações IN/OUT/INITIAL_STOCK criadas DEPOIS dele. Sem nenhum
- * `ADJUSTMENT` ainda, o comportamento é idêntico ao de antes (soma de tudo).
+ * Soma o efeito de movimentações ADJUSTMENT no saldo, uma por uma.
+ *
+ * `IN`/`OUT`/`INITIAL_STOCK` são comutativos (soma é soma, ordem não
+ * importa) e continuam agregados via `groupBy` nos dois pontos que usam
+ * este helper (`currentBalance` aqui, `balancesFor` em `routes/products.ts`).
+ * `ADJUSTMENT` NÃO é comutativo por natureza — fixa um saldo absoluto num
+ * ponto no tempo — mas seu efeito INCREMENTAL é sempre exatamente
+ * `newQuantity - previousQuantity`. Somar esse delta (em vez de achar "o
+ * ajuste mais recente" e tratá-lo como baseline) dá o mesmo resultado sem
+ * precisar de uma noção de "checkpoint": a soma de TODOS os deltas de TODAS
+ * as movimentações (de qualquer tipo, em qualquer ordem) já é o saldo final,
+ * porque `previousQuantity` de cada ajuste sempre reflete o saldo real no
+ * momento em que foi criado (`recordAdjustmentInTx` garante isso).
+ *
+ * DECISÃO REGISTRADA: uma `ADJUSTMENT` sem `previousQuantity`/`newQuantity`
+ * preenchidos nunca deveria existir (o `StockService` sempre preenche os
+ * dois) — só é possível por escrita direta no banco fora deste serviço
+ * (dado legado/corrompido). Nesse caso, o efeito dela no saldo é tratado
+ * como zero (não lança erro — não queremos que uma única linha corrompida
+ * derrube uma listagem inteira de produtos) e a ocorrência é logada como
+ * warning, para não ficar silenciosa a quem opera o sistema.
  */
+export function sumAdjustmentDeltas(rows: AdjustmentDeltaRow[]): number {
+  let total = 0;
+  for (const row of rows) {
+    if (row.previousQuantity === null || row.newQuantity === null) {
+      logger.warn(
+        { productId: row.productId },
+        'StockMovement ADJUSTMENT sem previousQuantity/newQuantity — efeito tratado como zero no cálculo de saldo.',
+      );
+      continue;
+    }
+    total += row.newQuantity - row.previousQuantity;
+  }
+  return total;
+}
+
+/** Saldo atual do produto — ver `sumAdjustmentDeltas` para a regra de ADJUSTMENT. */
 async function currentBalance(tx: Prisma.TransactionClient, productId: string): Promise<number> {
-  const lastAdjustment = await tx.stockMovement.findFirst({
-    where: { productId, type: 'ADJUSTMENT' },
-    orderBy: { createdAt: 'desc' },
-    select: { newQuantity: true, createdAt: true },
-  });
-
-  const where: Prisma.StockMovementWhereInput = lastAdjustment
-    ? { productId, createdAt: { gt: lastAdjustment.createdAt } }
-    : { productId };
-
   const agg = await tx.stockMovement.groupBy({
     by: ['type'],
-    where,
+    where: { productId, type: { in: ['IN', 'OUT', 'INITIAL_STOCK'] } },
     _sum: { quantity: true },
   });
   const sumIn =
     (agg.find((a) => a.type === 'IN')?._sum.quantity ?? 0) +
     (agg.find((a) => a.type === 'INITIAL_STOCK')?._sum.quantity ?? 0);
   const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity ?? 0;
-  const baseline = lastAdjustment?.newQuantity ?? 0;
 
-  return baseline + sumIn - sumOut;
+  const adjustments = await tx.stockMovement.findMany({
+    where: { productId, type: 'ADJUSTMENT' },
+    select: { previousQuantity: true, newQuantity: true },
+  });
+
+  return sumIn - sumOut + sumAdjustmentDeltas(adjustments);
 }
 
 /**

@@ -190,6 +190,37 @@ describe('POST /products/:id/adjustments', () => {
     expect(await currentBalance(product.id)).toBe(15);
   });
 
+  it('ADJUSTMENT para baixo seguido de ADJUSTMENT para cima: o segundo enxerga o saldo resultante do primeiro', async () => {
+    const product = await createProductWithBalance(`ADJ-SEQ-${Date.now()}`, 20);
+
+    const first = await request(app)
+      .post(`/api/products/${product.id}/adjustments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ targetQuantity: 18, expectedPreviousQuantity: 20, reason: 'Contagem física — primeira conferência' });
+    expect(first.status).toBe(201);
+    expect(first.body.previousQuantity).toBe(20);
+    expect(first.body.newQuantity).toBe(18);
+
+    // O segundo ajuste usa 18 como expectedPreviousQuantity — só é aceito se
+    // o saldo calculado pelo sistema já refletir o primeiro ajuste. Antes da
+    // correção de currentBalance(), o sistema ainda enxergava 20 (ignorava
+    // ADJUSTMENT por completo), e este segundo pedido seria rejeitado com
+    // 409 mesmo estando correto.
+    const second = await request(app)
+      .post(`/api/products/${product.id}/adjustments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ targetQuantity: 25, expectedPreviousQuantity: 18, reason: 'Contagem física — recontagem' });
+    expect(second.status).toBe(201);
+    expect(second.body.previousQuantity).toBe(18);
+    expect(second.body.newQuantity).toBe(25);
+
+    expect(await currentBalance(product.id)).toBe(25);
+
+    // Nenhuma movimentação indevida: exatamente IN inicial + 2 ADJUSTMENT, nada a mais.
+    const total = await prisma.stockMovement.count({ where: { productId: product.id } });
+    expect(total).toBe(3);
+  });
+
   it('produto não encontrado retorna 404', async () => {
     const res = await request(app)
       .post('/api/products/produto-inexistente/adjustments')
