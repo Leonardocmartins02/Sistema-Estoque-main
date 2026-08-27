@@ -5,7 +5,7 @@ export async function fetchMovements(
   productId: string,
   page = 1,
   pageSize = 20,
-  filters?: { type?: 'IN' | 'OUT' | ''; from?: string; to?: string; q?: string },
+  filters?: { type?: 'IN' | 'OUT' | 'ADJUSTMENT' | 'INITIAL_STOCK' | ''; from?: string; to?: string; q?: string },
 ): Promise<Paged<Movement>> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (filters?.type) params.set('type', filters.type);
