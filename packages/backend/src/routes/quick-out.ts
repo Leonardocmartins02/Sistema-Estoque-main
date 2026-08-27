@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { HttpError } from '../shared/httpError';
+import { recordMovement } from '../services/stockService';
 import { prisma } from '../shared/prisma';
 import {
   optionalDateParam,
@@ -24,52 +24,29 @@ router.post('/', async (req, res, next) => {
   try {
     const { productId, quantity, note } = quickOutSchema.parse(req.body);
 
-    // Mesma proteção de transação + lock de linha usada em movements.ts —
-    // ver o comentário lá para o motivo (condição de corrida no saldo).
-    const result = await prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ id: string }[]>`
-        SELECT "id" FROM "Product" WHERE "id" = ${productId} FOR UPDATE
-      `;
-      if (locked.length === 0) {
-        throw new HttpError(404, 'Produto não encontrado.');
-      }
-      const product = await tx.product.findUniqueOrThrow({ where: { id: productId } });
-
-      const agg = await tx.stockMovement.groupBy({
-        by: ['type'],
-        where: { productId },
-        _sum: { quantity: true },
-      });
-      const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity ?? 0;
-      const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity ?? 0;
-      const currentBalance = sumIn - sumOut;
-
-      if (quantity > currentBalance) {
-        throw new HttpError(422, 'Estoque insuficiente.');
-      }
-
-      const movement = await tx.stockMovement.create({
-        data: {
-          productId,
-          type: 'OUT',
-          quantity,
-          note: note || `Baixa rápida - ${quantity} un.`,
-        },
-      });
-
-      await tx.product.update({ where: { id: productId }, data: { updatedAt: new Date() } });
-
-      return { movement, product, newBalance: currentBalance - quantity };
+    // Lock, saldo, validação e previousQuantity/newQuantity/userId ficam no
+    // StockService (ver stockService.ts) — mesmo mecanismo de movements.ts.
+    const movement = await recordMovement({
+      productId,
+      type: 'OUT',
+      quantity,
+      userId: req.user!.id,
+      note: note || `Baixa rápida - ${quantity} un.`,
+      insufficientStockMessage: 'Estoque insuficiente.',
     });
+
+    // Leitura à parte, só para formatar a resposta (nome/sku do produto) —
+    // não faz parte da decisão de saldo, que já foi resolvida acima.
+    const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
 
     res.json({
       success: true,
-      movement: result.movement,
-      newBalance: result.newBalance,
+      movement,
+      newBalance: movement.newQuantity,
       product: {
-        id: result.product.id,
-        name: result.product.name,
-        sku: result.product.sku,
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
       },
     });
   } catch (err) {

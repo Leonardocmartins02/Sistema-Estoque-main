@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { HttpError } from '../shared/httpError';
+import { recordMovement } from '../services/stockService';
 import { prisma } from '../shared/prisma';
 import {
   optionalDateParam,
@@ -72,42 +72,18 @@ router.post('/:id/movements', async (req, res, next) => {
     const id = req.params.id;
     const data = movementSchema.parse(req.body);
 
-    // Toda a sequência ler-saldo -> decidir -> escrever-movimentação roda
-    // dentro de uma transação com lock de linha (`FOR UPDATE`) no produto:
-    // duas requisições OUT concorrentes para o mesmo produto serializam
-    // aqui, a segunda só lê o saldo depois que a primeira commitou. Sem
-    // isso, ambas podiam ler o mesmo saldo e ambas passar na checagem,
-    // deixando o estoque negativo.
-    const created = await prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<{ id: string }[]>`
-        SELECT "id" FROM "Product" WHERE "id" = ${id} FOR UPDATE
-      `;
-      if (locked.length === 0) {
-        throw new HttpError(404, 'Produto não encontrado.');
-      }
-
-      const agg = await tx.stockMovement.groupBy({
-        by: ['type'],
-        where: { productId: id },
-        _sum: { quantity: true },
-      });
-      const sumIn = agg.find((a) => a.type === 'IN')?._sum.quantity ?? 0;
-      const sumOut = agg.find((a) => a.type === 'OUT')?._sum.quantity ?? 0;
-      const balance = sumIn - sumOut;
-
-      if (data.type === 'OUT' && data.quantity > balance) {
-        throw new HttpError(422, 'Saída maior que o saldo atual do produto.');
-      }
-
-      return tx.stockMovement.create({
-        data: {
-          productId: id,
-          type: data.type,
-          quantity: data.quantity,
-          date: data.date ? new Date(data.date) : new Date(),
-          note: data.note ?? undefined,
-        },
-      });
+    // Lock, cálculo de saldo, validação de saldo insuficiente e gravação de
+    // previousQuantity/newQuantity/userId ficam centralizados no StockService
+    // (mesmo padrão de lock de linha que já existia aqui, agora reaproveitado
+    // por movements.ts, quick-out.ts e products.ts).
+    const created = await recordMovement({
+      productId: id,
+      type: data.type,
+      quantity: data.quantity,
+      userId: req.user!.id,
+      date: data.date ? new Date(data.date) : undefined,
+      note: data.note,
+      insufficientStockMessage: 'Saída maior que o saldo atual do produto.',
     });
 
     res.status(201).json(created);

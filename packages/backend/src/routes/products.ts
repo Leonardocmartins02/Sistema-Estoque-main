@@ -3,6 +3,7 @@ import type { ProductStockSummary } from '@simplestock/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 
+import { recordMovementInTx } from '../services/stockService';
 import { prisma } from '../shared/prisma';
 import { optionalTextParam, pageParam, pageSizeParam } from '../shared/queryParams';
 import { normalizeForSearch } from '../shared/text';
@@ -222,18 +223,27 @@ router.post('/', async (req, res, next) => {
     if (existing) return res.status(409).json({ message: 'SKU já cadastrado.' });
 
     const { initialStock, ...productData } = data;
-    const created = await prisma.product.create({ data: { ...productData } });
 
-    if ((initialStock ?? 0) > 0) {
-      await prisma.stockMovement.create({
-        data: {
-          productId: created.id,
-          type: 'IN',
+    // Produto + movimentação de estoque inicial na mesma transação: se a
+    // gravação da movimentação falhar, a criação do produto também é
+    // revertida — antes eram dois `await` separados e um produto podia
+    // ficar órfão, sem sua movimentação inicial, se o segundo falhasse.
+    const created = await prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({ data: { ...productData } });
+
+      if ((initialStock ?? 0) > 0) {
+        await recordMovementInTx(tx, {
+          productId: product.id,
+          type: 'INITIAL_STOCK',
           quantity: initialStock,
-          date: new Date(),
-        },
-      });
-    }
+          userId: req.user!.id,
+          note: 'Estoque inicial',
+        });
+      }
+
+      return product;
+    });
+
     res.status(201).json(created);
   } catch (err) {
     next(err);

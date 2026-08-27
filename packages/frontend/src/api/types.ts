@@ -13,7 +13,7 @@ export type ProductWithBalance = Product & { balance: number };
 export type Movement = {
   id: string;
   productId: string;
-  type: 'IN' | 'OUT';
+  type: 'IN' | 'OUT' | 'INITIAL_STOCK';
   quantity: number;
   date: string;
   note?: string | null;

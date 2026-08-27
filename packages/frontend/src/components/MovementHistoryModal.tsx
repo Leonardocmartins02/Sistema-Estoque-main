@@ -183,7 +183,7 @@ export function MovementHistoryModal({ open, onOpenChange, productId }: Props) {
                   return (
                     <tr key={m.id}>
                       <td className="px-4 py-2 text-sm text-gray-800">{when}</td>
-                      <td className={`px-4 py-2 text-sm font-medium ${m.type === 'IN' ? 'text-green-700' : 'text-red-700'}`}>
+                      <td className={`px-4 py-2 text-sm font-medium ${m.type === 'OUT' ? 'text-red-700' : 'text-green-700'}`}>
                         {m.type}
                       </td>
                       <td className="px-4 py-2 text-sm text-gray-800">{m.quantity}</td>

@@ -8,11 +8,12 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String          @id @default(cuid())
+  email        String          @unique
   passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  movements    StockMovement[]
 }
 
 model Product {
@@ -30,9 +31,15 @@ model Product {
 /// garantidos apenas pela camada Zod — qualquer escrita fora das rotas
 /// (seed, script, psql) podia gravar um valor fora do domínio e quebrar o
 /// cálculo de saldo silenciosamente. Agora o banco garante o domínio.
+/// `ADJUSTMENT` e `INITIAL_STOCK` foram adicionados na Fase 1 do plano de
+/// estoque auditável: toda alteração de saldo — inclusive a criação de
+/// estoque inicial e correções de inventário — passa a ter um tipo próprio
+/// em vez de ser gravada como `IN` disfarçado.
 enum MovementType {
   IN
   OUT
+  ADJUSTMENT
+  INITIAL_STOCK
 }
 
 model StockMovement {
@@ -45,9 +52,25 @@ model StockMovement {
   note      String?
   createdAt DateTime     @default(now())
 
+  // Campos de auditoria da Fase 1. Nullable porque linhas gravadas antes
+  // desta migration não têm como preencher previousQuantity/newQuantity
+  // retroativamente sem reconstruir o histórico inteiro — StockService
+  // sempre preenche os quatro em toda movimentação nova.
+  previousQuantity Int?
+  newQuantity      Int?
+  user             User?   @relation(fields: [userId], references: [id])
+  userId           String?
+  // Identifica a operação de negócio que originou a movimentação (ex.:
+  // "PURCHASE_ORDER", "STOCK_TRANSFER") quando ela não é uma entrada/saída
+  // manual — usado por funcionalidades futuras (Fase 4/5), sem FK porque a
+  // entidade de origem varia por referenceType.
+  referenceType String?
+  referenceId   String?
+
   // Índices que sustentam as consultas quentes depois da Parte 3:
   // - agregação de saldo por página de produtos (`groupBy` em productId+type);
   // - histórico de baixas (`type = OUT` ordenado por data desc).
   @@index([productId, type])
   @@index([type, date])
+  @@index([userId])
 }
