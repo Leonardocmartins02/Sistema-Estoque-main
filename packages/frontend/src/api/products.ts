@@ -27,6 +27,10 @@ export async function fetchProducts(
   return apiFetch(`/products?${params.toString()}`);
 }
 
+export async function fetchProduct(id: string): Promise<ProductWithBalance> {
+  return apiFetch(`/products/${id}`);
+}
+
 export async function createProduct(data: {
   name: string;
   sku: string;

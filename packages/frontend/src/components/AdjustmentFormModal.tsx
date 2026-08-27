@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { createAdjustment } from '../api/adjustments';
+import { ApiRequestError } from '../api/httpClient';
+import { fetchProduct } from '../api/products';
 
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -59,10 +61,18 @@ function buildAdjustmentSchema(currentBalance: number) {
  * componente compartilhado para isso aumentaria o escopo desta feature).
  */
 export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: Props) {
-  const [step, setStep] = useState<'form' | 'confirm'>('form');
+  const [step, setStep] = useState<'form' | 'confirm' | 'conflict'>('form');
   const [pending, setPending] = useState<AdjustmentFormValues | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  // Saldo que a sessão de edição considera "atual" — inicia como product.balance,
+  // mas é a Task 5 (não a prop, que nunca muda) que atualiza isto depois de um
+  // conflito resolvido via "Revisar". Todo lugar que precisa do "saldo atual
+  // desta tentativa" usa esta variável, nunca product.balance diretamente
+  // (exceto para inicializá-la).
+  const [expectedPreviousQuantity, setExpectedPreviousQuantity] = useState(product.balance);
+  const [conflictActualBalance, setConflictActualBalance] = useState<number | null>(null);
   const { show: showToast } = useToast();
+  const queryClient = useQueryClient();
   const targetId = useId();
   const reasonId = useId();
 
@@ -70,15 +80,16 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<AdjustmentFormValues>({
-    resolver: zodResolver(buildAdjustmentSchema(product.balance)),
+    resolver: zodResolver(buildAdjustmentSchema(expectedPreviousQuantity)),
     defaultValues: { targetQuantity: product.balance, reason: '' },
   });
 
   // Reabrir o modal sempre começa no formulário — sem isso, cancelar a
-  // partir da confirmação e reabrir depois deixaria o usuário preso na tela
-  // de confirmação de uma tentativa anterior.
+  // partir da confirmação/conflito e reabrir depois deixaria o usuário preso
+  // numa tela de uma tentativa anterior.
   useEffect(() => {
     if (open) {
       setStep('form');
@@ -90,7 +101,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
     mutationFn: (values: AdjustmentFormValues) =>
       createAdjustment(product.id, {
         targetQuantity: values.targetQuantity,
-        expectedPreviousQuantity: product.balance,
+        expectedPreviousQuantity,
         reason: values.reason,
       }),
     onSuccess: () => {
@@ -99,10 +110,20 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
       onSuccess?.();
       showToast({ type: 'success', message: 'Estoque ajustado com sucesso.' });
     },
-    onError: (error: unknown) => {
-      // 409 (conflito de concorrência) é tratado na Task 5 — por enquanto,
-      // qualquer erro (incluindo 409) cai no caminho genérico: volta ao
-      // formulário com a mensagem do servidor.
+    onError: async (error: unknown) => {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        // O corpo do erro 409 é só { message } (ver stockService.ts) — não
+        // traz o saldo real. Busca-se via GET /products/:id, a mesma fonte
+        // de verdade que o resto do app já usa — nunca recalculado aqui.
+        const fresh = await queryClient.fetchQuery({
+          queryKey: ['products', 'detail', product.id],
+          queryFn: () => fetchProduct(product.id),
+        });
+        setConflictActualBalance(fresh.balance);
+        setStep('conflict');
+        return;
+      }
+
       const message = error instanceof Error && error.message ? error.message : 'Falha ao ajustar estoque';
       setServerError(message);
       setStep('form');
@@ -113,7 +134,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
   const parsedTarget = typeof watchedTarget === 'number' ? watchedTarget : Number(watchedTarget);
   const hasValidPreview =
     watchedTarget !== undefined && watchedTarget !== ('' as unknown) && !Number.isNaN(parsedTarget);
-  const diff = hasValidPreview ? parsedTarget - product.balance : 0;
+  const diff = hasValidPreview ? parsedTarget - expectedPreviousQuantity : 0;
   const diffLabel = diff > 0 ? `+${diff}` : `${diff}`;
 
   function handleClose() {
@@ -129,6 +150,56 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
   function confirmAdjustment() {
     if (!pending) return;
     mutation.mutate(pending);
+  }
+
+  // Única ação disponível no conflito além de cancelar: reconhece o saldo
+  // real explicitamente, atualiza a baseline, limpa SÓ a quantidade (o
+  // motivo já digitado é preservado) e volta ao formulário para uma nova
+  // decisão — nunca reenvia sozinho.
+  function handleReview() {
+    if (conflictActualBalance === null) return;
+    setExpectedPreviousQuantity(conflictActualBalance);
+    setValue('targetQuantity', '' as unknown as number);
+    setConflictActualBalance(null);
+    setPending(null);
+    setStep('form');
+  }
+
+  if (step === 'conflict' && conflictActualBalance !== null) {
+    return (
+      <Modal
+        open={open}
+        onClose={handleClose}
+        title="O estoque deste produto mudou"
+        size="md"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" onClick={handleClose}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="primary" onClick={handleReview}>
+              Revisar
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-gray-700">
+            O estoque deste produto mudou enquanto você realizava o ajuste. Revise o novo saldo antes de continuar.
+          </p>
+          <dl className="space-y-2">
+            <div className="flex justify-between gap-4">
+              <dt className="text-gray-600">Saldo que você visualizou</dt>
+              <dd className="font-medium text-gray-900">{expectedPreviousQuantity}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-gray-600">Saldo atual</dt>
+              <dd className="font-medium text-gray-900">{conflictActualBalance}</dd>
+            </div>
+          </dl>
+        </div>
+      </Modal>
+    );
   }
 
   if (step === 'confirm' && pending) {
@@ -163,14 +234,14 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
           <div className="flex justify-between gap-4">
             <dt className="text-gray-600">Saldo atual → Novo saldo</dt>
             <dd className="font-medium text-gray-900">
-              {product.balance} → {pending.targetQuantity}
+              {expectedPreviousQuantity} → {pending.targetQuantity}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-gray-600">Diferença</dt>
             <dd className="font-medium text-gray-900">
-              {pending.targetQuantity > product.balance ? '+' : ''}
-              {pending.targetQuantity - product.balance}
+              {pending.targetQuantity > expectedPreviousQuantity ? '+' : ''}
+              {pending.targetQuantity - expectedPreviousQuantity}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -192,7 +263,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
       <form onSubmit={handleSubmit(advanceToConfirm)} noValidate className="space-y-3">
         <div>
           <span className="block text-sm font-medium text-gray-700">Saldo atual</span>
-          <p className="mt-1 text-lg font-semibold text-gray-900">{product.balance}</p>
+          <p className="mt-1 text-lg font-semibold text-gray-900">{expectedPreviousQuantity}</p>
         </div>
 
         <Input
@@ -206,7 +277,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
 
         {hasValidPreview && (
           <p className="text-sm text-gray-700" aria-live="polite">
-            {product.balance} → {parsedTarget}
+            {expectedPreviousQuantity} → {parsedTarget}
             <br />
             Diferença: {diffLabel}
           </p>
