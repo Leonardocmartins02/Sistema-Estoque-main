@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import type { ProductStockSummary } from '@simplestock/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 
@@ -179,6 +180,26 @@ router.get('/', async (req, res, next) => {
     const items = pageSize === 0 ? sorted : sorted.slice(start, start + pageSize);
 
     res.json({ items, total: filtered.length, page: respPage, pageSize });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Precisa vir antes de `GET /:id` — senão "summary" seria capturado como id.
+router.get('/summary', async (_req, res, next) => {
+  try {
+    const products = await prisma.product.findMany({ select: { id: true, minStock: true } });
+    const balances = await balancesFor(products.map((product) => product.id));
+
+    const summary: ProductStockSummary = { ok: 0, attn: 0, out: 0 };
+    for (const product of products) {
+      const balance = balances.get(product.id) ?? 0;
+      if (balance === 0) summary.out += 1;
+      else if (balance < product.minStock) summary.attn += 1;
+      else summary.ok += 1;
+    }
+
+    res.json(summary);
   } catch (err) {
     next(err);
   }

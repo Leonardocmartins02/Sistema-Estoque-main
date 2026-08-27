@@ -5,6 +5,7 @@ import type { ProductWithBalance } from '../api/types';
 import { useConfirm } from '../hooks/useConfirm';
 import { useProductMutations } from '../hooks/useProductMutations';
 import { useProductsQuery } from '../hooks/useProductsQuery';
+import { useProductStockSummary } from '../hooks/useProductStockSummary';
 
 import { MovementFormModal } from './MovementFormModal';
 import { MovementHistoryModal } from './MovementHistoryModal';
@@ -17,6 +18,7 @@ import QuickOutListModal from './QuickOutListModal';
 import { QuickOutModal } from './QuickOutModal';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import LowStockBanner from './ui/LowStockBanner';
 
 /**
  * Container de orquestração da tela de produtos.
@@ -30,6 +32,7 @@ export function ProductDashboard() {
   const products = useProductsQuery();
   const { removeProduct, zeroBalance, removeProducts, zeroBalances, invalidateProducts } = useProductMutations();
   const { confirm, confirmDialog } = useConfirm();
+  const stockSummary = useProductStockSummary();
 
   const [openCreate, setOpenCreate] = useState(false);
   const [editing, setEditing] = useState<ProductWithBalance | null>(null);
@@ -129,6 +132,7 @@ export function ProductDashboard() {
           Produtos
         </h2>
         <p className="text-sm text-gray-600">Gerencie o cadastro e o estoque</p>
+        <LowStockBanner summary={stockSummary.data} onShowLowStock={products.showLowStock} />
         <div className="mt-6 flex items-center gap-2">
           <Button variant="primary" size="md" onClick={() => setOpenCreate(true)}>
             <Plus className="h-4 w-4" aria-hidden="true" />

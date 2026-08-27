@@ -29,7 +29,8 @@
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",
     "zod": "^3.23.8",
-    "@prisma/client": "^5.16.2"
+    "@prisma/client": "^5.16.2",
+    "@simplestock/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

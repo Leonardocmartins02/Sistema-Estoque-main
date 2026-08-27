@@ -1,5 +1,11 @@
+import type { ProductStockSummary } from '@simplestock/shared';
+
 import { apiFetch } from './httpClient';
 import type { Product, ProductWithBalance } from './types';
+
+export async function fetchProductStockSummary(): Promise<ProductStockSummary> {
+  return apiFetch('/products/summary');
+}
 
 export async function fetchProducts(
   search: string,

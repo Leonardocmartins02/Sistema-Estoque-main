@@ -104,6 +104,12 @@ export function useProductsQuery() {
     setPage(1);
   }, []);
 
+  /** Usado pelo banner de alerta de estoque baixo (`LowStockBanner`). */
+  const showLowStock = useCallback(() => {
+    setStatusFilter(['ATTN', 'OUT']);
+    setPage(1);
+  }, []);
+
   return {
     // busca
     search,
@@ -121,6 +127,7 @@ export function useProductsQuery() {
     statusFilter,
     toggleStatus,
     clearStatus,
+    showLowStock,
     // dados
     query,
     items,

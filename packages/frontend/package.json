@@ -19,7 +19,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.62.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@simplestock/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.24",
