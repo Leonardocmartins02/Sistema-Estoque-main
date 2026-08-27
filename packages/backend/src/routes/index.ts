@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { requireAuth } from '../middleware/requireAuth';
 
+import adjustments from './adjustments';
 import auth from './auth';
 import movements from './movements';
 import products from './products';
@@ -16,6 +17,7 @@ const router = Router();
 router.use('/auth', auth);
 router.use('/products', requireAuth, products);
 router.use('/products', requireAuth, movements); // nested under /products/:id/movements
+router.use('/products', requireAuth, adjustments); // nested under /products/:id/adjustments
 router.use('/quick-out', requireAuth, quickOut); // rota para baixa rápida
 
 export default router;
