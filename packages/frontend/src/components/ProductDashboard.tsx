@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowDownToLine, Plus, Search } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -7,6 +8,7 @@ import { useProductMutations } from '../hooks/useProductMutations';
 import { useProductsQuery } from '../hooks/useProductsQuery';
 import { useProductStockSummary } from '../hooks/useProductStockSummary';
 
+import { AdjustmentFormModal } from './AdjustmentFormModal';
 import { MovementFormModal } from './MovementFormModal';
 import { MovementHistoryModal } from './MovementHistoryModal';
 import ProductCardList from './products/ProductCardList';
@@ -33,12 +35,14 @@ export function ProductDashboard() {
   const { removeProduct, zeroBalance, removeProducts, zeroBalances, invalidateProducts } = useProductMutations();
   const { confirm, confirmDialog } = useConfirm();
   const stockSummary = useProductStockSummary();
+  const queryClient = useQueryClient();
 
   const [openCreate, setOpenCreate] = useState(false);
   const [editing, setEditing] = useState<ProductWithBalance | null>(null);
   const [movingProductId, setMovingProductId] = useState<string | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
   const [quickOutProduct, setQuickOutProduct] = useState<ProductWithBalance | null>(null);
+  const [adjustingProduct, setAdjustingProduct] = useState<ProductWithBalance | null>(null);
   const [openQuickOutList, setOpenQuickOutList] = useState(false);
   const [openQuickOutHistory, setOpenQuickOutHistory] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -63,6 +67,7 @@ export function ProductDashboard() {
       onQuickOut: (p) => setQuickOutProduct(p),
       onEdit: (p) => setEditing(p),
       onHistory: (p) => setHistoryProductId(p.id),
+      onAdjust: (p) => setAdjustingProduct(p),
       onZeroBalance: async (p) => {
         if (p.balance <= 0) return;
         const ok = await confirm({
@@ -305,6 +310,29 @@ export function ProductDashboard() {
             currentBalance: quickOutProduct.balance,
           }}
           onSuccess={invalidateProducts}
+        />
+      )}
+
+      {/* Montado só enquanto há produto em ajuste (mesmo padrão do QuickOutModal):
+          AdjustmentFormModal guarda a baseline de saldo em useState derivado de
+          product.balance, então desmontar é o que garante que o próximo produto
+          ajustado não herde a baseline do anterior. */}
+      {adjustingProduct && (
+        <AdjustmentFormModal
+          open
+          onOpenChange={(v) => {
+            if (!v) setAdjustingProduct(null);
+          }}
+          product={{
+            id: adjustingProduct.id,
+            name: adjustingProduct.name,
+            sku: adjustingProduct.sku,
+            balance: adjustingProduct.balance,
+          }}
+          onSuccess={() => {
+            invalidateProducts();
+            queryClient.invalidateQueries({ queryKey: ['movements', adjustingProduct.id] });
+          }}
         />
       )}
 

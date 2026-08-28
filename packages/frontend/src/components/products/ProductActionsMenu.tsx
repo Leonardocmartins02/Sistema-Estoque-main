@@ -7,7 +7,7 @@ import type { ProductActions } from './types';
 
 type Props = {
   product: ProductWithBalance;
-  actions: Pick<ProductActions, 'onEdit' | 'onHistory' | 'onZeroBalance' | 'onDelete'>;
+  actions: Pick<ProductActions, 'onEdit' | 'onHistory' | 'onAdjust' | 'onZeroBalance' | 'onDelete'>;
 };
 
 /**
@@ -31,6 +31,7 @@ export function ProductActionsMenu({ product, actions }: Props) {
         <>
           <MenuItem onSelect={() => actions.onEdit(product)}>Editar</MenuItem>
           <MenuItem onSelect={() => actions.onHistory(product)}>Ver Histórico</MenuItem>
+          <MenuItem onSelect={() => actions.onAdjust(product)}>Ajustar Estoque</MenuItem>
           <MenuItem onSelect={() => actions.onZeroBalance(product)} disabled={product.balance <= 0}>
             Zerar Estoque
           </MenuItem>

@@ -6,6 +6,7 @@ export type ProductActions = {
   onQuickOut: (product: ProductWithBalance) => void;
   onEdit: (product: ProductWithBalance) => void;
   onHistory: (product: ProductWithBalance) => void;
+  onAdjust: (product: ProductWithBalance) => void;
   onZeroBalance: (product: ProductWithBalance) => void;
   onDelete: (product: ProductWithBalance) => void;
 };
