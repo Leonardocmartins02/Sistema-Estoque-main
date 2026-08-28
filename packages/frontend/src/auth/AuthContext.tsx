@@ -1,6 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch, setAuthToken, setUnauthorizedHandler } from '../api/httpClient';
+import { useToast } from '../components/ui/ToastProvider';
 
 const TOKEN_STORAGE_KEY = 'simplestock.auth.token';
 
@@ -21,6 +22,11 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const { show: showToast } = useToast();
+  // Um 401 costuma chegar em rajada (várias chamadas em voo no mesmo
+  // instante) — sem essa trava o usuário veria um toast de expiração por
+  // chamada. `login()` rearma para a próxima expiração real.
+  const sessionExpiredNotifiedRef = useRef(false);
 
   const logout = useCallback(() => {
     setAuthToken(null);
@@ -29,12 +35,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus('unauthenticated');
   }, []);
 
-  // Qualquer 401 vindo de qualquer chamada de API (token expirado, revogado
-  // etc.) derruba a sessão local e volta para a tela de login.
+  // Chamado só quando a sessão cai por um 401 vindo de qualquer chamada de
+  // API (token expirado, revogado etc.) — nunca pelo botão "Sair", que chama
+  // `logout` direto e não deve anunciar "sessão expirou".
+  const handleSessionExpired = useCallback(() => {
+    logout();
+    if (sessionExpiredNotifiedRef.current) return;
+    sessionExpiredNotifiedRef.current = true;
+    showToast({ type: 'error', message: 'Sua sessão expirou. Faça login novamente.' });
+  }, [logout, showToast]);
+
   useEffect(() => {
-    setUnauthorizedHandler(logout);
+    setUnauthorizedHandler(handleSessionExpired);
     return () => setUnauthorizedHandler(null);
-  }, [logout]);
+  }, [handleSessionExpired]);
 
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -62,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_STORAGE_KEY, res.token);
     setUser(res.user);
     setStatus('authenticated');
+    sessionExpiredNotifiedRef.current = false;
   }, []);
 
   const value = useMemo(() => ({ user, status, login, logout }), [user, status, login, logout]);
