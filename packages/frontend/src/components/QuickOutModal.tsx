@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { ApiRequestError } from '../api/httpClient';
 import { quickOutProduct } from '../api/quickOut';
 
 import Button from './ui/Button';
@@ -130,8 +131,12 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
         type: 'success',
         message: `Baixa de ${values.quantity} unidade(s) registrada com sucesso!`,
       });
-    } catch (e: any) {
-      const errorMessage = e.response?.data?.message || 'Falha ao registrar baixa';
+    } catch (e) {
+      // O projeto não usa axios: `apiFetch` lança `ApiRequestError` com a mensagem
+      // já sanitizada pelo backend em `.message`. Qualquer outro erro (bug de
+      // runtime, etc.) não é seguro de exibir e cai no texto genérico.
+      const errorMessage =
+        e instanceof ApiRequestError && e.message ? e.message : 'Falha ao registrar baixa';
       setServerError(errorMessage);
       showToast({ type: 'error', message: errorMessage });
     } finally {
