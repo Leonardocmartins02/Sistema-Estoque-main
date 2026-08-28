@@ -31,39 +31,11 @@ type Props = {
 };
 
 export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props) {
-  console.log('QuickOutModal renderizado', { 
-    open, 
-    product, 
-    hasProduct: !!product,
-    hasOnOpenChange: !!onOpenChange,
-    hasOnSuccess: !!onSuccess
-  });
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const { show: showToast } = useToast();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [highlight, setHighlight] = useState(false);
-  
-  // Efeito para debug
-  useEffect(() => {
-    console.log('QuickOutModal - open mudou para:', open);
-    console.log('QuickOutModal - product:', product);
-    
-    if (open) {
-      console.log('Modal aberto, verificando elementos no DOM...');
-      const modalElement = document.querySelector('[data-testid="quick-out-modal"]');
-      console.log('Elemento do modal no DOM:', modalElement);
-      
-      if (modalElement) {
-        console.log('Estilos do modal:', window.getComputedStyle(modalElement));
-        // Força o foco para o modal
-        (modalElement as HTMLElement).focus();
-      } else {
-        console.error('Elemento do modal não encontrado no DOM');
-      }
-    }
-  }, [open, product]);
 
   const {
     register,
@@ -112,7 +84,6 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
   }, [quantity, open]);
 
   async function onSubmit(values: QuickOutFormValues) {
-    console.log('Submetendo baixa rápida', { values, product });
     setServerError(null);
     setIsSubmitting(true);
     
@@ -144,13 +115,10 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
     }
   }
 
-  console.log('Preparando para renderizar QuickOutModal com open =', open);
-  
   if (!open) {
-    console.log('QuickOutModal não renderizado (open = false)');
     return null;
   }
-  
+
   // Versão simplificada do modal para debug
   // Valores pré-definidos para baixa rápida
   const quickAmounts = [1, 5, 10, 25, 50];
