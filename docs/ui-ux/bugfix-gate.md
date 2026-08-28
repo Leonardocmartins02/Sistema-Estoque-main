@@ -127,6 +127,7 @@ Todos exigem **characterization test antes** de qualquer alteração (§4).
 | **M-7** — `animate-fade-in` nunca definida | **D** | Usada em `MovementHistoryModal:90`, ausente do config | Sem efeito ao usuário — a animação só não acontece. A classe sai na migração | Remover ao migrar | Fase 8 |
 | **M-8** — cabeçalho ordenável sem rótulo | **D** | `DataTable:138-156` renderiza só a seta quando `sortable` e sem `headerRender` | Latente: `ProductsTable` sempre passa `headerRender` | Corrigir ao adaptar o `DataTable` | Fase 8 |
 | Código morto `FinanceDashboard`/`SalesDashboard` | **D** | Zero imports (confirmado na Fase 1) | Remoção exige OK explícito por `frontend.md` | Ver G-4 | — |
+| **F-10** — `ProductFormModal` mantém `serverError` ao fechar e reabrir | **D** | `ProductFormModal.tsx:93` — `setServerError(null)` só ocorre no início de um novo submit; o efeito de abertura (`:70-78`) faz `reset()` do formulário mas não limpa o erro | Achado adjacente identificado durante F-06, **não corrigido**. Sem efeito de dado: a mensagem antiga reaparece até o próximo submit. Fora do escopo de F-06 e de F-07 | Registrar; limpar o erro no efeito de abertura quando for decidido | Follow-up |
 | Desvio em `docs/current-state.md` | **D** | Afirma que não há `useEffect`+`fetch` manual e que só existe um primitivo de modal ativo — **ambas falsas** | Documento é usado como mapa de referência do projeto | Atualizar em task própria | Follow-up |
 
 ---
@@ -277,6 +278,6 @@ Ambas são descartadas na migração. Aplicar agora, ou aguentar até a Fase 8?
 
 ## Estado do gate
 
-**Concluído.** Nenhum código, CSS ou teste alterado. 30 itens classificados: **7 em A**, **12 em B**, **2 em C**, **6 em D**, mais os 3 itens de housekeeping.
+**Concluído.** Nenhum código, CSS ou teste alterado. 31 itens classificados: **7 em A**, **12 em B**, **2 em C**, **7 em D** (F-10 registrado durante a onda 0), mais os 3 itens de housekeeping.
 
 Aguardando **G-1 a G-4** antes da **Fase 7 — Implementation Plan**.
