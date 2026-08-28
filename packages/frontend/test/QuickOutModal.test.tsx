@@ -74,3 +74,21 @@ describe('QuickOutModal — erro da API chega ao usuário (F-07 / UF-26)', () =>
     await waitFor(() => expect(screen.getAllByText('Falha ao registrar baixa').length).toBeGreaterThan(0));
   });
 });
+
+describe('QuickOutModal — erro do servidor não é duplicado na tela (C-3)', () => {
+  beforeEach(() => {
+    mockedQuickOutProduct.mockReset();
+  });
+
+  it('renderiza a mensagem de erro uma única vez', async () => {
+    mockedQuickOutProduct.mockRejectedValue(new ApiRequestError(422, 'Estoque insuficiente.'));
+    renderModal();
+
+    await submit();
+
+    await waitFor(() => expect(screen.getAllByText('Estoque insuficiente.').length).toBeGreaterThan(0));
+    // O texto aparece no bloco de erro do formulário; o toast some sozinho e
+    // não é contado aqui porque usa role="status" à parte — ver ToastProvider.
+    expect(screen.getAllByText('Estoque insuficiente.', { selector: 'h3' })).toHaveLength(1);
+  });
+});
