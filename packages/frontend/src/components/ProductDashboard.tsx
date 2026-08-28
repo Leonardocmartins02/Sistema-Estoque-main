@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowDownToLine, Plus, Search } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ProductWithBalance } from '../api/types';
 import { useConfirm } from '../hooks/useConfirm';
@@ -47,6 +47,13 @@ export function ProductDashboard() {
   const [openQuickOutHistory, setOpenQuickOutHistory] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+
+  // Decisão de produto: seleção múltipla não atravessa paginação/busca/filtro
+  // (F-04). Sem isto, uma ação em lote podia atingir produtos que não estão
+  // mais visíveis na tela.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [products.page, products.search, products.statusFilter]);
 
   const toggleSelected = useCallback((id: string, selected: boolean) => {
     setSelectedIds((prev) => {
@@ -126,8 +133,8 @@ export function ProductDashboard() {
       confirmLabel: 'Excluir página',
     });
     if (!ok) return;
-    products.setPage(1);
     removeProducts.mutate(items);
+    products.setPage(1);
   };
 
   return (
