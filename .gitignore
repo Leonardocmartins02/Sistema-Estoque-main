@@ -20,3 +20,6 @@ pnpm-debug.log*
 # prisma
 packages/backend/prisma/*.db
 packages/backend/prisma/*.db-journal
+
+# logs de servidores de dev rodados localmente
+*.dev.log
