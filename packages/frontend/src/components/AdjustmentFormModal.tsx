@@ -115,12 +115,26 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
         // O corpo do erro 409 é só { message } (ver stockService.ts) — não
         // traz o saldo real. Busca-se via GET /products/:id, a mesma fonte
         // de verdade que o resto do app já usa — nunca recalculado aqui.
-        const fresh = await queryClient.fetchQuery({
-          queryKey: ['products', 'detail', product.id],
-          queryFn: () => fetchProduct(product.id),
-        });
-        setConflictActualBalance(fresh.balance);
-        setStep('conflict');
+        // Se esta busca falha (rede, timeout de 8s do httpClient, sessão
+        // expirada), NÃO há saldo real para mostrar — então não se entra no
+        // passo de conflito fingindo que a revisão aconteceu. Cai no mesmo
+        // caminho de erro genérico já usado abaixo: volta ao formulário com o
+        // motivo preservado e uma mensagem explícita, de onde dá para tentar
+        // de novo ou cancelar. A baseline continua a original, porque nada
+        // novo foi confirmado.
+        try {
+          const fresh = await queryClient.fetchQuery({
+            queryKey: ['products', 'detail', product.id],
+            queryFn: () => fetchProduct(product.id),
+          });
+          setConflictActualBalance(fresh.balance);
+          setStep('conflict');
+        } catch {
+          setServerError(
+            'O estoque deste produto mudou, mas não foi possível obter o saldo atualizado. Verifique sua conexão e tente novamente.',
+          );
+          setStep('form');
+        }
         return;
       }
 
@@ -148,7 +162,9 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
   }
 
   function confirmAdjustment() {
-    if (!pending) return;
+    // O botão usa aria-disabled (não disabled) para não perder o foco durante
+    // o envio, então a proteção contra envio duplo vive aqui.
+    if (!pending || mutation.isPending) return;
     mutation.mutate(pending);
   }
 
@@ -184,7 +200,9 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
         }
       >
         <div className="space-y-3 text-sm">
-          <p className="text-gray-700">
+          {/* Único caminho de erro do fluxo que não era anunciado. Mesmo padrão
+              do erro de campo e do erro de servidor mais abaixo neste arquivo. */}
+          <p className="text-gray-700" role="alert">
             O estoque deste produto mudou enquanto você realizava o ajuste. Revise o novo saldo antes de continuar.
           </p>
           <dl className="space-y-2">
@@ -214,14 +232,21 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
             <Button type="button" onClick={handleClose} disabled={mutation.isPending}>
               Cancelar
             </Button>
+            {/* aria-disabled em vez de disabled: desabilitar o elemento que
+                está com o foco o joga para o <body>, e como "Cancelar" também
+                fica desabilitado o rodapé ficaria sem nenhum controle focável
+                durante a requisição. O rótulo muda junto porque o spinner do
+                Button é aria-hidden — sem isso o envio é silencioso para
+                leitor de tela. */}
             <Button
               type="button"
               variant="primary"
               onClick={confirmAdjustment}
-              disabled={mutation.isPending}
+              aria-disabled={mutation.isPending}
               isLoading={mutation.isPending}
+              className={mutation.isPending ? 'cursor-not-allowed opacity-50' : ''}
             >
-              Confirmar ajuste
+              {mutation.isPending ? 'Confirmando...' : 'Confirmar ajuste'}
             </Button>
           </div>
         }

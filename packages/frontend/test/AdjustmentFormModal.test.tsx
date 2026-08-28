@@ -187,7 +187,7 @@ describe('AdjustmentFormModal — formulário e confirmação (Task 4)', () => {
     expect(screen.queryByText('Ajustar estoque?')).not.toBeInTheDocument();
   });
 
-  it('desabilita e mostra indicador de carregamento no botão de confirmação enquanto a mutação está pendente', async () => {
+  it('torna o botão de confirmação inerte e mostra indicador de carregamento enquanto a mutação está pendente', async () => {
     const user = userEvent.setup();
     let resolvePromise: (value: Movement) => void = () => {};
     mockedCreateAdjustment.mockReturnValueOnce(
@@ -201,7 +201,10 @@ describe('AdjustmentFormModal — formulário e confirmação (Task 4)', () => {
     const confirmButton = await screen.findByRole('button', { name: 'Confirmar ajuste' });
     await user.click(confirmButton);
 
-    await waitFor(() => expect(confirmButton).toBeDisabled());
+    // O mecanismo de "inerte" é aria-disabled, não disabled: desabilitar o
+    // botão focado perderia o foco para o <body> (ver A3 em "correções
+    // pós-review" mais abaixo). A proteção contra envio duplo vive no handler.
+    await waitFor(() => expect(confirmButton).toHaveAttribute('aria-disabled', 'true'));
     resolvePromise({
       id: 'm1',
       productId: 'p1',
@@ -358,6 +361,133 @@ describe('AdjustmentFormModal — conflito de concorrência (Task 5)', () => {
     expect(mockedCreateAdjustment).toHaveBeenNthCalledWith(2, 'p1', {
       targetQuantity: 12,
       expectedPreviousQuantity: 15,
+      reason: 'Contagem física mensal',
+    });
+  });
+});
+
+/**
+ * Correções pós-review (accessibility A2/A3, security #12). Escopo fechado:
+ * nenhuma refatoração adjacente, só o comportamento que os reviewers apontaram.
+ */
+describe('AdjustmentFormModal — correções pós-review', () => {
+  beforeEach(() => {
+    mockedCreateAdjustment.mockReset();
+    mockedFetchProduct.mockReset();
+  });
+
+  /**
+   * A2 — o conflito é o único caminho de erro do fluxo que não tinha live
+   * region. Sem isso, quem usa leitor de tela pode acreditar que ajustou o
+   * estoque quando o ajuste foi recusado.
+   */
+  it('A2: o estado de conflito é anunciado como live region (role="alert")', async () => {
+    const user = userEvent.setup();
+    mockedCreateAdjustment.mockRejectedValueOnce(new ApiRequestError(409, 'Conflito.'));
+    mockedFetchProduct.mockResolvedValueOnce({ ...product, balance: 15 });
+    renderModal();
+
+    await fillValidFormAndAdvance(user);
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+    await screen.findByRole('button', { name: 'Revisar' });
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some((el) => /o estoque deste produto mudou/i.test(el.textContent ?? ''))).toBe(true);
+  });
+
+  /**
+   * A3 — o spinner do Button é aria-hidden e o rótulo não mudava: o envio era
+   * silencioso. E `disabled` no botão que está com o foco joga o foco para o
+   * body, deixando o rodapé sem controle focável durante a requisição.
+   */
+  it('A3: durante o envio o botão comunica o estado por texto e mantém o foco', async () => {
+    const user = userEvent.setup();
+    let resolveCreate: (movement: Movement) => void = () => {};
+    mockedCreateAdjustment.mockImplementationOnce(
+      () =>
+        new Promise<Movement>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    const { onOpenChange } = renderModal();
+
+    await fillValidFormAndAdvance(user);
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+
+    const pendingButton = await screen.findByRole('button', { name: /Confirmando/i });
+    expect(pendingButton).toHaveFocus();
+    expect(pendingButton).not.toBeDisabled();
+    expect(pendingButton).toHaveAttribute('aria-disabled', 'true');
+
+    // aria-disabled mantém o foco, então a proteção contra envio duplo tem de
+    // vir do handler, não do atributo `disabled`.
+    await user.click(pendingButton);
+    expect(mockedCreateAdjustment).toHaveBeenCalledTimes(1);
+
+    resolveCreate({
+      id: 'm1',
+      productId: 'p1',
+      type: 'ADJUSTMENT',
+      quantity: 2,
+      previousQuantity: 20,
+      newQuantity: 18,
+      note: 'Contagem física mensal',
+      date: '2027-05-10T18:31:00.000Z',
+      createdAt: '2027-05-10T18:31:00.000Z',
+    });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  /**
+   * #12 — o fetchQuery que busca o saldo real depois do 409 não tinha
+   * try/catch: se ele falhasse, nenhum setStep rodava e o usuário ficava parado
+   * na confirmação, sem mensagem nenhuma.
+   */
+  it('#12: falha ao buscar o saldo atualizado no 409 não fecha o modal, preserva o motivo e mostra o erro', async () => {
+    const user = userEvent.setup();
+    mockedCreateAdjustment.mockRejectedValueOnce(new ApiRequestError(409, 'Conflito.'));
+    mockedFetchProduct.mockRejectedValueOnce(new Error('Falha de rede'));
+    const { onOpenChange, onSuccess } = renderModal();
+
+    await fillValidFormAndAdvance(user);
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+
+    expect(await screen.findByText(/não foi possível obter o saldo atualizado/i)).toBeInTheDocument();
+    // Não finge que a revisão aconteceu: nenhum passo de conflito é exibido.
+    expect(screen.queryByRole('button', { name: 'Revisar' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Motivo/i)).toHaveValue('Contagem física mensal');
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('#12: depois da falha é possível tentar de novo, e a baseline continua a original', async () => {
+    const user = userEvent.setup();
+    mockedCreateAdjustment.mockRejectedValueOnce(new ApiRequestError(409, 'Conflito.'));
+    mockedFetchProduct.mockRejectedValueOnce(new Error('Falha de rede'));
+    mockedCreateAdjustment.mockResolvedValueOnce({
+      id: 'm1',
+      productId: 'p1',
+      type: 'ADJUSTMENT',
+      quantity: 2,
+      previousQuantity: 20,
+      newQuantity: 18,
+      note: 'Contagem física mensal',
+      date: '2027-05-10T18:31:00.000Z',
+      createdAt: '2027-05-10T18:31:00.000Z',
+    });
+    renderModal();
+
+    await fillValidFormAndAdvance(user);
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+    await screen.findByText(/não foi possível obter o saldo atualizado/i);
+
+    await user.click(screen.getByRole('button', { name: /^Ajustar$/i }));
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+
+    await waitFor(() => expect(mockedCreateAdjustment).toHaveBeenCalledTimes(2));
+    expect(mockedCreateAdjustment).toHaveBeenNthCalledWith(2, 'p1', {
+      targetQuantity: 18,
+      expectedPreviousQuantity: 20,
       reason: 'Contagem física mensal',
     });
   });

@@ -127,6 +127,39 @@ describe('POST /products/:id/adjustments', () => {
     expect(res.status).toBe(400);
   });
 
+  /**
+   * Prisma `Int` sobre PostgreSQL é `int4` (máximo 2.147.483.647). Sem teto no
+   * Zod, um alvo acima disso passava na borda HTTP e só estourava no INSERT,
+   * virando um 500 genérico (erro não-HttpError/não-ZodError) em vez do 400 que
+   * a entrada inválida merece. O limite não é estético: é o do tipo persistido.
+   */
+  it('alvo acima do máximo de um INT do PostgreSQL é rejeitado com 400, sem tocar o banco', async () => {
+    const product = await createProductWithBalance(`ADJ-OVERFLOW-${Date.now()}`, 20);
+    const countBefore = await prisma.stockMovement.count({ where: { productId: product.id } });
+
+    const res = await request(app)
+      .post(`/api/products/${product.id}/adjustments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ targetQuantity: 2_147_483_648, expectedPreviousQuantity: 20, reason: 'Estouro de int4' });
+
+    expect(res.status).toBe(400);
+
+    const countAfter = await prisma.stockMovement.count({ where: { productId: product.id } });
+    expect(countAfter).toBe(countBefore);
+  });
+
+  it('alvo exatamente no máximo de um INT do PostgreSQL é aceito', async () => {
+    const product = await createProductWithBalance(`ADJ-MAXINT-${Date.now()}`, 20);
+
+    const res = await request(app)
+      .post(`/api/products/${product.id}/adjustments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ targetQuantity: 2_147_483_647, expectedPreviousQuantity: 20, reason: 'Limite exato do tipo' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.newQuantity).toBe(2_147_483_647);
+  });
+
   it('motivo vazio/em branco é rejeitado', async () => {
     const product = await createProductWithBalance(`ADJ-NOREASON-${Date.now()}`, 20);
 
