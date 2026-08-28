@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protótipo — Fase 6 — SimpleStock</title>
+<!-- Mesma fonte e mesma origem do index.html de produção, para o protótipo ter fidelidade tipográfica. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   PROTÓTIPO — NÃO É CÓDIGO DE PRODUÇÃO
+   Tokens espelham docs/ui-ux/design-system.md (Fase 5).
+   HTML+CSS puro: sem framework, sem CDN, sem dependência.
+   Breakpoint 768px = o `md` do Tailwind, para testar A4.
+   ============================================================ */
+:root{
+  /* neutros */
+  --background:#F9FAFB; --surface:#FFFFFF; --surface-subtle:#F9FAFB;
+  --border:#E5E7EB; --border-strong:#6B7280; --border-hover:#4B5563;
+  --text-primary:#111827; --text-secondary:#4B5563; --text-muted:#6B7280;
+  /* acento (blue) */
+  --accent:#2563EB; --accent-strong:#1D4ED8; --accent-subtle:#EFF6FF; --accent-subtle-text:#1E40AF;
+  /* estados */
+  --success:#047857; --success-subtle:#ECFDF5;
+  --warning:#B45309; --warning-subtle:#FFFBEB;
+  --danger:#B91C1C;  --danger-subtle:#FEF2F2;
+  /* forma */
+  --r-control:6px; --r-surface:8px;
+  --shadow-overlay:0 10px 24px -6px rgb(0 0 0 / .18), 0 4px 8px -4px rgb(0 0 0 / .10);
+  /* espaço */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--background); color:var(--text-primary);
+  font:400 14px/1.55 Inter,system-ui,'Segoe UI',Roboto,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,p,dl,dd,dt,figure{margin:0}
+button{font:inherit;color:inherit}
+
+/* --- tipografia: 5 tamanhos --- */
+.t-page{font-size:24px;font-weight:600;line-height:1.25;letter-spacing:-.01em}
+.t-section{font-size:18px;font-weight:600;line-height:1.35}
+.t-component{font-size:16px;font-weight:600;line-height:1.4}
+.t-body{font-size:14px;font-weight:400;line-height:1.55}
+.t-label{font-size:14px;font-weight:500;line-height:1.4}
+.t-caption{font-size:12px;font-weight:400;line-height:1.4;color:var(--text-secondary)}
+.t-th{font-size:12px;font-weight:600;line-height:1.4;letter-spacing:.03em;color:var(--text-secondary)}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+/* --- foco: UMA semântica, em todos os controles --- */
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{
+  outline:none; box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent);
+}
+
+/* --- botões --- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);
+  border-radius:var(--r-control);border:1px solid transparent;cursor:pointer;
+  font-size:14px;font-weight:500;padding:0 var(--s3);height:36px;white-space:nowrap}
+.btn--sm{height:32px;padding:0 var(--s2);font-size:13px}
+.btn--primary{background:var(--accent);color:#fff}
+.btn--primary:hover{background:var(--accent-strong)}
+.btn--secondary{background:var(--surface);border-color:var(--border-strong);color:var(--text-primary)}
+.btn--secondary:hover{border-color:var(--border-hover);background:var(--surface-subtle)}
+.btn--tertiary{background:transparent;color:var(--text-secondary)}
+.btn--tertiary:hover{background:var(--surface-subtle);color:var(--text-primary)}
+.btn--destructive{background:var(--danger);color:#fff}
+.btn--icon{width:36px;padding:0}
+.btn--icon.btn--sm{width:32px}
+.btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
+
+/* --- badge de estado: cor + palavra, radius de controle (A1) --- */
+.badge{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-control);
+  padding:2px var(--s2);font-size:12px;font-weight:500;white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.badge--ok{background:var(--success-subtle);color:var(--success)}
+.badge--low{background:var(--warning-subtle);color:var(--warning)}
+.badge--out{background:var(--danger-subtle);color:var(--danger)}
+.badge--info{background:var(--accent-subtle);color:var(--accent-subtle-text)}
+
+/* --- layout / zonas --- */
+.shell{max-width:1280px;margin:0 auto;padding:0 var(--s4)}
+.appbar{background:var(--surface);border-bottom:1px solid var(--border)}
+.appbar__in{display:flex;align-items:center;justify-content:space-between;height:52px;gap:var(--s4)}
+.brand{font-size:14px;font-weight:600}
+.zone{margin-top:var(--s8)}
+.zone--tight{margin-top:var(--s6)}
+
+/* zona alerta */
+.alert-strip{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);
+  background:var(--warning-subtle);border:1px solid #FDE68A;border-radius:var(--r-surface);
+  padding:var(--s3) var(--s4)}
+.alert-strip__txt{flex:1 1 260px;color:#78350F}
+
+/* zona controle */
+.toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--s3);justify-content:space-between}
+.field{display:flex;flex-direction:column;gap:var(--s1);min-width:0}
+.field__label{font-size:14px;font-weight:500}
+.input{height:36px;border:1px solid var(--border-strong);border-radius:var(--r-control);
+  background:var(--surface);padding:0 var(--s3);font-size:14px;min-width:0;width:100%}
+.input:hover{border-color:var(--border-hover)}
+.input:focus-visible{border-color:var(--accent)}
+.search{flex:1 1 320px;max-width:420px}
+.toolbar__actions{display:flex;gap:var(--s2);flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;margin-top:var(--s3)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-subtle);
+  color:var(--accent-subtle-text);border:1px solid #BFDBFE;border-radius:var(--r-control);
+  padding:2px var(--s2);font-size:12px;font-weight:500}
+.chip button{background:none;border:0;cursor:pointer;padding:0 2px;line-height:1;color:inherit;font-size:13px}
+.result-count{color:var(--text-secondary);font-size:12px}
+
+/* barra contextual de seleção — substitui a toolbar */
+.selbar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);justify-content:space-between;
+  background:var(--accent-subtle);border:1px solid #BFDBFE;border-radius:var(--r-surface);
+  padding:var(--s2) var(--s3)}
+.selbar__count{font-weight:500;color:var(--accent-subtle-text)}
+
+/* --- REGIÃO DE DADOS (não é card: sem sombra) --- */
+.dataregion{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);overflow:hidden}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{background:var(--surface-subtle);border-bottom:1px solid var(--border);
+  text-align:left;padding:var(--s2) var(--s4);height:36px}
+tbody td{border-top:1px solid var(--border);padding:var(--s3) var(--s4);vertical-align:middle;height:44px}
+tbody tr:first-child td{border-top:0}
+tbody tr:hover{background:var(--surface-subtle)}
+tbody tr[aria-selected="true"]{background:var(--accent-subtle);box-shadow:inset 2px 0 0 var(--accent)}
+.c-sel{width:44px}
+.c-prod{width:auto}
+.c-num{width:132px;text-align:right}
+.c-status{width:150px}
+.c-act{width:var(--actw,168px);text-align:right}
+.prod__name{font-weight:500}
+.prod__sku{font-size:12px;color:var(--text-secondary);letter-spacing:.03em}
+/* par saldo/mínimo = veredito + evidência */
+.stock{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.stock__cur{font-weight:600;font-variant-numeric:tabular-nums}
+.stock__cur .u{font-weight:400;color:var(--text-secondary);font-size:12px}
+.stock__min{font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.stock--low .stock__cur{color:var(--warning)}
+.stock--out .stock__cur{color:var(--danger)}
+.rowacts{display:flex;gap:var(--s2);justify-content:flex-end;align-items:center}
+.tfootbar{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);
+  flex-wrap:wrap;padding:var(--s3) var(--s4);border-top:1px solid var(--border);background:var(--surface-subtle)}
+
+/* --- cards mobile --- */
+.cards{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--s3)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);padding:var(--s3) var(--s4)}
+.card__top{display:flex;justify-content:space-between;gap:var(--s3);align-items:flex-start}
+.card__acts{display:flex;gap:var(--s2);margin-top:var(--s3);align-items:center}
+.card__acts .btn{height:44px}
+.card__acts .btn--icon{width:44px}
+.grow{flex:1}
+
+/* --- diálogos (renderizados estáticos p/ comparar a gramática) --- */
+.dlg{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);
+  box-shadow:var(--shadow-overlay);max-width:460px;overflow:hidden}
+.dlg__h{padding:var(--s3) var(--s4);border-bottom:1px solid var(--border)}
+.dlg__b{padding:var(--s4)}
+.dlg__f{padding:var(--s3) var(--s4);border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:var(--s2)}
+.ctx{display:flex;flex-wrap:wrap;gap:var(--s4);background:var(--surface-subtle);
+  border:1px solid var(--border);border-radius:var(--r-control);padding:var(--s2) var(--s3);margin-bottom:var(--s4)}
+.ctx div{min-width:0}
+.ctx dt{font-size:12px;color:var(--text-secondary)}
+.ctx dd{font-weight:600;font-variant-numeric:tabular-nums}
+.preview{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r-control);
+  padding:var(--s3);margin-top:var(--s4);background:var(--surface-subtle)}
+.preview__row{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s3)}
+.big{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.delta{font-weight:600;font-variant-numeric:tabular-nums}
+.delta--up{color:var(--success)} .delta--down{color:var(--danger)}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r-control);overflow:hidden}
+.seg button{background:var(--surface);border:0;padding:0 var(--s3);height:36px;cursor:pointer;font-weight:500}
+.seg button+button{border-left:1px solid var(--border-strong)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+
+/* --- histórico (direção C — Registro) --- */
+.ledger{width:100%;border-collapse:collapse;table-layout:auto}
+.ledger th{background:transparent;border-bottom:1px solid var(--border);padding:var(--s2) var(--s3);height:auto}
+.ledger td{border-top:1px solid var(--border);padding:var(--s2) var(--s3);height:auto;vertical-align:top}
+.ledger .flow{font-variant-numeric:tabular-nums;white-space:nowrap}
+.anchor{display:flex;flex-wrap:wrap;gap:var(--s6);padding:var(--s3) var(--s4);
+  background:var(--surface-subtle);border:1px solid var(--border);border-radius:var(--r-surface);margin-bottom:var(--s3)}
+
+/* --- estados --- */
+.state{padding:var(--s12) var(--s4);text-align:center;color:var(--text-secondary)}
+.state__t{font-weight:500;color:var(--text-primary);margin-bottom:var(--s1)}
+.skel{height:12px;border-radius:4px;background:linear-gradient(90deg,#EEF0F3,#F7F8FA,#EEF0F3);
+  background-size:200% 100%;animation:sh 1.2s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.skel{animation:none}*{transition:none!important}}
+
+/* --- andaimes do protótipo (não fazem parte do design) --- */
+.scaffold{max-width:1280px;margin:0 auto;padding:var(--s6) var(--s4) 0}
+.scaffold h2{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:#7C3AED;margin:var(--s8) 0 var(--s2)}
+.scaffold .note{font-size:13px;color:var(--text-secondary);margin-bottom:var(--s3);max-width:76ch}
+.tag{display:inline-block;background:#F5F3FF;color:#5B21B6;border:1px solid #DDD6FE;
+  border-radius:var(--r-control);padding:1px 6px;font-size:11px;font-weight:600;margin-right:6px}
+.split{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start}
+.frame{border:1px dashed #C4B5FD;border-radius:var(--r-surface);padding:var(--s3);background:#FCFCFD}
+.frame__t{font-size:12px;font-weight:600;color:#6D28D9;margin-bottom:var(--s2)}
+.w375{width:375px;max-width:100%}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ====== A4: BREAKPOINT md = 768px ====== */
+.only-desktop{display:block}
+.only-mobile{display:none}
+@media (max-width:767.98px){
+  .only-desktop{display:none}
+  .only-mobile{display:block}
+  .toolbar{align-items:stretch}
+  .search{flex:1 1 100%;max-width:none}
+  .toolbar__actions{width:100%}
+  .toolbar__actions .btn{flex:1}
+  .appbar__in{height:48px}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ ZONA 1 · IDENTIDADE ============ -->
+<header class="appbar">
+  <div class="shell appbar__in">
+    <span class="brand">SimpleStock</span>
+    <div style="display:flex;gap:var(--s2);align-items:center">
+      <span class="t-caption">ana@empresa.com</span>
+      <button class="btn btn--secondary btn--sm">Sair</button>
+    </div>
+  </div>
+</header>
+
+<main class="shell" id="app">
+
+  <!-- ZONA 1b · contexto da tela -->
+  <div class="zone" style="display:flex;flex-wrap:wrap;gap:var(--s3);align-items:flex-end;justify-content:space-between">
+    <div>
+      <h1 class="t-page">Produtos</h1>
+      <p class="t-caption">Gerencie o cadastro e o estoque</p>
+    </div>
+    <div class="toolbar__actions">
+      <button class="btn btn--secondary">Baixa de Produtos</button>
+      <button class="btn btn--primary">Adicionar Produto</button>
+    </div>
+  </div>
+
+  <!-- ZONA 2 · ALERTA -->
+  <div class="zone--tight zone" role="status">
+    <div class="alert-strip">
+      <span class="alert-strip__txt"><strong>7 produtos</strong> precisam de atenção: 5 com estoque baixo, 2 sem estoque.</span>
+      <button class="btn btn--secondary btn--sm">Ver esses produtos</button>
+    </div>
+  </div>
+
+  <!-- ZONA 3 · CONTROLE -->
+  <div class="zone--tight zone" id="zone-control">
+    <div class="toolbar">
+      <div class="field search">
+        <label class="field__label" for="q">Buscar por nome ou SKU</label>
+        <input class="input" id="q" type="search" placeholder="Ex.: Caneta ou PAP-014">
+      </div>
+      <div class="toolbar__actions">
+        <button class="btn btn--secondary" id="btn-filters">Filtros <span class="badge badge--info" style="margin-left:2px">2</span></button>
+        <button class="btn btn--secondary" id="btn-sort">Ordenar: Nome ↑</button>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="result-count num">38 produtos</span>
+      <span class="chip">Estoque baixo <button aria-label="Remover filtro Estoque baixo">✕</button></span>
+      <span class="chip">Sem estoque <button aria-label="Remover filtro Sem estoque">✕</button></span>
+      <button class="btn btn--tertiary btn--sm">Limpar filtros</button>
+    </div>
+  </div>
+
+  <!-- ZONA 4 · DADOS -->
+  <div class="zone--tight zone">
+
+    <div class="scaffold" style="padding-left:0;padding-right:0;padding-top:0">
+      <h2>Variante A — três controles por linha <span class="tag">D3 (a)</span></h2>
+      <p class="note">Hipótese aprovada conceitualmente: <code>[Movimentar] [Baixa rápida] [⋯]</code>, com a baixa rápida neutra (sem o vermelho que hoje se repete em todas as linhas).</p>
+    </div>
+
+    <div class="dataregion only-desktop" id="tbl-a" style="--actw:206px">
+      <table>
+        <thead><tr>
+          <th class="c-sel"><input type="checkbox" aria-label="Selecionar todos desta página"></th>
+          <th class="c-prod t-th" aria-sort="ascending">Produto ▲</th>
+          <th class="c-num t-th">Saldo / mín.</th>
+          <th class="c-status t-th">Status</th>
+          <th class="c-act t-th"><span class="sr">Ações</span></th>
+        </tr></thead>
+        <tbody id="rows-a"></tbody>
+      </table>
+      <div class="tfootbar">
+        <span class="t-caption num">Página 1 de 4 · 38 produtos</span>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn btn--secondary btn--sm" aria-disabled="true">← Anterior</button>
+          <button class="btn btn--secondary btn--sm">Próxima →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="scaffold" style="padding-left:0;padding-right:0">
+      <h2>Variante B — dois controles por linha <span class="tag">D3 (b)</span></h2>
+      <p class="note">Alternativa mínima: baixa rápida desce para o overflow. Mesma tabela, mesmos dados — só muda a coluna de ações.</p>
+    </div>
+
+    <div class="dataregion only-desktop" id="tbl-b" style="--actw:150px">
+      <table>
+        <thead><tr>
+          <th class="c-sel"><input type="checkbox" aria-label="Selecionar todos desta página"></th>
+          <th class="c-prod t-th" aria-sort="ascending">Produto ▲</th>
+          <th class="c-num t-th">Saldo / mín.</th>
+          <th class="c-status t-th">Status</th>
+          <th class="c-act t-th"><span class="sr">Ações</span></th>
+        </tr></thead>
+        <tbody id="rows-b"></tbody>
+      </table>
+    </div>
+
+    <!-- barra contextual (substitui a zona de controle quando há seleção) -->
+    <div class="scaffold" style="padding-left:0;padding-right:0">
+      <h2>Barra contextual de seleção</h2>
+      <p class="note">Aparece na primeira seleção e substitui a zona de controle no mesmo lugar. Escopo sempre nomeado; some quando não há seleção.</p>
+    </div>
+    <div class="selbar">
+      <span class="selbar__count num">3 selecionados nesta página</span>
+      <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+        <button class="btn btn--tertiary btn--sm">Limpar seleção</button>
+        <button class="btn btn--secondary btn--sm" style="color:var(--danger);border-color:var(--danger)">Zerar estoque de 3 produtos</button>
+        <button class="btn btn--secondary btn--sm" style="color:var(--danger);border-color:var(--danger)">Excluir 3 produtos</button>
+      </div>
+    </div>
+
+    <!-- ===== MOBILE ===== -->
+    <div class="only-mobile">
+      <ul class="cards" id="cards-a"></ul>
+      <div class="tfootbar" style="border:1px solid var(--border);border-radius:var(--r-surface);margin-top:var(--s3)">
+        <span class="t-caption num">Página 1 de 4 · 38 produtos</span>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn btn--secondary btn--sm" aria-disabled="true">←</button>
+          <button class="btn btn--secondary btn--sm">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ANDAIMES DE VALIDAÇÃO ============ -->
+  <div class="scaffold">
+
+    <h2>Card mobile — variante A (baixa rápida inline) vs B (no overflow)</h2>
+    <p class="note">Renderizado em largura fixa de 375px para comparação, independente da largura da janela.</p>
+    <div class="split">
+      <div class="frame"><div class="frame__t">A · baixa rápida inline</div>
+        <div class="w375"><ul class="cards" id="card-var-a"></ul></div></div>
+      <div class="frame"><div class="frame__t">B · baixa rápida no overflow</div>
+        <div class="w375"><ul class="cards" id="card-var-b"></ul></div></div>
+    </div>
+
+    <h2>Menu de ações — destrutivas separadas</h2>
+    <div class="frame" style="max-width:280px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);box-shadow:var(--shadow-overlay);padding:var(--s1) 0">
+        <div style="padding:var(--s2) var(--s3)">Editar</div>
+        <div style="padding:var(--s2) var(--s3)">Ajustar estoque</div>
+        <div style="padding:var(--s2) var(--s3)">Ver histórico</div>
+        <div style="padding:var(--s2) var(--s3)">Baixa rápida <span class="t-caption">(variante B)</span></div>
+        <hr style="border:0;border-top:1px solid var(--border);margin:var(--s1) 0">
+        <div style="padding:var(--s2) var(--s3);color:var(--danger)">Zerar estoque</div>
+        <div style="padding:var(--s2) var(--s3);color:var(--danger)">Excluir produto</div>
+      </div>
+    </div>
+
+    <h2>D2 — duas formas de declarar a intenção</h2>
+    <p class="note">A intenção precisa ser inequívoca <em>antes</em> de digitar a quantidade. Nenhuma das duas usa <code>&lt;select&gt;</code> com default perigoso.</p>
+    <div class="split">
+      <div class="frame"><div class="frame__t">D2-A · escolhe antes de abrir</div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="btn btn--secondary">Registrar entrada</button>
+          <button class="btn btn--secondary">Registrar saída</button>
+        </div>
+        <p class="note" style="margin-top:var(--s2)">O diálogo abre já com a intenção fixada no título. Um clique a mais na navegação, um campo a menos no formulário.</p>
+      </div>
+      <div class="frame"><div class="frame__t">D2-B · declara dentro, sem default</div>
+        <div class="seg" role="group" aria-label="Tipo de movimentação">
+          <button aria-pressed="false">Entrada</button><button aria-pressed="false">Saída</button>
+        </div>
+        <p class="note" style="margin-top:var(--s2)">Nenhuma opção pré-selecionada; os campos abaixo permanecem desabilitados até a escolha. Mesmo número de cliques que hoje.</p>
+      </div>
+    </div>
+
+    <h2>Gramática comum — as quatro operações</h2>
+    <p class="note">Todas respondem: qual produto · qual intenção · qual quantidade/destino · saldo antes · saldo depois · o que vou gravar. A cerimônia varia.</p>
+    <div class="split" id="dialogs"></div>
+
+    <h2>Histórico — direção C (Registro)</h2>
+    <p class="note">Saldo atual ancorado <strong>fora</strong> da lista: o filtro afeta eventos, não o saldo do produto.</p>
+    <div class="dataregion" style="padding:var(--s4)">
+      <div class="anchor">
+        <div><div class="t-caption">Produto</div><div class="t-label">Caneta Esferográfica Azul · PAP-014</div></div>
+        <div><div class="t-caption">Saldo atual</div><div class="big num">125 <span class="t-caption">un.</span></div></div>
+        <div><div class="t-caption">Estoque mínimo</div><div class="big num">20 <span class="t-caption">un.</span></div></div>
+      </div>
+      <div class="chips" style="margin-top:0;margin-bottom:var(--s3)">
+        <span class="t-caption">Filtrando eventos:</span>
+        <span class="chip">Todos os tipos <button aria-label="Remover filtro">✕</button></span>
+        <span class="t-caption">O saldo acima não muda com o filtro.</span>
+      </div>
+      <table class="ledger">
+        <thead><tr>
+          <th class="t-th">Quando</th><th class="t-th">Tipo</th><th class="t-th">Saldo</th>
+          <th class="t-th">Δ</th><th class="t-th">Motivo</th><th class="t-th">Responsável</th>
+        </tr></thead>
+        <tbody id="ledger"></tbody>
+      </table>
+    </div>
+
+    <h2>A4 — comportamento em torno do breakpoint (768px)</h2>
+    <p class="note">Cada moldura é um <code>&lt;iframe&gt;</code> com viewport próprio, então as media queries respondem à largura da moldura — não à da janela. É o teste determinístico do critério A4: <em>nenhuma capacidade crítica desaparece e nenhuma composição fica inutilizável em torno da transição</em>.</p>
+    <div id="bpharness" style="display:flex;gap:var(--s4);overflow-x:auto;padding-bottom:var(--s3)"></div>
+
+    <h2>Estados</h2>
+    <div class="split">
+      <div class="frame"><div class="frame__t">Vazio · com filtro ativo</div>
+        <div class="dataregion"><div class="state">
+          <div class="state__t">Nenhum produto corresponde aos filtros</div>
+          <p class="t-body">2 filtros de status estão ativos.</p>
+          <div style="margin-top:var(--s3);display:flex;gap:var(--s2);justify-content:center">
+            <button class="btn btn--secondary btn--sm">Limpar filtros</button>
+            <button class="btn btn--primary btn--sm">Adicionar produto</button>
+          </div></div></div></div>
+      <div class="frame"><div class="frame__t">Vazio · sem cadastro</div>
+        <div class="dataregion"><div class="state">
+          <div class="state__t">Nenhum produto cadastrado ainda</div>
+          <p class="t-body">Cadastre o primeiro produto para começar a controlar o estoque.</p>
+          <div style="margin-top:var(--s3)"><button class="btn btn--primary btn--sm">Adicionar produto</button></div>
+        </div></div></div>
+      <div class="frame"><div class="frame__t">Carregando · preserva layout</div>
+        <div class="dataregion"><table><tbody>
+          <tr><td style="width:44px"><div class="skel" style="width:16px"></div></td>
+              <td><div class="skel" style="width:60%"></div><div class="skel" style="width:30%;margin-top:6px"></div></td>
+              <td style="width:132px"><div class="skel"></div></td></tr>
+          <tr><td><div class="skel" style="width:16px"></div></td>
+              <td><div class="skel" style="width:45%"></div><div class="skel" style="width:25%;margin-top:6px"></div></td>
+              <td><div class="skel"></div></td></tr>
+        </tbody></table></div></div>
+      <div class="frame"><div class="frame__t">Erro · persistente</div>
+        <div class="dataregion"><div style="padding:var(--s3) var(--s4);background:var(--danger-subtle);border-bottom:1px solid #FECACA;color:var(--danger)" role="alert">
+          <strong>Não foi possível carregar os produtos.</strong><br>
+          <span class="t-body">A API está indisponível. Tentando reconectar automaticamente.</span>
+        </div><div class="state">Nenhum dado para exibir.</div></div></div>
+    </div>
+
+    <div style="height:var(--s12)"></div>
+  </div>
+</main>
+
+<script>
+/* ---- modo "frame": só o app, sem os andaimes de validação ---- */
+const FRAME = new URLSearchParams(location.search).has('frame');
+if (FRAME) {
+  document.documentElement.classList.add('is-frame');
+  const s=document.createElement('style');
+  s.textContent='.scaffold{display:none!important}';
+  document.head.appendChild(s);
+}
+
+/* ---- dados fictícios no formato do domínio (espelha o seed) ---- */
+const P=[
+ {n:"Caderno Universitário 200 folhas",s:"PAP-001",b:142,m:20},
+ {n:"Caneta Esferográfica Azul",s:"PAP-014",b:1250,m:200},
+ {n:"Lápis Preto nº2",s:"PAP-023",b:8,m:15},
+ {n:"Borracha Branca Pequena",s:"PAP-031",b:0,m:10},
+ {n:"Grampeador de Mesa 26/6",s:"PAP-047",b:36,m:5},
+ {n:"Papel Sulfite A4 75g — resma 500 folhas",s:"PAP-052",b:9,m:12},
+ {n:"Marcador de Texto Amarelo",s:"PAP-068",b:74,m:25},
+ {n:"Tesoura Escolar 13cm",s:"PAP-070",b:3,m:8},
+];
+const st=p=>p.b===0?"out":(p.b<p.m?"low":"ok");
+const lbl={ok:"Em estoque",low:"Estoque baixo",out:"Sem estoque"};
+const nf=n=>n.toLocaleString("pt-BR");
+
+/* ---- linhas da tabela ---- */
+function row(p,variant){
+  const s=st(p);
+  const quick=variant==="a"
+   ? `<button class="btn btn--tertiary btn--sm btn--icon" aria-label="Baixa rápida em ${p.n}" title="Baixa rápida">↓</button>` : "";
+  return `<tr>
+    <td class="c-sel"><input type="checkbox" aria-label="Selecionar ${p.n}"></td>
+    <td class="c-prod"><div class="prod__name">${p.n}</div><div class="prod__sku">${p.s}</div></td>
+    <td class="c-num"><div class="stock stock--${s}">
+        <span class="stock__cur">${nf(p.b)} <span class="u">un.</span></span>
+        <span class="stock__min">mín. ${nf(p.m)}</span></div></td>
+    <td class="c-status"><span class="badge badge--${s}">${lbl[s]}</span></td>
+    <td class="c-act"><div class="rowacts">
+        <button class="btn btn--secondary btn--sm">Movimentar</button>
+        ${quick}
+        <button class="btn btn--tertiary btn--sm btn--icon" aria-label="Mais ações para ${p.n}">⋯</button>
+      </div></td></tr>`;
+}
+document.getElementById("rows-a").innerHTML=P.map(p=>row(p,"a")).join("");
+document.getElementById("rows-b").innerHTML=P.map(p=>row(p,"b")).join("");
+document.querySelectorAll("#rows-a tr")[4].setAttribute("aria-selected","true");
+
+/* ---- cards ---- */
+function card(p,variant){
+  const s=st(p);
+  const quick=variant==="a"
+   ? `<button class="btn btn--secondary btn--icon" aria-label="Baixa rápida em ${p.n}" title="Baixa rápida">↓</button>`:"";
+  return `<li class="card">
+    <div class="card__top">
+      <div class="grow"><div class="prod__name">${p.n}</div><div class="prod__sku">${p.s}</div></div>
+      <div class="stock stock--${s}">
+        <span class="stock__cur">${nf(p.b)} <span class="u">un.</span></span>
+        <span class="stock__min">mín. ${nf(p.m)}</span></div>
+    </div>
+    <div style="margin-top:var(--s2)"><span class="badge badge--${s}">${lbl[s]}</span></div>
+    <div class="card__acts">
+      <button class="btn btn--secondary grow">Movimentar</button>
+      ${quick}
+      <button class="btn btn--secondary btn--icon" aria-label="Mais ações para ${p.n}">⋯</button>
+    </div></li>`;
+}
+document.getElementById("cards-a").innerHTML=P.map(p=>card(p,"a")).join("");
+document.getElementById("card-var-a").innerHTML=P.slice(0,3).map(p=>card(p,"a")).join("");
+document.getElementById("card-var-b").innerHTML=P.slice(0,3).map(p=>card(p,"b")).join("");
+
+/* ---- os quatro diálogos ---- */
+function ctx(){return `<dl class="ctx">
+  <div><dt>Produto</dt><dd class="t-label" style="font-weight:500">Caneta Esferográfica Azul</dd></div>
+  <div><dt>Saldo atual</dt><dd class="num">1250</dd></div>
+  <div><dt>Estoque mínimo</dt><dd class="num">200</dd></div></dl>`;}
+function prev(a,b){const d=b-a;const c=d>0?"up":"down";const sg=d>0?"+":"";
+ return `<div class="preview"><div class="preview__row">
+   <span class="t-caption">Saldo após esta operação</span>
+   <span class="big">${nf(a)} → ${nf(b)}<span class="sr">, de ${nf(a)} para ${nf(b)}</span></span></div>
+   <div class="preview__row" style="margin-top:4px"><span class="t-caption">Diferença</span>
+   <span class="delta delta--${c}">${sg}${nf(d)}</span></div></div>`;}
+
+const dialogs=[
+ {t:"Registrar entrada · Caneta Esferográfica Azul",cer:"N1 — confirmação embutida",
+  body:ctx()+`<div class="field"><label class="field__label" for="d1">Quantidade a somar</label><input class="input num" id="d1" value="120"></div>`+prev(1250,1370),
+  ok:"Registrar entrada de 120 un."},
+ {t:"Registrar saída · Caneta Esferográfica Azul",cer:"N1 — confirmação embutida",
+  body:ctx()+`<div class="field"><label class="field__label" for="d2">Quantidade a subtrair</label><input class="input num" id="d2" value="45"></div>`+prev(1250,1205),
+  ok:"Registrar saída de 45 un."},
+ {t:"Baixa rápida · Caneta Esferográfica Azul",cer:"N1 — confirmação embutida + atalhos",
+  body:ctx()+`<div class="field"><label class="field__label" for="d3">Quantidade a subtrair</label>
+   <div style="display:flex;gap:var(--s2);margin-bottom:var(--s2)">
+    ${[1,5,10,25,50].map(n=>`<button class="btn btn--secondary btn--sm" aria-pressed="${n===5}">${n}</button>`).join("")}</div>
+   <input class="input num" id="d3" value="5"></div>`+prev(1250,1245),
+  ok:"Confirmar baixa de 5 un."},
+ {t:"Ajustar estoque · Caneta Esferográfica Azul",cer:"N2 — resumo antes de gravar",
+  body:ctx()+`<div class="field"><label class="field__label" for="d4">Novo saldo (contagem física)</label><input class="input num" id="d4" value="1180"></div>
+   <div class="field" style="margin-top:var(--s3)"><label class="field__label" for="d4m">Motivo</label><input class="input" id="d4m" value="Contagem física do dia 28/08"></div>`+prev(1250,1180)
+   +`<p class="t-caption" style="margin-top:var(--s3)">Você informou um <strong>destino</strong>, não um efeito — o próximo passo mostra a saída de 70 un. que será gravada.</p>`,
+  ok:"Revisar ajuste →"},
+];
+document.getElementById("dialogs").innerHTML=dialogs.map(d=>`
+ <div><div class="frame__t" style="margin-bottom:6px">${d.cer}</div>
+ <div class="dlg"><div class="dlg__h"><h3 class="t-component">${d.t}</h3></div>
+ <div class="dlg__b">${d.body}</div>
+ <div class="dlg__f"><button class="btn btn--secondary">Cancelar</button>
+ <button class="btn btn--primary">${d.ok}</button></div></div></div>`).join("");
+
+/* ---- harness de breakpoint: iframes com viewport próprio ---- */
+if(!FRAME){
+ const WIDTHS=[375,600,767,768,900,1024,1440];
+ document.getElementById("bpharness").innerHTML=WIDTHS.map(w=>`
+  <div class="frame" style="flex:none">
+    <div class="frame__t">${w}px — ${w<768?'CARDS':'TABELA'}</div>
+    <iframe src="dashboard.html?frame=1" width="${w}" height="620" style="border:1px solid var(--border);border-radius:var(--r-control);background:#fff"
+      title="Protótipo em ${w}px" data-w="${w}"></iframe>
+  </div>`).join("");
+}
+
+/* ---- histórico ---- */
+const H=[
+ {w:"28/08/2026 09:02",t:"Ajuste",cls:"info",a:127,b:125,r:"Contagem física",u:"ana@empresa.com"},
+ {w:"27/08/2026 16:40",t:"Saída",cls:"out",a:132,b:127,r:"Requisição setor B",u:"joao@empresa.com"},
+ {w:"26/08/2026 11:15",t:"Entrada",cls:"ok",a:120,b:132,r:"Compra NF 4471",u:"ana@empresa.com"},
+ {w:"01/08/2026 08:00",t:"Estoque inicial",cls:"ok",a:null,b:50,r:"Estoque inicial",u:"ana@empresa.com"},
+];
+document.getElementById("ledger").innerHTML=H.map(h=>{
+ const d=h.a===null?h.b:h.b-h.a; const sg=d>0?"+":""; const c=d>0?"up":"down";
+ const from=h.a===null?"—":nf(h.a);
+ const sr=h.a===null?`saldo inicial ${nf(h.b)}`:`de ${nf(h.a)} para ${nf(h.b)}`;
+ return `<tr><td class="t-caption" style="white-space:nowrap">${h.w}</td>
+  <td><span class="badge badge--${h.cls}">${h.t}</span></td>
+  <td class="flow">${from} → ${nf(h.b)}<span class="sr">, ${sr}</span></td>
+  <td class="flow delta delta--${c}">${sg}${nf(d)}</td>
+  <td>${h.r}</td><td class="t-caption">${h.u}</td></tr>`;}).join("");
+</script>
+</body>
+</html>
