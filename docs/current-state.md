@@ -160,7 +160,16 @@ Listadas em `AGENTS.md` como backlog conhecido, mais achados desta análise:
 - Migração do ESLint para flat config ainda pendente (mencionada em `AGENTS.md`; não verificado nesta análise se `eslint.config.js` já é flat config ou não).
 - `seed.ts` grava movimentações de estoque inicial diretamente via `PrismaClient`, sem passar pelo `StockService` — dados gerados pelo seed não têm `previousQuantity`/`newQuantity`/`userId` como os dados criados via API.
 - `DELETE /products/:id` é hard-delete com cascata manual das movimentações — qualquer histórico de auditoria de um produto excluído é perdido permanentemente.
-- `MovementType.ADJUSTMENT` existe no schema/banco mas não tem nenhuma rota, UI ou regra de negócio associada — é uma capacidade do banco sem uso definido ainda.
+- `MovementType.ADJUSTMENT` existe no schema/banco mas não tem nenhuma rota, UI ou regra de negócio associada — é uma capacidade do banco sem uso definido ainda. **(Resolvido em 28/08/2026 pela feature Ajuste de Estoque; a linha fica aqui porque o restante deste documento reflete o repositório em 27/08/2026.)**
+
+Da revisão final de Ajuste de Estoque (28/08/2026) — detalhe de cada item em `docs/features/ajuste-estoque/review.md`, nenhum é bug atual e nenhum tem prioridade atribuída:
+
+- **A1** — `AdjustmentFormModal` não gerencia o foco explicitamente na troca entre os passos `form`/`confirm`/`conflict`; hoje o foco é recuperado por um fallback do Radix, não por desenho.
+- **A4** — a região `aria-live` do preview de saldo é montada junto com o próprio conteúdo, então deixa de anunciar no fluxo de revisão pós-conflito.
+- **A5** — a seta `→` usada entre saldo anterior e novo saldo pode não ser anunciada por leitor de tela; o significado hoje se apoia na coluna de diferença ao lado.
+- **A6** — `ui/Input.tsx` renderiza a mensagem de erro sem `role="alert"`, divergindo de outros campos do mesmo formulário. Dívida do primitivo, não de quem o consome.
+- **#8** — `GET /products/:id/movements` espalha o registro cru da movimentação (inclui `userId`, `referenceType`, `referenceId`) em vez de projetar um DTO mínimo explícito, como `quick-out.ts` já faz.
+- **#11** — `StockMovement.userId` usa `ON DELETE SET NULL`: se exclusão de usuário for introduzida no futuro, a autoria dos ajustes já gravados some silenciosamente.
 
 # Riscos
 
@@ -168,6 +177,8 @@ Listadas em `AGENTS.md` como backlog conhecido, mais achados desta análise:
 - **Ausência de RBAC**: qualquer conta comprometida (ou qualquer usuário legítimo) tem acesso irrestrito a todas as operações, incluindo exclusão de produtos e movimentação de estoque.
 - **Deploy não configurado de fato**: `render.yaml` vazio e `netlify.toml` com placeholder significam que não há garantia de que um deploy real funcione sem intervenção manual adicional — não verificado nesta análise se existe um ambiente de produção já funcionando por fora desses arquivos.
 - **Dependência de Postgres real para validar mudanças de schema/estoque**: sem um Postgres acessível, não é possível rodar `prisma migrate`, a suíte de testes de backend, nem confirmar em CI local que uma mudança de concorrência/transação está correta — só lint, typecheck e build de schema são verificáveis sem banco.
+- **Exposição do e-mail do responsável (risco aceito, 28/08/2026)**: o histórico de movimentações devolve o e-mail de quem fez cada movimentação, o que permite a qualquer usuário autenticado enumerar contas válidas — algo que a rota de login evita de propósito. Aceito conscientemente porque a feature existe para auditoria operacional e `User` não tem outro identificador humano hoje; reavaliar se surgir `name`/`displayName` ou uma política de privacidade diferente. Ver `docs/features/ajuste-estoque/review.md` (#7).
+- **Agregação de `ADJUSTMENT` em memória (risco aceito, 28/08/2026)**: o cálculo de saldo carrega uma linha por ajuste para a memória do Node em vez de agregar no banco. Funcionalmente correto; pode não escalar conforme o volume de ajustes crescer. Aceito como dívida de performance, sem otimização agora. Ver `docs/features/ajuste-estoque/review.md` (#10).
 - **Exclusão em massa e "zerar saldo em massa"** (`useProductMutations.removeProducts`, `zeroBalances`) usam `Promise.allSettled` por item — uma falha parcial é reportada ("falhou X de Y"), mas não há transação atômica cobrindo o lote inteiro; um lote pode terminar parcialmente aplicado.
 
 # Questões em Aberto
