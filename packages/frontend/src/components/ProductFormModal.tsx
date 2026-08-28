@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -53,6 +53,29 @@ export function ProductFormModal({ open, onOpenChange, mode, initialId, initialV
       description: initialValues?.description ?? '',
     },
   });
+
+  // `defaultValues` do react-hook-form é lido UMA vez, na montagem. Esta
+  // instância é montada pelo `ProductDashboard` enquanto nenhum produto está em
+  // edição (`editing === null`, portanto todos os `initialValues` indefinidos) e
+  // depois é reaproveitada — só `open` e `initialValues` mudam. Sem este efeito,
+  // abrir a edição mostrava o formulário com os valores da primeira montagem
+  // (vazios) em vez dos do produto selecionado, e salvar era bloqueado pelo Zod
+  // com "Informe o nome" / "Informe o SKU".
+  //
+  // Dependências deliberadas: `initialValues` é um objeto literal novo a cada
+  // render do pai, então depender da identidade dele resetaria o formulário no
+  // meio da digitação. O que define quando recarregar é a abertura do diálogo e
+  // qual produto ele está editando.
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      name: initialValues?.name ?? '',
+      sku: initialValues?.sku ?? '',
+      minStock: initialValues?.minStock ?? 0,
+      initialStock: 0,
+      description: initialValues?.description ?? '',
+    });
+  }, [open, initialId, reset]);
 
   // Submit logic is inlined into handleSubmit below to simplify generic typing
 
