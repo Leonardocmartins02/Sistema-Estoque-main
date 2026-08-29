@@ -585,7 +585,7 @@ Conforme a regra do brief, o que a auditoria de fluxo revelou de **comportamento
 
 | ID | Achado | Fluxo | Encaminhamento |
 |---|---|---|---|
-| **F-01** | `QuickOutModal` permite quantidade até `currentBalance * 2` e desenha "Estoque negativo", estado que o domínio proíbe | 7 | Já registrado na Fase 1. Precisa de decisão de produto: impedir no cliente ou apenas avisar? A regra do backend não muda |
+| **F-01** | `QuickOutModal` permite quantidade até `currentBalance * 2`; o ramo "Estoque negativo" é código morto (`Math.max(0, …)`, achado N-4 de `characterization-plan.md` §13) — o que de fato acontece é o preview mostrar `0` com "Estoque zerado" sem sinalizar que a quantidade é impossível | 7 | **Decidido em 29/08/2026** (`bugfix-gate.md` §7 G-3): a interface vai **impedir** — quantidade não pode ultrapassar o saldo, confirmação desabilitada, feedback claro, nunca representar a quantidade impossível como "Estoque zerado". A regra do backend não muda. Aplicado durante a migração do `QuickOutModal` (Fase 8) |
 | **F-02** | `QuickOutListModal` / `QuickOutHistoryModal` usam `fetch` manual em `useEffect`, sem cancelamento — digitar rápido na busca pode aplicar resposta antiga | 7 | Backlog do `CLAUDE.md`. Corrigir junto da migração para React Query, com commit próprio |
 | **F-03** | `QuickOutHistoryModal` ordena só a página atual em memória, aparentando ordenação global | 7 | Mesmo backlog de paginação real |
 | **F-04** | Seleção múltipla não é limpa ao paginar/filtrar — permite excluir itens fora da tela | 11 (UF-46) | Precisa de decisão antes da Fase 8: limpar ao navegar, ou mostrar e permitir gerenciar a seleção acumulada? |

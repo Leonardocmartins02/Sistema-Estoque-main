@@ -67,8 +67,8 @@ Contrato §9.3 itens 1–10. Após C-2 o componente **não tem nenhum gerenciame
 | QOM-12 | "Cancelar" fecha sem chamar a API | **PRESERVAR** | Clicar → `onOpenChange(false)`, API não chamada | Backdrop e Escape não substituem o controle explícito |
 | — | Mensagem de erro da API chega ao usuário | **PRESERVAR** | *(já coberto — F-07)* | Teste de requisito, sobrevive à migração |
 | — | Erro renderizado uma única vez | **PRESERVAR** | *(já coberto — C-3)* | — |
-| — | `max` do input = `saldo × 2` | **ALTERAR INTENCIONALMENTE** | — | F-01/P-4: a interface passará a comunicar impedimento |
-| — | Rótulo "Estoque zerado" quando o novo saldo é 0 | **ALTERAR INTENCIONALMENTE** | — | Idem F-01; o vocabulário de estado é reescrito |
+| — | `max` do input = `saldo × 2` | **ALTERAR INTENCIONALMENTE** | — | F-01 **decidido** (29/08/2026, `bugfix-gate.md` §7 G-3): a interface passa a **impedir** — quantidade não pode ultrapassar o saldo; o `max` deixa de permitir o dobro |
+| — | Rótulo "Estoque zerado" quando o novo saldo é 0 | **ALTERAR INTENCIONALMENTE** | — | Idem F-01: o rótulo é substituído por impedimento de confirmação com feedback claro. Nunca representar a quantidade impossível apenas como "Estoque zerado" |
 | — | Rótulo "Estoque negativo" | **BUG — NÃO CONGELAR** | — | **Código morto (N-4).** `Math.max(0, …)` na linha 53 impede `newBalance < 0`; o ramo nunca renderiza |
 | — | Listener de teclado global no `window`, ativo fora do modal | **BUG — NÃO CONGELAR** | — | Intercepta Enter da página inteira. O trap do Radix o torna desnecessário |
 | — | Sem `role="dialog"`, `aria-modal`, `aria-labelledby` | **BUG — NÃO CONGELAR** | — | C-1. Alvo = contrato de `Modal.test.tsx` |
@@ -143,7 +143,7 @@ Contrato §9.3 itens 18–20. Cobertura atual: **zero**.
 
 **Testes novos: 7.**
 
-> **Contrato em aberto (N-9):** o componente **preserva** filtros, busca e página entre aberturas (o estado vive fora do `if (!open)`). Não há decisão registrada sobre isso ser desejado. A migração pode mudá-lo em silêncio. **Decidir antes de escrever QOH-1..3** — se for para preservar, vira um teste a mais; se for para limpar, vira ALTERAR INTENCIONALMENTE.
+> **N-9 — DECIDIDO em 29/08/2026:** o componente **preserva** filtros, busca e página entre aberturas (o estado vive fora do `if (!open)`), e isso passa a ser **PRESERVAR** — reabrir o histórico devolve a pessoa ao recorte que ela deixou, sem obrigar a refiltrar. Coberto por QOH-8, observando o efeito (o que a API recebe e o que a tela mostra), nunca o estado interno do componente.
 
 ---
 
@@ -308,7 +308,7 @@ Vários riscos de mobile deste plano **não são detectáveis** pela stack de te
 
 **Nenhum destes vira characterization test nesta Task 0** — seria escrever um teste que não testa. O projeto não tem runner de navegador (sem Playwright/Cypress).
 
-> **Decisão pendente (Q-1):** introduzir uma verificação de navegador em 375px e altura curta como parte da Fase 8, ou aceitar que a paridade mobile seja verificada manualmente contra a tabela de §15.1? Adicionar um runner é dependência nova e precisa de aprovação explícita — não vou presumi-la.
+> **Q-1 — DECIDIDO em 29/08/2026:** a paridade responsiva/mobile da primeira etapa da migração visual será verificada **manualmente** no navegador, contra a tabela de §15.1. Nenhum runner E2E (Playwright, Cypress, Selenium ou equivalente) é introduzido — nem nesta fase, nem como dependência nova do projeto. Characterization tests continuam responsáveis pelo comportamento funcional; a verificação manual cobre o que o jsdom não pode ver: 320px quando relevante, 375px, viewport baixo, a transição em torno de `md`, clipping, rolagem, `max-height`, alvos de toque de ~44px, a grade de atalhos e a paridade de capacidades entre desktop e mobile.
 
 ---
 
@@ -386,7 +386,7 @@ Encontrados ao conferir o código. **Nenhum foi corrigido.**
 | **N-6** | Falha de consulta silenciosa: `try/finally` sem `catch`. Erro de API vira estado vazio, indistinguível de resultado legítimo | `QuickOutListModal.tsx:39-50`, `QuickOutHistoryModal.tsx:28-39` | Médio. A pessoa conclui "não há produtos" quando a API caiu |
 | **N-7** | O mesmo clipping do UF-29 existe no histórico (`overflow-hidden` + `table-fixed`), além de busca `w-72` fixa no cabeçalho | `QuickOutHistoryModal.tsx:67-80,92-93` | Médio. UF-29 estava registrado só para a lista |
 | **N-8** | Campos sem `<label>`: quantidade do `QuickOutModal`; busca e datas do `QuickOutHistoryModal` | `QuickOutModal.tsx`, `QuickOutHistoryModal.tsx:73-88` | Médio, acessibilidade. B-7 registrava só a busca da lista |
-| **N-9** | `QuickOutHistoryModal` preserva filtros, busca e página entre aberturas, sem decisão registrada | `QuickOutHistoryModal.tsx:14-25,62` | Contrato em aberto — decidir antes de escrever QOH-1..3 |
+| **N-9** | `QuickOutHistoryModal` preserva filtros, busca e página entre aberturas | `QuickOutHistoryModal.tsx:14-25,62` | **Decidido (29/08/2026): PRESERVAR.** Coberto por QOH-8 |
 
 ---
 
@@ -455,9 +455,9 @@ Um módulo `test/helpers/` com fábricas de `ProductWithBalance`, `Movement` e `
 
 | Dependência | Bloqueia | Situação |
 |---|---|---|
-| **N-9** (estado do histórico preservado entre aberturas) | QOH-1..3 | **Decidir antes de T1** |
-| **F-01** (impedir × avisar) | Nada do que será escrito — determina apenas que `max` e o vocabulário do preview não viram teste. **Precisa ser redecidida à luz de N-4** | Pendente (G-3) |
-| **Q-1** (verificação em navegador) | Nada da Task 0; define como a paridade mobile é verificada na Fase 8 | **Pendente** |
+| **N-9** (estado do histórico preservado entre aberturas) | QOH-1..3 | **Decidido: PRESERVAR** (29/08/2026) — coberto por QOH-8 |
+| **F-01** (impedir × avisar) | Nada do que será escrito — determina apenas que `max` e o vocabulário do preview não viram teste | **Decidido: impedir** (29/08/2026, `bugfix-gate.md` §7 G-3) — aplicado na migração do `QuickOutModal` (Fase 8), não na Task 0 |
+| **Q-1** (verificação em navegador) | Nada da Task 0; define como a paridade mobile é verificada na Fase 8 | **Decidido: verificação manual**, sem runner E2E (29/08/2026) |
 | **UF-08** (ordenação secundária) | Mantém Shift+clique fora do contrato | Em aberto |
 | **P-1** (baixa rápida no mobile) | Não bloqueia: o teste afirma *"existe baixa rápida alcançável no card"*, não onde ela vive | Pendente |
 
@@ -488,6 +488,11 @@ Só **N-9** bloqueia o início de uma trilha.
 
 ## Estado
 
-**Plano concluído e revisado.** Nenhum teste escrito, nenhum código, CSS ou token alterado.
+**Plano concluído e revisado.**
 
-Aguardando decisão de **N-9** e **Q-1**, e a redecisão de **F-01** à luz de **N-4**, antes de iniciar a implementação da Task 0.
+**Atualização — 29/08/2026.** As três dependências que bloqueavam a implementação foram decididas:
+- **N-9** → PRESERVAR (coberto por QOH-8 em `QuickOutHistoryModal.test.tsx`);
+- **F-01** → impedir (redecidido à luz de N-4; aplicado durante a migração do `QuickOutModal`, não na Task 0 — ver `bugfix-gate.md` §7 G-3);
+- **Q-1** → verificação manual da paridade responsiva, sem runner E2E.
+
+A Task 0 foi implementada: 189 testes na suíte de frontend (90 pré-existentes + 99 novos), todos verdes, `pnpm -r run lint`/`typecheck`/`build` sem erro, nenhum arquivo de `src/`, CSS ou token alterado. Nenhum comportamento classificado BUG — NÃO CONGELAR ou ALTERAR INTENCIONALMENTE (incluindo o alvo agora decidido de F-01) foi transformado em characterization test.

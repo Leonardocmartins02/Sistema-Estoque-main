@@ -115,7 +115,7 @@ Todos exigem **characterization test antes** de qualquer alteração (§4).
 
 | Item | Class. | Evidência | Por quê | Ação | Quando | Teste |
 |---|---|---|---|---|---|---|
-| **F-01** — UI desenha "Estoque negativo" | **C** | `QuickOutModal:225` permite `max = saldo × 2` e pinta o preview de vermelho; o backend sempre recusa (422) | Não há "correto" técnico: impedir no cliente e avisar são ambos defensáveis, com consequências opostas para quem digita rápido. A regra do backend **não muda** | Decidir: bloquear ou avisar | **Antes** de migrar `QuickOutModal` | Depende da decisão |
+| **F-01** — UI desenha "Estoque negativo" | **C** — **DECIDIDO em 29/08/2026** | `QuickOutModal:225` permite `max = saldo × 2` e pinta o preview de vermelho; o backend sempre recusa (422). Redecidida à luz de N-4 (`characterization-plan.md` §13): o ramo "Estoque negativo" é código morto (`Math.max(0, …)`), então o que acontece hoje não é o que os documentos anteriores descreviam — exceder o saldo mostra `0` com "Estoque zerado", sem nenhum sinal de que a quantidade é impossível | **Decisão: impedir.** A quantidade de saída não pode ultrapassar o saldo disponível. Confirmação desabilitada quando `quantidade > saldo`; feedback claro no momento do impedimento; nunca representar a quantidade impossível apenas como "Estoque zerado"; nunca permitir estoque negativo | Aplicar durante a migração do `QuickOutModal` (Fase 8) — a UI a bloquear é a mesma tela que muda de sistema de diálogo | **Antes** de migrar `QuickOutModal` | Requisito novo da migração, não characterization. O comportamento atual (`max = saldo × 2`, rótulo "Estoque zerado" sem impedimento) está classificado **ALTERAR INTENCIONALMENTE** em §4 — nenhum characterization test o força a continuar |
 | **F-05** — SKU maiúsculo só por CSS | **C** | Input e coluna aplicam `uppercase` (transformação visual); o valor gravado mantém a caixa digitada; unicidade é exata → `abc123` e `ABC123` coexistem parecendo idênticos | É decisão de **dado/backend** (normalizar na escrita? unicidade case-insensitive?), não de UI. A UI só não pode continuar mentindo sobre o valor gravado | Decidir a política de SKU | **Antes** de migrar `ProductFormModal` | Depende da decisão |
 
 ### 3.4 · Categoria D — dívida fora de escopo
@@ -147,11 +147,11 @@ Critério de pronto da Task 0: a suíte passa **verde contra o código atual, se
 | Clique no backdrop fecha; no conteúdo, não | PRESERVAR |
 | Atalhos 1 · 5 · 10 · 25 · 50 com `aria-pressed` | PRESERVAR |
 | Preview "Saldo Atual → Novo Saldo" recalculado a cada tecla | PRESERVAR |
-| Rótulos "Estoque zerado" / "Estoque negativo" | ALTERAR INTENCIONALMENTE (depende de F-01) |
+| Rótulos "Estoque zerado" / "Estoque negativo" | ALTERAR INTENCIONALMENTE — F-01 decidido: rótulo será substituído por impedimento de confirmação com feedback claro, nunca representando a quantidade impossível como "Estoque zerado" |
 | Ação primária desabilitada com quantidade ≤ 0 | PRESERVAR |
 | Toast de sucesso com a quantidade; `onSuccess` dispara | PRESERVAR |
 | Sem `role="dialog"`, sem foco preso, sem retorno de foco | ALTERAR INTENCIONALMENTE |
-| `max = saldo × 2` | ALTERAR INTENCIONALMENTE (depende de F-01) |
+| `max = saldo × 2` | ALTERAR INTENCIONALMENTE — F-01 decidido: a quantidade não pode ultrapassar o saldo; o `max` deixa de permitir o dobro |
 | **Mensagem de erro genérica** | **BUG — NÃO CONGELAR** (F-07, corrigido na onda 0) |
 | **Erro renderizado duas vezes** | **BUG — NÃO CONGELAR** (C-3, onda 0) |
 | **`console.log` no caminho crítico** | **BUG — NÃO CONGELAR** (C-2, onda 0) |
@@ -269,8 +269,8 @@ As duas trilhas não se tocam e podem correr simultaneamente. **Não paralelizar
 Ambas são descartadas na migração. Aplicar agora, ou aguentar até a Fase 8?
 
 **G-3 · Decisões de produto (categoria C).**
-- **F-01** — a interface deve **impedir** quantidade maior que o saldo, ou **avisar** e deixar o backend recusar?
-- **F-05** — política de SKU: normalizar na escrita, unicidade case-insensitive, ou manter como está e parar de exibir em maiúsculas?
+- **F-01 — DECIDIDO em 29/08/2026.** A interface deve **impedir**: a quantidade de saída não pode ultrapassar o saldo disponível. Confirmação desabilitada quando `quantidade > saldo`, feedback claro no momento do impedimento, nunca representar a quantidade impossível apenas como "Estoque zerado", nunca permitir estoque negativo. A regra do backend não muda — a UI passa a impedir **antes** de submeter, em vez de deixar o 422 ser a primeira notícia. Aplicado **durante** a migração do `QuickOutModal` (Fase 8), não antes: é a mesma tela que muda de sistema de diálogo, e o comportamento atual está classificado ALTERAR INTENCIONALMENTE em §4 — nenhum characterization test o congela.
+- **F-05** — política de SKU: normalizar na escrita, unicidade case-insensitive, ou manter como está e parar de exibir em maiúsculas? **Segue pendente.**
 
 **G-4 · Remover `FinanceDashboard.tsx` e `SalesDashboard.tsx`?** Zero imports confirmados; `frontend.md` exige confirmação explícita antes de apagar.
 
@@ -281,3 +281,17 @@ Ambas são descartadas na migração. Aplicar agora, ou aguentar até a Fase 8?
 **Concluído.** Nenhum código, CSS ou teste alterado. 31 itens classificados: **7 em A**, **12 em B**, **2 em C**, **7 em D** (F-10 registrado durante a onda 0), mais os 3 itens de housekeeping.
 
 Aguardando **G-1 a G-4** antes da **Fase 7 — Implementation Plan**.
+
+---
+
+## Atualização — 29/08/2026
+
+A Task 0 (characterization tests, `characterization-plan.md`) foi implementada: 189 testes na suíte de frontend, todos verdes, nenhum código de produção alterado.
+
+**F-01 decidido** (registrado em §3.3 e §7 acima): a interface vai **impedir** quantidade maior que o saldo. Nenhum characterization test força o comportamento atual (`max = saldo × 2`, "Estoque zerado" sem impedimento) a continuar — está marcado ALTERAR INTENCIONALMENTE.
+
+**N-9 decidido** (ver `characterization-plan.md` §4 e §15): o `QuickOutHistoryModal` **preserva** filtros, busca e página entre fechamento e reabertura. Passa a ser PRESERVAR. Coberto por characterization test (QOH-8, em `QuickOutHistoryModal.test.tsx`).
+
+**Q-1 decidido** (ver `characterization-plan.md` §11): a paridade responsiva/mobile da Fase 8 será validada **manualmente** no navegador — 320px quando relevante, 375px, viewport baixo, transição em torno de `md`, clipping, rolagem, `max-height`, alvos de ~44px, grade de atalhos, paridade de capacidades desktop/mobile. Nenhum runner E2E (Playwright/Cypress/Selenium) é introduzido. Characterization tests continuam responsáveis pelo comportamento funcional; a verificação manual cobre apenas o que o jsdom não pode ver (§11).
+
+**F-05 continua pendente** — não bloqueia a Task 0 nem a migração do `QuickOutModal`/`QuickOutHistoryModal`; bloqueia especificamente a migração do `ProductFormModal`.

@@ -78,3 +78,32 @@ describe('ProductActionsMenu', () => {
     expect(actions.onZeroBalance).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * PAM-1 — complemento de caracterização (`characterization-plan.md` §8).
+ *
+ * `onAdjust` e `onDelete` já estavam cobertos acima. A lacuna real era a
+ * fiação de `onEdit`, `onHistory` e `onZeroBalance`: é exatamente o tipo de
+ * ligação que a migração visual quebra em silêncio, porque o menu continua
+ * abrindo e os itens continuam na tela — só deixam de fazer efeito.
+ */
+describe('ProductActionsMenu — fiação das demais ações (PAM-1)', () => {
+  const cases = [
+    { label: 'Editar', callback: 'onEdit' },
+    { label: 'Ver Histórico', callback: 'onHistory' },
+    { label: 'Zerar Estoque', callback: 'onZeroBalance' },
+  ] as const;
+
+  it.each(cases)('acionar "$label" chama actions.$callback com o produto', async ({ label, callback }) => {
+    // Saldo > 0 para que "Zerar Estoque" esteja habilitado neste cenário.
+    const product = makeProduct({ balance: 20 });
+    const actions = makeActions();
+    render(<ProductActionsMenu product={product} actions={actions} />);
+    const user = await openMenu(product);
+
+    await user.click(await screen.findByRole('menuitem', { name: label }));
+
+    expect(actions[callback]).toHaveBeenCalledTimes(1);
+    expect(actions[callback]).toHaveBeenCalledWith(product);
+  });
+});
