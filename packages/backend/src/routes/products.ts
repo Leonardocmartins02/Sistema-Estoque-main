@@ -185,31 +185,48 @@ router.get('/', async (req, res, next) => {
       return;
     }
 
-    const candidates = await prisma.product.findMany({ where, orderBy: { name: 'asc' } });
+    // 3-F2 (REV-01): `name`/`sku` usam o PostgreSQL como autoridade de
+    // ordenação, também neste caminho — a mesma que o caminho sem valor
+    // derivado já usa (linha ~164). Antes, este caminho reordenava os
+    // candidatos em JS com `.toLowerCase()` (ver histórico do commit), uma
+    // autoridade DIFERENTE da collation do banco: o mesmo `sortBy=name`
+    // podia produzir ordens diferentes só por existir um filtro de `status`
+    // na consulta. SD-1 (implementation-plan.md §9.3.1) aceita a collation
+    // nativa de cada ambiente — mas exige que ela seja usada de forma
+    // consistente, nunca substituída por uma comparação de string em JS.
+    //
+    // Para `sortBy=balance` a ordem da consulta de candidatos não importa:
+    // o array é inteiramente reordenado por saldo abaixo, e `id` desempata.
+    const candidatesOrderBy: Prisma.ProductOrderByWithRelationInput[] =
+      sortBy === 'balance'
+        ? [{ id: 'asc' }]
+        : [sortBy === 'sku' ? { sku: sortDir } : { name: sortDir }, { id: 'asc' }];
+
+    const candidates = await prisma.product.findMany({ where, orderBy: candidatesOrderBy });
     const balances = await balancesFor(candidates.map((product) => product.id));
     const withBalance = candidates.map((product) => ({
       ...product,
       balance: balances.get(product.id) ?? 0,
     }));
 
+    // `Array.prototype.filter` preserva a ordem relativa dos elementos que
+    // passam — não reordena. Para `name`/`sku`, `candidates` já chegou do
+    // Prisma na ordem final (collation do banco, com `id` como desempate);
+    // aplicar o filtro de status não destrói essa ordem, só remove itens.
     const filtered = withBalance.filter((product) => matchesStatus(product, status));
-    const direction = sortDir === 'asc' ? 1 : -1;
-    // A ordenação acontece sobre o conjunto filtrado INTEIRO e só depois é
-    // fatiada (`slice` abaixo) — global antes da paginação, como no caminho do
-    // banco. O desempate por `id` fecha o mesmo buraco do outro caminho: sem
-    // ele, saldos empatados (o caso comum: vários produtos zerados) deixam a
-    // ordem entre páginas indefinida.
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === 'balance') {
+
+    // `balance` é campo derivado (não existe como coluna): precisa do
+    // comparador em memória. `name`/`sku` já saíram ordenados do banco em
+    // `candidates`/`filtered` — reordená-los aqui reintroduziria exatamente
+    // o problema desta correção.
+    let sorted = filtered;
+    if (sortBy === 'balance') {
+      const direction = sortDir === 'asc' ? 1 : -1;
+      sorted = [...filtered].sort((a, b) => {
         if (a.balance !== b.balance) return (a.balance - b.balance) * direction;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-      }
-      const av = sortBy === 'sku' ? a.sku.toLowerCase() : a.name.toLowerCase();
-      const bv = sortBy === 'sku' ? b.sku.toLowerCase() : b.name.toLowerCase();
-      if (av < bv) return -direction;
-      if (av > bv) return direction;
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-    });
+      });
+    }
 
     const start = (page - 1) * pageSize;
     const items = pageSize === 0 ? sorted : sorted.slice(start, start + pageSize);
