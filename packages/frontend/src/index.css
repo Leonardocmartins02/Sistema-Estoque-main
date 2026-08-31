@@ -2,8 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Tokens semânticos — Fase 5 (docs/ui-ux/design-system.md).
+ *
+ * Dois níveis: primitivo (paleta default do Tailwind, não redefinida aqui)
+ * → semântico (estas variáveis, referenciadas pelo `theme.extend` do
+ * tailwind.config.js). Componente só deve consumir o nível semântico
+ * (`bg-accent`, `text-secondary`, `rounded-control`, `shadow-overlay`...).
+ *
+ * Canais RGB sem função, para preservar `<alpha-value>` (`bg-accent/10`
+ * continua funcionando) — ver design-system.md §19.
+ *
+ * Nenhum componente consome estas variáveis ainda (Task 1 do
+ * docs/ui-ux/implementation-plan.md); a migração dos consumidores é feita
+ * task a task a partir da Task 5.
+ */
 :root {
   color-scheme: light;
+
+  /* Neutros */
+  --color-background: 249 250 251; /* gray-50 */
+  --color-surface: 255 255 255; /* white */
+  --color-surface-subtle: 249 250 251; /* gray-50 — alias declarado de background, ver §3.1 */
+  --color-border: 229 231 235; /* gray-200 — separador decorativo */
+  --color-border-strong: 107 114 128; /* gray-500 — contorno de controle, 4.83:1 (WCAG 1.4.11) */
+  --color-border-hover: 75 85 99; /* gray-600 */
+  --color-text-primary: 17 24 39; /* gray-900 */
+  --color-text-secondary: 75 85 99; /* gray-600 */
+  --color-text-muted: 107 114 128; /* gray-500 */
+
+  /* Acento — família blue (D4) */
+  --color-accent: 37 99 235; /* blue-600 */
+  --color-accent-strong: 29 78 216; /* blue-700 — hover/active e links */
+  --color-accent-subtle: 239 246 255; /* blue-50 */
+  --color-accent-subtle-text: 30 64 175; /* blue-800 */
+
+  /* Foco — alias deliberado de accent (ver §3.1) */
+  --color-focus: 37 99 235; /* blue-600 */
+
+  /* Estados de estoque — cada papel é um par (texto/ícone + fundo sutil) */
+  --color-success: 4 120 87; /* emerald-700 */
+  --color-success-subtle: 236 253 245; /* emerald-50 */
+  --color-warning: 180 83 9; /* amber-700 */
+  --color-warning-subtle: 255 251 235; /* amber-50 */
+  --color-danger: 185 28 28; /* red-700 */
+  --color-danger-subtle: 254 242 242; /* red-50 */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 html, body, #root {
