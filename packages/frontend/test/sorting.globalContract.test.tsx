@@ -303,3 +303,89 @@ describe('QuickOutHistoryModal — delega a ordenação ao backend (F-03)', () =
     expect(rendered).toEqual(['Bravo', 'Alfa']);
   });
 });
+
+/**
+ * 3-F4 (REV-06) — trocar a ordenação do histórico de baixas também tem que
+ * voltar para a página 1, preservando busca e intervalo de datas já
+ * aplicados.
+ *
+ * Os quatro handlers de cabeçalho (`QuickOutHistoryModal.tsx`) já chamam
+ * `setPage(1)` antes de `setSortBy`/`setSortDir`; faltava a prova
+ * comportamental. Os campos de data não têm `<label>` (N-8, dívida
+ * conhecida) — localizados por `input[type="date"]`, mesmo padrão de
+ * `QuickOutHistoryModal.test.tsx`.
+ */
+describe('QuickOutHistoryModal — trocar a ordenação reseta a página (3-F4 / REV-06)', () => {
+  const items = [
+    {
+      id: 'm1',
+      productId: 'p1',
+      productName: 'Alfa',
+      productSku: 'SKU-A',
+      quantity: 5,
+      date: '2026-02-01T10:00:00.000Z',
+      note: 'nota 1',
+    },
+  ];
+
+  function dateFields() {
+    return Array.from(document.querySelectorAll<HTMLInputElement>('input[type="date"]'));
+  }
+
+  it('busca e intervalo de datas já aplicados permanecem; ordenar na página 2 volta para page=1 com o novo critério', async () => {
+    mockedFetchHistory.mockResolvedValue({ items, total: 25, page: 1, pageSize: 10 });
+    const user = userEvent.setup();
+    render(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(mockedFetchHistory).toHaveBeenCalled());
+
+    // Busca e datas já definidas ANTES de ordenar — precisam sobreviver.
+    await user.type(screen.getByRole('searchbox'), 'nota');
+    await waitFor(() => {
+      expect(mockedFetchHistory.mock.calls.at(-1)?.[0]).toMatchObject({ q: 'nota' });
+    });
+
+    const [fromField, toField] = dateFields();
+    await user.type(fromField, '2026-08-01');
+    await user.type(toField, '2026-08-31');
+    await waitFor(() => {
+      expect(mockedFetchHistory.mock.calls.at(-1)?.[0]).toMatchObject({ from: '2026-08-01', to: '2026-08-31' });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Próxima' }));
+    await waitFor(() => {
+      expect(mockedFetchHistory.mock.calls.at(-1)?.[0]).toMatchObject({ page: 2 });
+    });
+
+    await user.click(screen.getByTitle('Ordenar por Quantidade'));
+
+    await waitFor(() => {
+      const params = mockedFetchHistory.mock.calls.at(-1)?.[0];
+      // Novo critério enviado corretamente.
+      expect(params).toMatchObject({ sortBy: 'quantity', sortDir: 'asc' });
+      // page volta a 1 — não fica presa na página 2.
+      expect(params).toMatchObject({ page: 1 });
+      // Busca e datas continuam na consulta: ordenar não descarta o recorte.
+      expect(params).toMatchObject({ q: 'nota', from: '2026-08-01', to: '2026-08-31' });
+    });
+  });
+
+  it('acionar a mesma coluna de novo (asc → desc) também volta para a página 1', async () => {
+    mockedFetchHistory.mockResolvedValue({ items, total: 25, page: 1, pageSize: 10 });
+    const user = userEvent.setup();
+    render(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(mockedFetchHistory).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('button', { name: 'Próxima' }));
+    await waitFor(() => {
+      expect(mockedFetchHistory.mock.calls.at(-1)?.[0]).toMatchObject({ page: 2 });
+    });
+
+    // Default já é sortBy=date desc; clicar de novo em "Data" alterna para asc.
+    await user.click(screen.getByTitle('Ordenar por Data'));
+
+    await waitFor(() => {
+      const params = mockedFetchHistory.mock.calls.at(-1)?.[0];
+      expect(params).toMatchObject({ sortBy: 'date', sortDir: 'asc', page: 1 });
+    });
+  });
+});

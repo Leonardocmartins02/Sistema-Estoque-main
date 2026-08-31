@@ -265,3 +265,62 @@ describe('ProductDashboard — busca repassada à consulta (PD-6)', () => {
     expect(lastQuery()?.[1]).toBe(1);
   });
 });
+
+/**
+ * 3-F4 (REV-06) — trocar a ordenação também tem que voltar para a página 1.
+ *
+ * `togglePrimarySort` (`useProductsQuery.ts`) já chama `setPage(1)`; o que
+ * faltava era um teste comportamental que provasse isso pelo caminho real
+ * (`ProductDashboard` → `ProductsTable` → `useProductsQuery`), no mesmo nível
+ * de integração do PD-6 acima — não uma chamada isolada ao hook.
+ */
+describe('ProductDashboard — trocar a ordenação reseta a página (3-F4 / REV-06)', () => {
+  it('busca já aplicada permanece; ao ordenar estando na página 2, a próxima consulta usa page=1 com o novo critério', async () => {
+    mockedFetchProducts.mockResolvedValue(paged(products, { total: 25 }));
+    const user = userEvent.setup();
+    renderWithProviders(<ProductDashboard />);
+
+    await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' });
+
+    // Busca já definida antes da troca de ordenação — precisa sobreviver.
+    await user.type(screen.getByLabelText(/Buscar por Nome ou SKU/i), 'caneta');
+    await waitFor(() => expect(lastQuery()?.[0]).toBe('caneta'), { timeout: 3000 });
+
+    await user.click(screen.getByRole('button', { name: 'Próxima →' }));
+    await waitFor(() => expect(lastQuery()?.[1]).toBe(2));
+
+    // Estado imediatamente antes de ordenar: página 2, ordenação default (name asc).
+    expect(lastQuery()?.[3]).toBe('name');
+
+    await user.click(screen.getByRole('button', { name: /SKU/i }));
+
+    await waitFor(() => expect(lastQuery()?.[3]).toBe('sku'));
+    // page volta a 1 — não fica presa na página 2 com um recorte que já não
+    // corresponde à nova ordenação.
+    expect(lastQuery()?.[1]).toBe(1);
+    // A direção do novo critério é asc (troca de coluna, não é o mesmo campo).
+    expect(lastQuery()?.[4]).toBe('asc');
+    // A busca continua na consulta — ordenar não é uma mudança de recorte que
+    // deva descartar o filtro já aplicado.
+    expect(lastQuery()?.[0]).toBe('caneta');
+  });
+
+  it('clicar na mesma coluna de novo (asc → desc) também volta para a página 1', async () => {
+    mockedFetchProducts.mockResolvedValue(paged(products, { total: 25 }));
+    const user = userEvent.setup();
+    renderWithProviders(<ProductDashboard />);
+
+    await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' });
+
+    await user.click(screen.getByRole('button', { name: 'Próxima →' }));
+    await waitFor(() => expect(lastQuery()?.[1]).toBe(2));
+
+    // Ordenação já é 'name' (default) — clicar em "Nome do Produto" alterna
+    // a MESMA coluna para desc, não troca de critério.
+    await user.click(screen.getByRole('button', { name: /Nome do Produto/i }));
+
+    await waitFor(() => expect(lastQuery()?.[4]).toBe('desc'));
+    expect(lastQuery()?.[3]).toBe('name');
+    expect(lastQuery()?.[1]).toBe(1);
+  });
+});
