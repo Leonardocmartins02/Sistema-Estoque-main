@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { fetchQuickOutHistory, type QuickOutHistoryItem } from '../api/quickOut';
@@ -30,34 +30,36 @@ export default function QuickOutHistoryModal({ open, onOpenChange }: QuickOutHis
     (async () => {
       setLoading(true);
       try {
-        const data = await fetchQuickOutHistory({ page, pageSize, q, from: from || undefined, to: to || undefined });
+        const data = await fetchQuickOutHistory({
+          page,
+          pageSize,
+          q,
+          from: from || undefined,
+          to: to || undefined,
+          sortBy,
+          sortDir,
+        });
         setItems(data.items);
         setTotal(data.total);
       } finally {
         setLoading(false);
       }
     })();
-  }, [open, page, pageSize, q, from, to]);
+  }, [open, page, pageSize, q, from, to, sortBy, sortDir]);
 
   const totalPages = Math.max(Math.ceil(total / pageSize), 1);
-  const viewItems = useMemo(() => {
-    const arr = [...items];
-    arr.sort((a, b) => {
-      let av: any = (a as any)[sortBy];
-      let bv: any = (b as any)[sortBy];
-      if (sortBy === 'date') {
-        av = new Date(av).getTime();
-        bv = new Date(bv).getTime();
-      } else if (typeof av === 'string') {
-        av = av.toLowerCase();
-        bv = (bv as string).toLowerCase();
-      }
-      if (av < bv) return sortDir === 'asc' ? -1 : 1;
-      if (av > bv) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return arr;
-  }, [items, sortBy, sortDir]);
+
+  /**
+   * A ordem exibida é a que o backend devolveu.
+   *
+   * Antes da Task 3 (F-03) havia aqui um `sort` em memória sobre `items` — que
+   * reordenava **só a página carregada** enquanto a rota tinha `date desc`
+   * fixo e não aceitava parâmetro nenhum. A interface oferecia quatro
+   * critérios e nenhum deles era real. Agora `sortBy`/`sortDir` vão na
+   * consulta (whitelist no backend) e a ordenação é global, antes da
+   * paginação.
+   */
+  const viewItems = items;
 
   if (!open) return null;
 
@@ -94,25 +96,25 @@ export default function QuickOutHistoryModal({ open, onOpenChange }: QuickOutHis
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-600 w-[32%]">
-                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setSortBy('productName'); setSortDir((d) => (sortBy==='productName' ? (d==='asc'?'desc':'asc') : 'asc')); }} title="Ordenar por Produto">
+                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setPage(1); setSortBy('productName'); setSortDir((d) => (sortBy==='productName' ? (d==='asc'?'desc':'asc') : 'asc')); }} title="Ordenar por Produto">
                       Produto
                       <span className={`text-gray-400 ${sortBy==='productName' && sortDir==='desc' ? 'rotate-180' : ''}`}>▲</span>
                     </button>
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-600 w-[18%]">
-                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setSortBy('productSku'); setSortDir((d) => (sortBy==='productSku' ? (d==='asc'?'desc':'asc') : 'asc')); }} title="Ordenar por SKU">
+                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setPage(1); setSortBy('productSku'); setSortDir((d) => (sortBy==='productSku' ? (d==='asc'?'desc':'asc') : 'asc')); }} title="Ordenar por SKU">
                       SKU
                       <span className={`text-gray-400 ${sortBy==='productSku' && sortDir==='desc' ? 'rotate-180' : ''}`}>▲</span>
                     </button>
                   </th>
                   <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-600 w-[10%]">
-                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setSortBy('quantity'); setSortDir((d) => (sortBy==='quantity' ? (d==='asc'?'desc':'asc') : 'asc')); }} title="Ordenar por Quantidade">
+                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setPage(1); setSortBy('quantity'); setSortDir((d) => (sortBy==='quantity' ? (d==='asc'?'desc':'asc') : 'asc')); }} title="Ordenar por Quantidade">
                       Qtde
                       <span className={`text-gray-400 ${sortBy==='quantity' && sortDir==='desc' ? 'rotate-180' : ''}`}>▲</span>
                     </button>
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-600 w-[20%]">
-                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setSortBy('date'); setSortDir((d) => (sortBy==='date' ? (d==='asc'?'desc':'asc') : 'desc')); }} title="Ordenar por Data">
+                    <button type="button" className="inline-flex items-center gap-1 hover:text-gray-800" onClick={() => { setPage(1); setSortBy('date'); setSortDir((d) => (sortBy==='date' ? (d==='asc'?'desc':'asc') : 'desc')); }} title="Ordenar por Data">
                       Data
                       <span className={`text-gray-400 ${sortBy==='date' && sortDir==='desc' ? 'rotate-180' : ''}`}>▲</span>
                     </button>

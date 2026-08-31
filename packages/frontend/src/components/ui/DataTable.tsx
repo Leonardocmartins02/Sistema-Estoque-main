@@ -48,38 +48,24 @@ export function DataTable<T>({
   className = '',
   footer,
 }: DataTableProps<T>) {
-  const handleSort = (e: React.MouseEvent, col: Column<T>) => {
+  /**
+   * Ordenação de coluna única.
+   *
+   * O ramo `event.shiftKey`, que acumulava critérios secundários (UF-08), saiu
+   * na Task 3 (D-D): a secundária era aplicada **só sobre a página carregada**
+   * enquanto a primária ia ao banco — invisível e enganosa. Ordenação
+   * multi-coluna server-side, com precedência comunicada, é desproporcional
+   * agora; a capacidade volta ao backlog com a condição de só retornar com
+   * suporte real e precedência visível.
+   */
+  const handleSort = (_e: React.MouseEvent, col: Column<T>) => {
     if (!col.sortable) return;
     const colKey = String(col.key);
-    // Preferir ordenação múltipla quando disponível
     if (onSortsChange) {
       const current = sorts ?? [];
-      const idx = current.findIndex((s) => s.by === colKey);
-      let next: Sort[] = [];
-      const shift = e.shiftKey;
-      if (idx === -1) {
-        // adicionar asc
-        next = shift ? [...current, { by: colKey, dir: 'asc' }] : [{ by: colKey, dir: 'asc' }];
-      } else {
-        const existing = current[idx];
-        if (existing.dir === 'asc') {
-          // alterna para desc
-          next = [...current.slice(0, idx), { by: colKey, dir: 'desc' }, ...current.slice(idx + 1)];
-        } else {
-          // remover da lista
-          next = [...current.slice(0, idx), ...current.slice(idx + 1)];
-          if (!shift && next.length === 0) {
-            // se não segurar shift e removemos tudo, deixar somente asc
-            next = [{ by: colKey, dir: 'asc' }];
-          }
-        }
-        if (!shift) {
-          // sem shift, manter apenas esta coluna
-          const self = next.find((s) => s.by === colKey) ?? { by: colKey, dir: 'asc' };
-          next = [self];
-        }
-      }
-      onSortsChange(next);
+      const existing = current.find((s) => s.by === colKey);
+      const dir: Sort['dir'] = existing?.dir === 'asc' ? 'desc' : 'asc';
+      onSortsChange([{ by: colKey, dir }]);
       return;
     }
     // Fallback para ordenação simples

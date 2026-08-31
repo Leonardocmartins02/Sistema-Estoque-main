@@ -50,28 +50,21 @@ export function useProductsQuery() {
   // Reordenação client-side: o backend já devolve ordenado, mas o nome usa
   // collation pt-BR aqui (acentos) e ordenações secundárias só existem no
   // cliente (Shift + clique no cabeçalho).
-  const viewItems = useMemo(() => {
-    const arr = [...items];
-    if (primary?.by === 'name') {
-      const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' });
-      arr.sort((a, b) => (primary.dir === 'asc' ? collator.compare(a.name, b.name) : collator.compare(b.name, a.name)));
-    }
-    if (sorts.length <= 1) return arr;
-    const secondary = sorts.slice(1);
-    arr.sort((a, b) => {
-      for (const s of secondary) {
-        const raw = (row: ProductWithBalance) => (row as unknown as Record<string, unknown>)[s.by];
-        let av = raw(a);
-        let bv = raw(b);
-        if (typeof av === 'string') av = av.toLowerCase();
-        if (typeof bv === 'string') bv = bv.toLowerCase();
-        if (av! < bv!) return s.dir === 'asc' ? -1 : 1;
-        if (av! > bv!) return s.dir === 'asc' ? 1 : -1;
-      }
-      return 0;
-    });
-    return arr;
-  }, [items, sorts, primary]);
+  /**
+   * A ordem exibida é a ordem que o backend devolveu — sem reordenação local.
+   *
+   * Antes da Task 3 (D-A) este `useMemo` reordenava **a página já carregada**:
+   * aplicava `Intl.Collator('pt-BR')` sobre `name` e ainda ordenações
+   * secundárias (Shift+clique). O conjunto de 10 itens era escolhido pelo
+   * banco numa ordem e reexibido noutra, então o primeiro item da tela não era
+   * necessariamente o primeiro do conjunto — e paginar revelava a incoerência.
+   * A ordenação global agora é responsabilidade do backend (`sortBy`/`sortDir`
+   * validados por whitelist, aplicados antes de `skip`/`take`).
+   *
+   * O alias sobrevive porque `ProductDashboard` ainda o consome e esse arquivo
+   * pertence à Task 16; o rename sai lá, sem mudança de comportamento.
+   */
+  const viewItems = items;
 
   const changeSearch = useCallback((value: string) => {
     setSearch(value);

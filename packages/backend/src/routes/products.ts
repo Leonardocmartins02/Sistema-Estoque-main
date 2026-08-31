@@ -148,16 +148,23 @@ router.get('/', async (req, res, next) => {
     const needsDerivedValue = status.length > 0 || sortBy === 'balance';
 
     if (!needsDerivedValue) {
-      // Ordenação por `name`/`sku` agora é do banco. Nuance conhecida e
-      // aceita: a ordenação em memória anterior comparava `toLowerCase()`, o
-      // que era case-insensitive; no banco a ordem passa a seguir a collation
-      // da coluna. O container do projeto usa `postgres:16-alpine` (musl), cuja
-      // collation é efetivamente byte-order — "Zebra" vem antes de "abacaxi" e
-      // acentuados vêm depois de "Z". Se isso incomodar na UI, a correção certa
-      // é uma collation ICU não determinística (ou `citext`) na coluna, não
-      // voltar a ordenar em memória.
-      const orderBy: Prisma.ProductOrderByWithRelationInput =
-        sortBy === 'sku' ? { sku: sortDir } : { name: sortDir };
+      // Ordenação por `name`/`sku` é do banco, seguindo a collation da coluna.
+      // SD-1 (docs/ui-ux/implementation-plan.md §9.3.1, 31/08/2026) decidiu
+      // **aceitar a collation nativa de cada ambiente**: ordem linguística
+      // pt-BR idêntica entre local, CI e produção não é requisito desta
+      // versão, e a diferença é risco residual aceito e documentado. Por isso
+      // não há coluna normalizada, ICU nem raw SQL aqui — e, se isso virar
+      // requisito, entra como task funcional própria. O que **não** volta é
+      // reordenar em memória a página já carregada: era isso que fazia a
+      // ordenação parecer global sem ser.
+      // `id` é o desempate final obrigatório (Task 3, item d): com nomes ou
+      // SKUs repetidos, `OFFSET` sem critério determinístico pode devolver o
+      // mesmo produto em duas páginas — ou omiti-lo de todas. A ordenação
+      // continua acontecendo no banco, antes de `skip`/`take`.
+      const orderBy: Prisma.ProductOrderByWithRelationInput[] = [
+        sortBy === 'sku' ? { sku: sortDir } : { name: sortDir },
+        { id: 'asc' },
+      ];
 
       const [total, pageProducts] = await Promise.all([
         prisma.product.count({ where }),
@@ -187,13 +194,21 @@ router.get('/', async (req, res, next) => {
 
     const filtered = withBalance.filter((product) => matchesStatus(product, status));
     const direction = sortDir === 'asc' ? 1 : -1;
+    // A ordenação acontece sobre o conjunto filtrado INTEIRO e só depois é
+    // fatiada (`slice` abaixo) — global antes da paginação, como no caminho do
+    // banco. O desempate por `id` fecha o mesmo buraco do outro caminho: sem
+    // ele, saldos empatados (o caso comum: vários produtos zerados) deixam a
+    // ordem entre páginas indefinida.
     const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === 'balance') return (a.balance - b.balance) * direction;
+      if (sortBy === 'balance') {
+        if (a.balance !== b.balance) return (a.balance - b.balance) * direction;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      }
       const av = sortBy === 'sku' ? a.sku.toLowerCase() : a.name.toLowerCase();
       const bv = sortBy === 'sku' ? b.sku.toLowerCase() : b.name.toLowerCase();
       if (av < bv) return -direction;
       if (av > bv) return direction;
-      return 0;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
 
     const start = (page - 1) * pageSize;
