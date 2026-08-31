@@ -15,6 +15,7 @@ pnpm-debug.log*
 # build
 **/dist
 **/build
+**/.vercel
 *.tsbuildinfo
 
 # prisma
