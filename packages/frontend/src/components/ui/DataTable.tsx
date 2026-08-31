@@ -101,14 +101,16 @@ export function DataTable<T>({
           <thead className="bg-gray-50/90 backdrop-blur-sm select-none" role="rowgroup">
             <tr role="row">
               {columns.map((col) => {
-                const isSorted = sorts
-                  ? (sorts ?? []).some((s) => s.by === String(col.key))
-                  : sort?.by === String(col.key);
-                const dir = sorts
-                  ? (sorts ?? []).find((s) => s.by === String(col.key))?.dir
-                  : isSorted
-                  ? sort?.dir
-                  : undefined;
+                // Somente a ordenação PRIMÁRIA (`sorts[0]`) pode anunciar
+                // aria-sort. Um chamador pode, em tese, passar mais de um
+                // critério em `sorts` (a prop ainda aceita `Sort[]`) — mesmo
+                // assim, só o índice 0 é tratado como ativo aqui. Ordenação
+                // múltipla não existe mais no produto (Task 3 / UF-08 / D-D):
+                // anunciar mais de um cabeçalho como ordenado contradiz o
+                // que de fato chega ao backend (só `sorts[0]`).
+                const primary = sorts?.[0];
+                const isSorted = sorts ? primary?.by === String(col.key) : sort?.by === String(col.key);
+                const dir = sorts ? (isSorted ? primary?.dir : undefined) : isSorted ? sort?.dir : undefined;
                 return (
                   <th
                     key={String(col.key)}

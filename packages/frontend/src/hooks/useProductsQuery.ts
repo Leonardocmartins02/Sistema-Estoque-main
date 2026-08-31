@@ -76,13 +76,20 @@ export function useProductsQuery() {
     setPage(1);
   }, []);
 
-  /** Clique no cabeçalho: torna a coluna a ordenação primária e alterna asc/desc. */
+  /**
+   * Clique no cabeçalho: torna a coluna a ordenação primária e alterna asc/desc.
+   *
+   * O estado é **sempre** um único critério (Task 3, item g / UF-08 / D-D): a
+   * ordenação múltipla foi removida por ser aplicada só sobre a página
+   * carregada, nunca de verdade no backend. Trocar de coluna substitui o
+   * critério anterior — nunca o preserva como secundário — senão o `<th>` da
+   * coluna antiga volta a anunciar `aria-sort` sem que o backend a use.
+   */
   const togglePrimarySort = useCallback((key: ProductSortKey) => {
     setSorts((current) => {
       const head = current[0];
-      const dir = !head || head.by !== key ? 'asc' : head.dir === 'asc' ? 'desc' : 'asc';
-      const rest = head && head.by === key ? current.slice(1) : current;
-      return [{ by: key, dir }, ...rest];
+      const dir = head?.by === key && head.dir === 'asc' ? 'desc' : 'asc';
+      return [{ by: key, dir }];
     });
     setPage(1);
   }, []);

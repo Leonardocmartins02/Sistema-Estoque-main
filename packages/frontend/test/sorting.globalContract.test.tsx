@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchProducts } from '../src/api/products';
 import { fetchQuickOutHistory } from '../src/api/quickOut';
 import QuickOutHistoryModal from '../src/components/QuickOutHistoryModal';
+import ProductsTable from '../src/components/products/ProductsTable';
 import { DataTable } from '../src/components/ui/DataTable';
 import { useProductsQuery } from '../src/hooks/useProductsQuery';
 
 import { makeProduct } from './helpers/factories';
+import { makeSpyActions } from './helpers/render';
 
 vi.mock('../src/api/products', () => ({ fetchProducts: vi.fn() }));
 vi.mock('../src/api/quickOut', () => ({ fetchQuickOutHistory: vi.fn() }));
@@ -90,6 +92,101 @@ describe('useProductsQuery — não reordena a resposta do backend (D-A)', () =>
       expect(last?.[3]).toBe('balance');
       expect(last?.[4]).toBe('asc');
     });
+  });
+});
+
+/**
+ * Correção 3-F1 — coluna única pelo caminho REAL de `ProductsTable`.
+ *
+ * `ProductsTable` não usa o `handleSort` do `DataTable`: seus cabeçalhos são
+ * `headerRender` customizados que chamam `onTogglePrimarySort` diretamente
+ * (`ProductsTable.tsx:110,148,173`). Remover `event.shiftKey` do `DataTable`
+ * (já corrigido) não fecha esse caminho — é `togglePrimarySort`, no hook, que
+ * precisa nunca acumular critérios.
+ *
+ * Este componente espelha EXATAMENTE a fiação real de produção
+ * (`ProductDashboard.tsx:183-197`: `sorts`, `onSortsChange`,
+ * `onTogglePrimarySort` vindos do mesmo `useProductsQuery()`), para que o
+ * clique no cabeçalho exercite o mesmo estado e o mesmo componente que a tela
+ * real usa — não um `DataTable` sintético com `sortable: true`.
+ */
+function ProductsTableWithRealHook() {
+  const products = useProductsQuery();
+  return (
+    <ProductsTable
+      items={products.viewItems}
+      isLoading={products.query.isLoading}
+      error={null}
+      sorts={products.sorts}
+      onSortsChange={products.setSorts}
+      onTogglePrimarySort={products.togglePrimarySort}
+      statusFilter={products.statusFilter}
+      onToggleStatus={products.toggleStatus}
+      onClearStatus={products.clearStatus}
+      selectedIds={new Set()}
+      onToggleSelected={() => {}}
+      expandedIds={{}}
+      onToggleExpanded={() => {}}
+      actions={makeSpyActions()}
+    />
+  );
+}
+
+describe('useProductsQuery.togglePrimarySort — exatamente um critério (3-F1)', () => {
+  it('trocar de coluna substitui o critério anterior, nunca o preserva como secundário', async () => {
+    mockedFetchProducts.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 });
+    const { result } = renderHook(() => useProductsQuery(), { wrapper });
+    await waitFor(() => expect(mockedFetchProducts).toHaveBeenCalled());
+
+    // Estado inicial do hook: [{ by: 'name', dir: 'asc' }].
+    expect(result.current.sorts).toEqual([{ by: 'name', dir: 'asc' }]);
+
+    act(() => result.current.togglePrimarySort('sku'));
+    // O critério anterior ('name') NÃO pode sobreviver como secundário.
+    expect(result.current.sorts).toEqual([{ by: 'sku', dir: 'asc' }]);
+
+    act(() => result.current.togglePrimarySort('balance'));
+    expect(result.current.sorts).toEqual([{ by: 'balance', dir: 'asc' }]);
+  });
+
+  it('clicar duas vezes na mesma coluna continua alternando asc/desc, sem duplicar', async () => {
+    mockedFetchProducts.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 });
+    const { result } = renderHook(() => useProductsQuery(), { wrapper });
+    await waitFor(() => expect(mockedFetchProducts).toHaveBeenCalled());
+
+    act(() => result.current.togglePrimarySort('name'));
+    expect(result.current.sorts).toEqual([{ by: 'name', dir: 'desc' }]);
+
+    act(() => result.current.togglePrimarySort('name'));
+    expect(result.current.sorts).toEqual([{ by: 'name', dir: 'asc' }]);
+  });
+});
+
+describe('ProductsTable + useProductsQuery — aria-sort exclusivo (3-F1)', () => {
+  it('ao trocar para SKU pelo clique real, só o cabeçalho SKU anuncia ordenação — Nome deixa de anunciar', async () => {
+    mockedFetchProducts.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 });
+    const user = userEvent.setup();
+    render(<ProductsTableWithRealHook />, { wrapper });
+    await waitFor(() => expect(mockedFetchProducts).toHaveBeenCalled());
+
+    // Estado inicial: Nome é o primário (default do hook).
+    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+    expect(screen.getByRole('columnheader', { name: /^SKU/i })).toHaveAttribute('aria-sort', 'none');
+
+    await user.click(screen.getByRole('button', { name: /SKU/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /^SKU/i })).toHaveAttribute('aria-sort', 'ascending');
+    });
+    // O critério anterior some do DOM real: nenhuma contradição entre o
+    // aria-sort do <th> e o sr-only interno do SortableHeader.
+    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).toHaveAttribute('aria-sort', 'none');
+    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).not.toHaveTextContent(
+      /ordenado crescente|ordenado decrescente/,
+    );
   });
 });
 
