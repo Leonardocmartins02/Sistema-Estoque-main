@@ -321,11 +321,9 @@ Nenhuma. Não depende de token. **Roda em paralelo às Tasks 1, 2 e 4** e **bloq
 
 **(d) Desempate estável obrigatório.** Todo `orderBy` recebe `id` como último critério. Sem isso, `OFFSET` sobre valores repetidos (dois produtos com o mesmo saldo, duas baixas no mesmo instante) **duplica ou salta linhas entre páginas** — uma ordenação "global" instável continua mentindo, só que de forma mais difícil de perceber.
 
-**(e) Sub-decisão de collation, a resolver dentro da task.** Remover a reordenação client-side **sem mais nada** faz a ordem alfabética **piorar**: o comentário em `routes/products.ts` registra que o container usa `postgres:16-alpine` (musl), cuja collation é efetivamente byte-order — "Zebra" antes de "abacaxi", acentuados depois de "Z". Hoje o cliente disfarça isso reordenando os 10 itens da página. Opções:
-  1. **Colunas de ordenação normalizadas** (`nameSort`, `skuSort`), preenchidas na escrita com o `normalizeForSearch` que já existe, indexadas — **recomendada**: não exige extensão nem privilégio especial, funciona em qualquer Postgres gerenciado e converge com o backlog de busca sem acento;
-  2. collation ICU não determinística na coluna — mais elegante, depende do que o Postgres de produção permite;
-  3. aceitar a ordem byte-order e documentar — **só com aceite explícito**, por ser regressão visível.
-  **Critério que fecha a sub-decisão: a ordem exibida não pode piorar em relação à de hoje.**
+**(e) Collation — SD-1, RESOLVIDA em 31/08/2026.** Ver §9.3 para a política aprovada e o risco residual aceito. Em resumo: **nenhuma coluna normalizada, nenhuma migration, nenhum ICU nesta versão.** A ordenação é global e no banco, e **aceita-se a collation nativa do PostgreSQL de cada ambiente**. Ordenação linguística pt-BR idêntica entre local, CI e produção **não é requisito do produto nesta versão**; se virar, entra como task funcional própria.
+
+Consequência para os testes desta task: as asserções de ordenação global usam **valores ASCII inequívocos** (letras sem acento, números, datas) e **nunca** dependem de acento, caixa ou locale — do contrário o mesmo teste passaria num ambiente e falharia noutro, medindo a collation em vez da regra.
 
 **(f) Histórico de baixas ganha ordenação real.** `productName`/`productSku` via `orderBy: { product: { name: … } }`, `quantity` e `date` diretos. Complexidade **baixa** — a rota já pagina e conta no banco. Portanto os quatro critérios **permanecem visíveis**, agora verdadeiros. Isso **supera** a recomendação anterior do `bugfix-gate.md` de simplesmente remover os controles.
 
@@ -347,7 +345,7 @@ Nenhuma. Não depende de token. **Roda em paralelo às Tasks 1, 2 e 4** e **bloq
 - Fim da reordenação local em `useProductsQuery.viewItems` — a ordem exibida passa a ser a ordem do conjunto.
 - Fim do Shift+clique (UF-08), com ausência declarada.
 - O histórico de baixas passa a ordenar de verdade (F-03).
-- A ordem alfabética pode mudar de aparência conforme a opção escolhida em (e) — é o ponto que o QA manual verifica.
+- A ordem alfabética passa a ser a do banco (collation nativa do ambiente), sem a reordenação client-side que a disfarçava. SD-1 (§9.3.1) aceita essa variação como risco residual; o QA manual documenta, não bloqueia.
 
 #### Bugs que NÃO devem ser congelados
 F-03 (ordenação só da página aparentando global), UF-08 (secundária enganosa), e a reordenação local de `name`. **Nenhum characterization test os afirma** — os dois primeiros estão na lista fechada de "não congelar" de `characterization-plan.md` §12.
@@ -369,7 +367,9 @@ Existentes que a task não pode quebrar: PT-3, PT-4, QOL-4, QOL-5, QOH-1..QOH-3,
 - a sheet/menu de ordenação do mobile usa o mesmo contrato do desktop (preparado aqui, aplicado na Task 16).
 
 #### QA manual
-Com mais de uma página de produtos: ordenar por saldo e por nome e conferir que a **página 2 continua a sequência** da página 1. Conferir acentuação e caixa (`Ábaco`, `abacaxi`, `Zebra`) contra o resultado de hoje — a ordem não pode ter piorado. Repetir no histórico de baixas, ordenando por produto e por quantidade.
+Com mais de uma página de produtos: ordenar por saldo e por nome e conferir que a **página 2 continua a sequência** da página 1. Repetir no histórico de baixas, ordenando por produto e por quantidade.
+
+**Verificação de acentuação — não bloqueante (SD-1, §9.3.1).** Conferir `Ábaco`, `abacaxi`, `Álcool`, `Zebra` no ambiente local e, quando houver acesso, no CI e em produção. O objetivo é **documentar** a ordem que cada ambiente produz, não aprovar ou reprovar a task: ordenação pt-BR idêntica entre ambientes não é requisito desta versão. Divergências encontradas são registradas como evidência para a eventual task funcional futura de collation.
 
 #### Critérios de aceite
 - **Nenhuma opção de ordenação visível reorganiza apenas a página carregada.**
@@ -378,7 +378,7 @@ Com mais de uma página de produtos: ordenar por saldo e por nome e conferir que
 - Ordenação aplicada antes da paginação, sobre o conjunto filtrado inteiro.
 - Desempate estável em todo critério.
 - Busca, filtros e paginação preservados; trocar a ordenação volta à página 1.
-- A ordem alfabética exibida não piorou.
+- A ordem alfabética exibida é a do banco, coerente entre páginas. Diferença entre ambientes é risco residual aceito (SD-1, §9.3.1), não critério de reprovação.
 
 #### Definição de pronto
 Checklist completo verde (**inclui os testes de backend, que rodam contra Postgres real no CI**) + revisão de `security-reviewer` (entrada de query nova em rota autenticada) e de `accessibility-reviewer` (os controles de ordenação continuam nomeados e com `aria-sort` na primária).
@@ -2252,14 +2252,32 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 
 | # | Sub-decisão | Task | Critério que a fecha |
 |---|---|---|---|
-| **SD-1** | Collation da ordenação alfabética: colunas normalizadas (recomendada), collation ICU, ou aceitar byte-order | **3** | **A ordem exibida não pode piorar em relação à de hoje** |
+| **SD-1** | Collation da ordenação alfabética | **3** | **RESOLVIDA em 31/08/2026** — ver §9.3.1 |
 | **SD-2** | `sortBy=balance` continua global no serviço ou migra para coluna computada no banco | **3** | Mantido no serviço, com o teto de volume medido no PR; a coluna computada fica como follow-up |
+
+#### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
+
+**Decisão aprovada:**
+
+- a ordenação é **global** e executada **no banco, antes da paginação**;
+- toda entrada externa é validada por **whitelist**;
+- empates usam **desempate secundário estável**, conforme item (d) da Task 3;
+- **aceita-se a collation nativa do PostgreSQL de cada ambiente**;
+- **ordenação linguística pt-BR idêntica entre local, CI e produção não é requisito do produto nesta versão**;
+- diferenças de acentuação, caixa ou collation entre ambientes ficam registradas como **risco residual aceito**;
+- se ordenação pt-BR idêntica entre ambientes virar requisito real, será implementada **posteriormente, em task funcional própria**, avaliando ICU ou chave normalizada.
+
+**O que fica explicitamente fora desta versão:** colunas `nameSort`/`skuSort`, alteração de schema Prisma, migration, collation ICU, e raw SQL para forçar collation.
+
+**Risco residual aceito.** O ambiente de desenvolvimento medido em 31/08/2026 é um PostgreSQL nativo Windows com collation `Portuguese_Brazil.1252`, cujo `ORDER BY` coincidiu com `Intl.Collator('pt-BR')` na amostra testada (`abacaxi · Ábaco · Álcool · banana · Zebra`). **Essa medição não é prova de equivalência** com o `postgres:16-alpine` usado no `docker-compose.yml` e no CI (`.github/workflows/ci.yml`), nem com o ambiente de produção futuro — são collations diferentes e podem ordenar acentuados e caixa de forma distinta. A medição serve para dimensionar o risco, não para eliminá-lo.
+
+**Consequência para os testes automatizados:** nenhuma asserção de ordenação pode depender de acento, caixa ou locale. Os testes de ordenação global usam valores ASCII inequívocos. A verificação com nomes acentuados é **QA manual não bloqueante**, que **documenta** a diferença entre ambientes em vez de afirmar uma garantia que não existe.
 
 ### 9.4 · Gate executável das decisões
 
 - **Nenhuma task inicia com uma decisão bloqueante sua ainda aberta.** A escolha aprovada é escrita **neste arquivo**, com data — como D-A, D-B, D-F, F-01, N-9 e Q-1 estão.
 - **Nenhuma decisão bloqueante permanece.** As três que travavam a execução foram fechadas em 31/08/2026; D-C e D-E não bloqueiam nenhuma task.
-- As sub-decisões de §9.3 são fechadas **dentro** da Task 3 e registradas no PR dela.
+- As sub-decisões de §9.3 são fechadas **dentro** da Task 3 e registradas no PR dela. **SD-1 foi fechada antecipadamente em 31/08/2026** (§9.3.1), por decisão explícita do usuário, para preservar a política de collation mesmo que a sessão de execução seja interrompida.
 
 ---
 
@@ -2268,7 +2286,7 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 | Risco | Prob. | Mitigação |
 |---|---|---|
 | **A Task 3 crescer**: mexe em duas rotas, um hook e três componentes | **Alta** | Escopo fechado por §2.1 (inventário assinado) e por escopos disjuntos declarados em §6.3: nos `QuickOut*`, a Task 3 toca **só a camada de dados**; o invólucro é das Tasks 22/23 |
-| **Remover a reordenação local piorar a ordem alfabética** (collation musl byte-order) | **Alta** | **SD-1** com critério explícito: a ordem exibida não pode piorar. É o motivo de a sub-decisão existir |
+| **A ordem alfabética variar entre ambientes** (collation nativa difere entre o Postgres local, o `alpine` do CI e a produção) | **Média** | **Risco residual aceito** por SD-1 (§9.3.1, 31/08/2026): ordenação pt-BR idêntica entre ambientes não é requisito desta versão. Mitigação: nenhum teste automatizado depende de acento/caixa/locale; a diferença é documentada em QA manual não bloqueante. Se virar requisito, entra como task funcional própria (ICU ou chave normalizada) |
 | **Ordenação instável duplicar ou perder linhas entre páginas** | Média | Desempate por `id` obrigatório em todo `orderBy` (Task 3, item d), com teste de backend dedicado |
 | **A largura fluida (D-B) esticar a linha da tabela em 1920px** | Média | QA obrigatório em 1920px nas Tasks 10 e 13; o teto de 1536px existe exatamente para isso |
 | **`ProductDashboard` como ponto de conflito** — 4 tasks o tocam | **Alta** | §6.3 fixa T10 → T16 → T17 → T19, serializadas |
