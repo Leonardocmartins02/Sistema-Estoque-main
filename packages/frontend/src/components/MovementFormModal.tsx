@@ -168,7 +168,7 @@ export function MovementFormModal({ open, onOpenChange, productId, onSuccess }: 
           <Button type="button" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary" disabled={mutation.isPending} isLoading={mutation.isPending}>
+          <Button type="submit" variant="primary" isLoading={mutation.isPending}>
             {mutation.isPending ? 'Lançando...' : 'Lançar'}
           </Button>
         </div>

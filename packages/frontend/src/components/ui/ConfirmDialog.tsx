@@ -51,7 +51,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           type="button"
           variant={tone === 'destructive' ? 'destructive' : 'primary'}
           onClick={onConfirm}
-          disabled={isPending}
           isLoading={isPending}
         >
           {confirmLabel}

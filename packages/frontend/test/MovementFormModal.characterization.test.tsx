@@ -200,10 +200,14 @@ describe('MovementFormModal — submissão duplicada (MFM-4)', () => {
 
     await waitFor(() => expect(mockedCreateMovement).toHaveBeenCalledTimes(1));
 
-    // O botão de envio fica desabilitado durante o envio — uma segunda
-    // tentativa de clique nele não deve gerar uma segunda chamada à API.
+    // Task 5 (design-system.md §11.2): durante o envio o botão fica
+    // `aria-disabled` — não `disabled` nativo — e continua focável; a
+    // proteção contra segunda submissão vem do guard do próprio `Button`,
+    // não da remoção de foco. Uma segunda tentativa de clique nele não deve
+    // gerar uma segunda chamada à API.
     const submitButton = screen.getByRole('button', { name: /Lançando\.\.\.|Lançar/i });
-    expect(submitButton).toBeDisabled();
+    expect(submitButton).not.toBeDisabled();
+    expect(submitButton).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(submitButton);
 
     expect(mockedCreateMovement).toHaveBeenCalledTimes(1);

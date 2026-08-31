@@ -217,7 +217,7 @@ export function ProductFormModal({ open, onOpenChange, mode, initialId, initialV
 
             <div className="mt-4 flex items-center justify-end gap-2">
               <Button type="button" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" variant="primary" disabled={isSubmitting}>
+              <Button type="submit" variant="primary" isLoading={isSubmitting}>
                 {isSubmitting ? 'Salvando...' : 'Salvar'}
               </Button>
             </div>

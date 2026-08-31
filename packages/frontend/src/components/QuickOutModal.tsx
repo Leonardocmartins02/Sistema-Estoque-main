@@ -277,7 +277,7 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
           <Button
             type="submit"
             variant="destructive"
-            disabled={isSubmitting || quantity <= 0}
+            disabled={quantity <= 0}
             isLoading={isSubmitting}
             className="w-full sm:w-auto"
           >
