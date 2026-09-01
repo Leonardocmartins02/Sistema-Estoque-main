@@ -1,7 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { X } from 'lucide-react';
 import React from 'react';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+
+/** `dialog` = centralizado (default). `sheet` = ancorada na base — variante do mesmo primitivo (design-system.md §12, §15). */
+export type ModalVariant = 'dialog' | 'sheet';
 
 export interface ModalProps {
   open: boolean;
@@ -12,6 +16,8 @@ export interface ModalProps {
   footer?: React.ReactNode;
   /** Largura máxima do diálogo. Default `lg` (a largura histórica do Modal custom). */
   size?: ModalSize;
+  /** `dialog` (default) ou `sheet` — mesmo Radix, mesma semântica, mesmo focus trap; só a caixa muda. */
+  variant?: ModalVariant;
   /** Ações extras renderizadas no cabeçalho, à esquerda do botão de fechar. */
   headerActions?: React.ReactNode;
   /** Classe do corpo do diálogo (para padding customizado). */
@@ -26,6 +32,14 @@ const sizeClass: Record<ModalSize, string> = {
   '2xl': 'max-w-2xl',
   '3xl': 'max-w-3xl',
   '4xl': 'max-w-4xl',
+};
+
+// O teto de largura do shell (D-B, design-system.md §4.4) não se aplica a
+// diálogos — cada variante só controla posição/altura; a largura continua
+// vindo de `size`.
+const variantClass: Record<ModalVariant, string> = {
+  dialog: 'left-1/2 top-1/2 max-h-[90vh] w-[95vw] -translate-x-1/2 -translate-y-1/2 rounded-surface',
+  sheet: 'left-1/2 bottom-0 max-h-[85vh] w-full -translate-x-1/2 rounded-t-surface',
 };
 
 /**
@@ -50,6 +64,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   size = 'lg',
+  variant = 'dialog',
   headerActions,
   bodyClassName = 'px-4 py-3',
 }) => {
@@ -80,7 +95,7 @@ export const Modal: React.FC<ModalProps> = ({
             event.preventDefault();
             lastActiveRef.current?.focus?.();
           }}
-          className={`fixed left-1/2 top-1/2 z-[1001] flex max-h-[90vh] w-[95vw] ${sizeClass[size]} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl focus:outline-none`}
+          className={`fixed z-[1001] flex ${variantClass[variant]} ${sizeClass[size]} flex-col overflow-hidden border border-gray-200 bg-white shadow-overlay focus:outline-none`}
         >
           <div className="flex shrink-0 items-start justify-between gap-4 border-b px-4 py-3">
             <div>
@@ -94,10 +109,10 @@ export const Modal: React.FC<ModalProps> = ({
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="rounded-md p-1 text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  className="rounded-md p-1 text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                   aria-label="Fechar"
                 >
-                  <span aria-hidden="true">✕</span>
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </Dialog.Close>
             </div>

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import MenuPopover, { MenuItem, MenuItemCheckbox } from '../src/components/ui/MenuPopover';
+import MenuPopover, { MenuItem, MenuItemCheckbox, MenuSeparator } from '../src/components/ui/MenuPopover';
 
 function Harness({ onEdit = vi.fn(), onDelete = vi.fn() }: { onEdit?: () => void; onDelete?: () => void }) {
   return (
@@ -133,5 +133,32 @@ describe('MenuPopover (padrão WAI-ARIA de menu)', () => {
     expect(onToggle).toHaveBeenCalled();
     // Itens de checkbox NÃO fecham o menu (permite múltipla seleção)
     expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('MenuSeparator não é anunciado como item e não entra na navegação por setas (UF-16, achado REV-19)', async () => {
+    const user = userEvent.setup();
+    render(
+      <MenuPopover triggerLabel="Mais ações" triggerContent={<span aria-hidden="true">…</span>} menuLabel="Ações">
+        {() => (
+          <>
+            <MenuItem onSelect={() => {}}>Editar</MenuItem>
+            <MenuSeparator />
+            <MenuItem onSelect={() => {}} tone="destructive">
+              Excluir
+            </MenuItem>
+          </>
+        )}
+      </MenuPopover>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Mais ações' }));
+
+    const items = await screen.findAllByRole('menuitem');
+    expect(items).toHaveLength(2);
+    expect(screen.getByRole('separator')).toBeInTheDocument();
+    await waitFor(() => expect(items[0]).toHaveFocus());
+
+    await user.keyboard('{ArrowDown}');
+    expect(items[1]).toHaveFocus();
   });
 });

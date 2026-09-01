@@ -87,7 +87,7 @@ describe('Modal (primitivo único do design system)', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
-  it('o glifo do botão fechar é decorativo (aria-hidden) e o botão tem nome acessível', async () => {
+  it('o botão fechar tem nome acessível "Fechar" e conteúdo gráfico decorativo (achado REV-19: não acopla ao caractere)', async () => {
     render(
       <Modal open onClose={() => {}} title="X">
         conteúdo
@@ -97,7 +97,34 @@ describe('Modal (primitivo único do design system)', () => {
     const close = await screen.findByRole('button', { name: 'Fechar' });
     const glyph = close.querySelector('[aria-hidden="true"]');
     expect(glyph).not.toBeNull();
-    expect(glyph?.textContent).toBe('✕');
+  });
+
+  it('variante sheet preserva role=dialog, aria-modal, focus trap e retorno de foco', async () => {
+    const user = userEvent.setup();
+    function SheetHarness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            abrir sheet
+          </button>
+          <Modal open={open} onClose={() => setOpen(false)} title="Ordenar" variant="sheet">
+            <button type="button">opção</button>
+          </Modal>
+        </>
+      );
+    }
+    render(<SheetHarness />);
+    const trigger = screen.getByRole('button', { name: 'abrir sheet' });
+    await user.click(trigger);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it('não renderiza nada quando open=false', () => {

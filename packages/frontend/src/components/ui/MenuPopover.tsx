@@ -12,7 +12,7 @@ type MenuItemBaseProps = {
 };
 
 const itemClass = (tone: 'default' | 'destructive', className: string) =>
-  `block w-full rounded-md px-3 py-2.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${
+  `block w-full rounded-md px-3 py-2.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
     tone === 'destructive' ? 'text-red-700 hover:bg-red-50' : 'text-gray-800 hover:bg-gray-50'
   } ${className}`;
 
@@ -47,6 +47,15 @@ export function MenuItemCheckbox({
       {children}
     </button>
   );
+}
+
+/**
+ * Separador semântico entre blocos de ação (D3, design-system.md §10.2) —
+ * `role="separator"`, não `menuitem`: fica fora do `ITEM_SELECTOR` acima, então
+ * não recebe foco nem entra na navegação por setas/Home/End.
+ */
+export function MenuSeparator() {
+  return <div role="separator" className="my-1 h-px bg-border" />;
 }
 
 export type MenuPopoverProps = {
@@ -229,7 +238,7 @@ export function MenuPopover({
             onClick={onMenuClick}
             onMouseDown={(event) => event.stopPropagation()}
             style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, width }}
-            className={`z-[10000] rounded-xl border border-gray-200 bg-white p-1 text-sm shadow-xl ring-1 ring-black/5 ${menuClassName}`}
+            className={`z-[10000] rounded-surface border border-gray-200 bg-white p-1 text-sm shadow-overlay ring-1 ring-black/5 ${menuClassName}`}
           >
             {children({ close: closeMenu })}
           </div>,
