@@ -4,6 +4,11 @@ import ProductDashboard from './components/ProductDashboard';
 import ApiStatusBanner from './components/ui/ApiStatusBanner';
 import { Button } from './components/ui/Button';
 
+// Container único do shell (D-B, design-system.md §4.4): header e main
+// compartilham exatamente a mesma calha — fluido até o teto de 1536px
+// (`max-w-screen-2xl`, já no tema padrão do Tailwind), gutters 16/24/32px.
+const SHELL_CONTAINER = 'mx-auto w-full max-w-screen-2xl px-4 md:px-6 xl:px-8';
+
 function App() {
   const { status, user, logout } = useAuth();
 
@@ -31,10 +36,10 @@ function App() {
         Pular para o conteúdo principal
       </a>
 
-      <header className="sticky top-0 z-40 border-b bg-white/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60">
-        <div className="mx-auto flex max-w-5xl items-center justify-between p-4">
+      <header className="sticky top-0 z-40 border-b bg-white">
+        <div className={`${SHELL_CONTAINER} flex items-center justify-between py-4`}>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">SimpleStock</h1>
+            <h1 className="text-label text-text-secondary">SimpleStock</h1>
             <p className="text-sm text-gray-600">Sistema de controle de estoque simplificado</p>
           </div>
           <div className="flex items-center gap-3">
@@ -48,7 +53,7 @@ function App() {
 
       <ApiStatusBanner />
 
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl p-4 focus:outline-none">
+      <main id="main-content" tabIndex={-1} className={`${SHELL_CONTAINER} py-4 focus:outline-none`}>
         <ProductDashboard />
       </main>
     </div>

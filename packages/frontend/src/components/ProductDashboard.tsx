@@ -140,12 +140,14 @@ export function ProductDashboard() {
   return (
     <section aria-labelledby="products-heading" className="mt-8">
       <div>
-        <h2 id="products-heading" className="text-3xl font-semibold tracking-tight text-gray-900">
+        <h2 id="products-heading" className="text-page-title text-text-primary">
           Produtos
         </h2>
         <p className="text-sm text-gray-600">Gerencie o cadastro e o estoque</p>
         <LowStockBanner summary={stockSummary.data} onShowLowStock={products.showLowStock} />
-        <div className="mt-6 flex items-center gap-2">
+        {/* Duas ações com rótulos longos e sem regra de quebra (design-system.md
+            §15.2 regra 5): empilham em largura total abaixo de `sm`. */}
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
           <Button variant="primary" size="md" onClick={() => setOpenCreate(true)}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Adicionar Produto
