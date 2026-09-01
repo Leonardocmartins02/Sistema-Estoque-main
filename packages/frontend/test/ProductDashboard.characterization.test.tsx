@@ -1,8 +1,8 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchMovements } from '../src/api/movements';
+import { createMovement, fetchMovements } from '../src/api/movements';
 import { fetchProduct, fetchProductStockSummary, fetchProducts } from '../src/api/products';
 import { fetchQuickOutHistory } from '../src/api/quickOut';
 import { ProductDashboard } from '../src/components/ProductDashboard';
@@ -89,12 +89,18 @@ describe('ProductDashboard — a seleção não sobrevive à mudança de recorte
     renderWithProviders(<ProductDashboard />);
 
     await user.click(await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' }));
-    expect(screen.getByRole('button', { name: 'Excluir (1)' })).toBeEnabled();
+    // A Task 16 trocou o botão sempre visível (e desabilitado) por uma barra
+    // contextual que só existe enquanto há seleção (N-3). O contrato de PD-1 —
+    // "a seleção não sobrevive à mudança de recorte" — é o mesmo; muda o sinal
+    // observável: a barra deixa de existir em vez de ficar desabilitada.
+    expect(screen.getByRole('button', { name: /Excluir selecionados \(1\)/i })).toBeEnabled();
 
     await user.type(screen.getByLabelText(/Buscar por Nome ou SKU/i), 'borracha');
 
     // Sem isto, uma ação em lote pode atingir produtos que não estão na tela.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Excluir' })).toBeDisabled());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Excluir selecionados/i })).not.toBeInTheDocument(),
+    );
   });
 
   it('PD-1 · filtrar por status limpa a seleção', async () => {
@@ -102,14 +108,16 @@ describe('ProductDashboard — a seleção não sobrevive à mudança de recorte
     renderWithProviders(<ProductDashboard />);
 
     await user.click(await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' }));
-    expect(screen.getByRole('button', { name: 'Excluir (1)' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Excluir selecionados \(1\)/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: /Filtrar por Status/i }));
     // Rótulo atualizado na Task 14 — vocabulário único ("Estoque baixo" no
     // lugar do antigo "Atenção", exclusivo do filtro).
     await user.click(await screen.findByRole('menuitemcheckbox', { name: /Estoque baixo/i }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Excluir' })).toBeDisabled());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Excluir selecionados/i })).not.toBeInTheDocument(),
+    );
   });
 });
 
@@ -172,6 +180,127 @@ describe('ProductDashboard — cada ação de linha abre o diálogo corresponden
     await user.click(screen.getByRole('button', { name: /Adicionar Produto/i }));
 
     expect(await screen.findByRole('dialog', { name: /Novo Produto/i })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Novos contratos da Task 16 — zona de controle e paridade mobile.
+ */
+describe('ProductDashboard — paridade de filtro e ordenação (Task 16)', () => {
+  /**
+   * UF-07/UF-41: entrar no filtro pelo banner e não conseguir sair. O jsdom não
+   * avalia media query, então o teste afirma **existência e ação** do caminho de
+   * saída — não a largura em que ele aparece.
+   */
+  it('limpar o filtro é alcançável e realmente limpa, sem depender da largura', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ProductDashboard />);
+    await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' });
+
+    // Entra no filtro pelo banner de estoque baixo (mesmo caminho do UF-07).
+    await user.click(screen.getByRole('button', { name: /Ver produtos/i }));
+    await waitFor(() => expect(lastQuery()?.[5]).toEqual(['ATTN', 'OUT']));
+
+    // O filtro ativo fica visível como chip removível, em qualquer largura.
+    expect(await screen.findByRole('button', { name: /Remover filtro Estoque baixo/i })).toBeInTheDocument();
+
+    // A saída existe fora de qualquer menu e é acionável.
+    await user.click(screen.getByRole('button', { name: /^Limpar filtros$/i }));
+
+    // Asserção pela UI, não pela chamada de rede: voltar ao recorte sem filtro
+    // reusa a queryKey já cacheada pelo React Query, então NÃO há novo fetch —
+    // o observável é o filtro ter sumido da tela.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Remover filtro/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('a ordenação do mobile envia os mesmos sortBy/sortDir do desktop', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ProductDashboard />);
+    await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' });
+
+    await user.click(screen.getByRole('button', { name: /Filtrar e ordenar/i }));
+    const sheet = await screen.findByRole('dialog', { name: /Filtrar e ordenar/i });
+
+    await user.click(within(sheet).getByRole('button', { name: /Ordenar por Saldo/i }));
+
+    // Mesmo contrato global da Task 3: chave válida e página de volta à 1.
+    await waitFor(() => expect(lastQuery()?.[3]).toBe('balance'));
+    expect(lastQuery()?.[1]).toBe(1);
+  });
+
+  it('as ações em lote pertencem ao ramo da tabela, não ao dos cards (N-3)', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ProductDashboard />);
+
+    // Sem seleção, o controle não existe — ausência, não desabilitação (N-3).
+    await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' });
+    expect(screen.queryByRole('button', { name: /Excluir selecionados/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Selecionar Caneta Azul' }));
+
+    // O produto não tem estado de viewport (DEP-03): a troca é só CSS. O que dá
+    // para afirmar é o RAMO do DOM em que o controle vive.
+    const tableBranch = document.querySelector('[data-surface="table"]') as HTMLElement;
+    const cardsBranch = document.querySelector('[data-surface="cards"]') as HTMLElement;
+    expect(tableBranch).not.toBeNull();
+    expect(cardsBranch).not.toBeNull();
+
+    const batch = await screen.findByRole('button', { name: /Excluir selecionados/i });
+    expect(tableBranch).toContainElement(batch);
+    expect(cardsBranch).not.toContainElement(batch);
+  });
+
+  it('a paginação é renderizada depois da lista e informa o total (C-4)', async () => {
+    renderWithProviders(<ProductDashboard />);
+    await screen.findByRole('checkbox', { name: 'Selecionar Caneta Azul' });
+
+    const nav = screen.getByRole('navigation', { name: /Paginação/i });
+    const cards = document.querySelector('[data-surface="cards"]') as HTMLElement;
+
+    // `compareDocumentPosition` devolve FOLLOWING quando `nav` vem depois.
+    expect(cards.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(nav).toHaveTextContent(/2 produtos?/i);
+  });
+});
+
+/**
+ * REV-05: PD-2 provava que o diálogo CERTO abria, não que ele abria para o
+ * produto certo. Os diálogos ainda não exibem o produto no corpo (UF-35, fora
+ * desta task), então a identidade é afirmada pelo dado que cada um busca/envia
+ * — que é exatamente o que quebraria em silêncio se a fiação trocasse de linha.
+ */
+describe('ProductDashboard — cada ação age sobre AQUELE produto (PD-2, REV-05)', () => {
+  it('PD-2 · "Ver Histórico" no segundo produto busca o histórico do segundo produto', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ProductDashboard />);
+    await screen.findByRole('checkbox', { name: 'Selecionar Borracha Branca' });
+
+    const table = document.querySelector('[data-surface="table"]') as HTMLElement;
+    await user.click(within(table).getByRole('button', { name: 'Mais ações para Borracha Branca' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Ver Histórico' }));
+
+    await screen.findByRole('dialog');
+    await waitFor(() => expect(vi.mocked(fetchMovements)).toHaveBeenCalled());
+    expect(vi.mocked(fetchMovements).mock.calls.at(-1)?.[0]).toBe('p2');
+  });
+
+  it('PD-2 · "Movimentar" no segundo produto lança a movimentação no segundo produto', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ProductDashboard />);
+    await screen.findByRole('checkbox', { name: 'Selecionar Borracha Branca' });
+
+    const table = document.querySelector('[data-surface="table"]') as HTMLElement;
+    await user.click(within(table).getAllByRole('button', { name: 'Movimentar' })[1]);
+    await screen.findByRole('dialog', { name: /Movimentar Estoque/i });
+
+    await user.clear(screen.getByLabelText(/Quantidade/i));
+    await user.type(screen.getByLabelText(/Quantidade/i), '3');
+    await user.click(screen.getByRole('button', { name: 'Lançar' }));
+
+    await waitFor(() => expect(vi.mocked(createMovement)).toHaveBeenCalled());
+    expect(vi.mocked(createMovement).mock.calls.at(-1)?.[0]).toBe('p2');
   });
 });
 

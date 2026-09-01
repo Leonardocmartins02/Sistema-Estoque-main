@@ -1,26 +1,35 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownToLine, Plus, Search } from 'lucide-react';
+import { ArrowDownToLine, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ProductWithBalance } from '../api/types';
 import { useConfirm } from '../hooks/useConfirm';
 import { useProductMutations } from '../hooks/useProductMutations';
-import { useProductsQuery } from '../hooks/useProductsQuery';
+import { useProductsQuery, type StatusKey } from '../hooks/useProductsQuery';
 import { useProductStockSummary } from '../hooks/useProductStockSummary';
+import { formatQuantity } from '../lib/formatNumber';
 
 import { AdjustmentFormModal } from './AdjustmentFormModal';
 import { MovementFormModal } from './MovementFormModal';
 import { MovementHistoryModal } from './MovementHistoryModal';
 import ProductCardList from './products/ProductCardList';
+import { ProductFiltersSheet } from './products/ProductFiltersSheet';
 import ProductsTable from './products/ProductsTable';
+import { OPTIONS as STATUS_OPTIONS } from './products/StatusFilterMenu';
 import type { ProductActions } from './products/types';
 import { ProductFormModal } from './ProductFormModal';
 import QuickOutHistoryModal from './QuickOutHistoryModal';
 import QuickOutListModal from './QuickOutListModal';
 import { QuickOutModal } from './QuickOutModal';
+import { Badge } from './ui/Badge';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import LowStockBanner from './ui/LowStockBanner';
+
+/** Vocabulário único (Task 14) reaproveitado — nunca uma quarta cópia. */
+const STATUS_LABEL: Record<StatusKey, string> = Object.fromEntries(
+  STATUS_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<StatusKey, string>;
 
 /**
  * Container de orquestração da tela de produtos.
@@ -45,8 +54,20 @@ export function ProductDashboard() {
   const [adjustingProduct, setAdjustingProduct] = useState<ProductWithBalance | null>(null);
   const [openQuickOutList, setOpenQuickOutList] = useState(false);
   const [openQuickOutHistory, setOpenQuickOutHistory] = useState(false);
+  const [openFilters, setOpenFilters] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+
+  const hasActiveFilters = products.search.trim() !== '' || products.statusFilter.length > 0;
+  const activeFilterCount = products.statusFilter.length + (products.search.trim() !== '' ? 1 : 0);
+  const primarySort = products.sorts[0];
+  const sortBy = (primarySort?.by ?? 'name') as 'name' | 'sku' | 'balance';
+  const sortDir = primarySort?.dir ?? 'asc';
+
+  const clearAllFilters = useCallback(() => {
+    products.setSearch('');
+    products.clearStatus();
+  }, [products]);
 
   // Decisão de produto: seleção múltipla não atravessa paginação/busca/filtro
   // (F-04). Sem isto, uma ação em lote podia atingir produtos que não estão
@@ -159,6 +180,8 @@ export function ProductDashboard() {
         </div>
       </div>
 
+      {/* Zona de controle — mesmo container do shell (D-B). A busca é inline em
+          todas as larguras; a sheet leva filtro E ordenação ao mobile. */}
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="w-full sm:max-w-md">
           <Input
@@ -171,18 +194,67 @@ export function ProductDashboard() {
             onChange={(e) => products.setSearch(e.target.value)}
           />
         </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={selectedIds.size === 0 || removeProducts.isPending}
-          onClick={handleDeleteSelected}
-        >
-          Excluir{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+        <Button variant="secondary" size="md" className="h-11 md:hidden" onClick={() => setOpenFilters(true)}>
+          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+          Filtrar e ordenar
+          {activeFilterCount > 0 && <Badge variant="info">{activeFilterCount}</Badge>}
         </Button>
       </div>
 
+      {/* Chips de filtro ativo — removíveis e visíveis em QUALQUER largura.
+          É a saída do beco sem saída do UF-07/UF-41: entrou pelo banner, sai
+          por aqui, sem depender de um menu que só existe no desktop. */}
+      {hasActiveFilters && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {products.search.trim() !== '' && (
+            <button
+              type="button"
+              onClick={() => products.setSearch('')}
+              className="inline-flex h-8 items-center gap-1 rounded-control border border-border-strong bg-white px-2 text-xs text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              Busca: {products.search}
+              <X className="h-3 w-3" aria-hidden="true" />
+              <span className="sr-only">Remover filtro de busca</span>
+            </button>
+          )}
+          {products.statusFilter.map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => products.toggleStatus(key)}
+              className="inline-flex h-8 items-center gap-1 rounded-control border border-border-strong bg-white px-2 text-xs text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              {STATUS_LABEL[key]}
+              <X className="h-3 w-3" aria-hidden="true" />
+              <span className="sr-only">Remover filtro {STATUS_LABEL[key]}</span>
+            </button>
+          ))}
+          <Button variant="tertiary" size="sm" onClick={clearAllFilters}>
+            Limpar filtros
+          </Button>
+        </div>
+      )}
+
       {/* Tabela (desktop/tablet) */}
-      <div className="mt-6 hidden md:block">
+      <div data-surface="table" className="mt-6 hidden md:block">
+        {/* Barra contextual de seleção: SUBSTITUI a zona de controle enquanto
+            há seleção e some quando não há — em vez de um "Excluir" visível e
+            permanentemente desabilitado (N-3). Vive dentro do ramo da tabela
+            porque a seleção só existe nesta superfície (DEP-03). */}
+        {selectedIds.size > 0 && (
+          <div
+            role="region"
+            aria-label="Ações para a seleção atual"
+            className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-surface border bg-accent-subtle px-3 py-2"
+          >
+            <span className="text-sm text-accent-subtle-text">
+              {selectedIds.size} selecionado(s) nesta página
+            </span>
+            <Button variant="destructive" size="sm" disabled={removeProducts.isPending} onClick={handleDeleteSelected}>
+              Excluir selecionados ({selectedIds.size})
+            </Button>
+          </div>
+        )}
         <ProductsTable
           items={viewItems}
           isLoading={query.isLoading}
@@ -197,15 +269,17 @@ export function ProductDashboard() {
           onToggleSelected={toggleSelected}
           expandedIds={expandedIds}
           onToggleExpanded={toggleExpanded}
-          hasActiveFilters={products.search.trim() !== '' || products.statusFilter.length > 0}
-          onClearFilters={() => {
-            products.setSearch('');
-            products.clearStatus();
-          }}
+          hasActiveFilters={hasActiveFilters}
+          onClearFilters={clearAllFilters}
           onCreateProduct={() => setOpenCreate(true)}
           actions={actions}
           footer={
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            // Região destrutiva rotulada, fora da hierarquia primária (§10.2).
+            <div
+              role="region"
+              aria-label="Ações destrutivas da página"
+              className="flex flex-wrap items-center justify-end gap-2"
+            >
               <Button
                 variant="secondary"
                 size="sm"
@@ -227,7 +301,21 @@ export function ProductDashboard() {
         />
       </div>
 
-      {/* Paginação */}
+      {/* Cards (mobile) */}
+      <div data-surface="cards" className="mt-4 md:hidden">
+        <ProductCardList
+          items={viewItems}
+          isLoading={query.isLoading}
+          error={errorMessage}
+          hasActiveFilters={hasActiveFilters}
+          onClearFilters={clearAllFilters}
+          onCreateProduct={() => setOpenCreate(true)}
+          actions={actions}
+        />
+      </div>
+
+      {/* C-4: a paginação vem DEPOIS da lista, nas duas superfícies, e informa
+          o total de itens — antes era renderizada acima dos cards. */}
       <nav aria-label="Paginação de produtos" className="mt-6 flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
@@ -238,7 +326,8 @@ export function ProductDashboard() {
           ← Anterior
         </Button>
         <span className="px-2 text-sm text-gray-700" aria-live="polite">
-          Página {products.page} de {products.totalPages}
+          Página {products.page} de {products.totalPages} · {formatQuantity(products.total)}{' '}
+          {products.total === 1 ? 'produto' : 'produtos'}
         </span>
         <Button
           variant="secondary"
@@ -250,21 +339,17 @@ export function ProductDashboard() {
         </Button>
       </nav>
 
-      {/* Cards (mobile) */}
-      <div className="mt-4 md:hidden">
-        <ProductCardList
-          items={viewItems}
-          isLoading={query.isLoading}
-          error={errorMessage}
-          hasActiveFilters={products.search.trim() !== '' || products.statusFilter.length > 0}
-          onClearFilters={() => {
-            products.setSearch('');
-            products.clearStatus();
-          }}
-          onCreateProduct={() => setOpenCreate(true)}
-          actions={actions}
-        />
-      </div>
+      <ProductFiltersSheet
+        open={openFilters}
+        onClose={() => setOpenFilters(false)}
+        statusFilter={products.statusFilter}
+        onToggleStatus={products.toggleStatus}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onTogglePrimarySort={products.togglePrimarySort}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={clearAllFilters}
+      />
 
       {/* Diálogos — uma instância de cada (antes MovementFormModal e
           MovementHistoryModal eram renderizados duas vezes, e ambos montavam

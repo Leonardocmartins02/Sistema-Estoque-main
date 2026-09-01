@@ -88,16 +88,20 @@ describe('ProductDashboard — seleção não atravessa paginação (F-04)', () 
     await user.click(checkbox);
 
     expect(checkbox).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Excluir (1)' })).toBeEnabled();
+    // Task 16 (N-3): a ação em lote virou barra contextual — existe enquanto há
+    // seleção e SOME quando não há, em vez de ficar visível e desabilitada. O
+    // contrato de F-04 é o mesmo; muda o sinal observável.
+    expect(screen.getByRole('button', { name: /Excluir selecionados \(1\)/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: 'Próxima →' }));
-    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+    // A paginação passou a informar o total (C-4), então o texto não é exato.
+    await waitFor(() => expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument());
 
     // O produto marcado nem está mais na tela...
     expect(screen.queryByLabelText('Selecionar Produto 01')).not.toBeInTheDocument();
     // ...e a ação em lote fica indisponível: não há como ela atingir um item
     // que ficou para trás na página anterior.
-    expect(screen.getByRole('button', { name: 'Excluir' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Excluir selecionados/i })).not.toBeInTheDocument();
   });
 });
 

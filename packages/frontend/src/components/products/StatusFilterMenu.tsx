@@ -7,7 +7,7 @@ import MenuPopover, { MenuItem, MenuItemCheckbox } from '../ui/MenuPopover';
 // Vocabulário único (Task 14): as mesmas três palavras da tabela e do card —
 // o filtro tinha um TERCEIRO conjunto de rótulos ("OK / Atenção / Em falta"),
 // enquanto backend, tabela e card já usavam vocabulários diferentes entre si.
-const OPTIONS: Array<{ value: StatusKey; label: string; dot: string }> = [
+export const OPTIONS: Array<{ value: StatusKey; label: string; dot: string }> = [
   { value: 'OK', label: 'Em estoque', dot: 'bg-emerald-600' },
   { value: 'ATTN', label: 'Estoque baixo', dot: 'bg-amber-600' },
   { value: 'OUT', label: 'Sem estoque', dot: 'bg-rose-600' },
