@@ -315,9 +315,11 @@ describe('ProductDashboard — trocar a ordenação reseta a página (3-F4 / REV
     await user.click(screen.getByRole('button', { name: 'Próxima →' }));
     await waitFor(() => expect(lastQuery()?.[1]).toBe(2));
 
-    // Ordenação já é 'name' (default) — clicar em "Nome do Produto" alterna
-    // a MESMA coluna para desc, não troca de critério.
-    await user.click(screen.getByRole('button', { name: /Nome do Produto/i }));
+    // Ordenação já é 'name' (default) — clicar em "Ordenar por Nome" alterna
+    // o MESMO critério para desc, não troca de critério. (O rótulo do controle
+    // mudou na Task 13, com a fusão do SKU sob o nome; o contrato de reset de
+    // página é o mesmo.)
+    await user.click(screen.getByRole('button', { name: /Ordenar por Nome/i }));
 
     await waitFor(() => expect(lastQuery()?.[4]).toBe('desc'));
     expect(lastQuery()?.[3]).toBe('name');

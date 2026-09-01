@@ -40,6 +40,9 @@ function renderTable(
     onToggleSelected: vi.fn(),
     expandedIds: {},
     onToggleExpanded: vi.fn(),
+    hasActiveFilters: false,
+    onClearFilters: vi.fn(),
+    onCreateProduct: vi.fn(),
     actions,
     ...overrides,
   };
@@ -66,10 +69,12 @@ describe('ProductsTable — dados da linha (PT-1, PT-2)', () => {
     ]);
 
     // A *regra* está em PS-1; aqui interessa que os três estados cheguem à tela
-    // como rótulos legíveis e diferentes entre si.
-    expect(screen.getByText('Em Estoque')).toBeInTheDocument();
-    expect(screen.getByText('Estoque Baixo')).toBeInTheDocument();
-    expect(screen.getByText('Fora de Estoque')).toBeInTheDocument();
+    // como rótulos legíveis e diferentes entre si. As FRASES mudaram na Task 13
+    // ("Vocabulário: Em estoque / Estoque baixo / Sem estoque") — o contrato
+    // protegido é a existência de três rótulos distintos, não o texto exato.
+    expect(screen.getByText('Em estoque')).toBeInTheDocument();
+    expect(screen.getByText('Estoque baixo')).toBeInTheDocument();
+    expect(screen.getByText('Sem estoque')).toBeInTheDocument();
   });
 });
 
@@ -136,8 +141,12 @@ describe('ProductsTable — descrição expansível (PT-6)', () => {
       makeProduct({ id: 'p1', name: 'Caneta Azul', description: 'Tinta azul, ponta 1.0mm' }),
     ]);
 
-    // Recolhido: a descrição não está na tela e o gatilho declara aria-expanded=false.
-    expect(screen.queryByText('Tinta azul, ponta 1.0mm')).not.toBeInTheDocument();
+    // Recolhido: a descrição não é perceptível e o gatilho declara aria-expanded=false.
+    // A Task 13 mantém a região SEMPRE no DOM (apenas oculta) para que
+    // `aria-controls` aponte para um elemento existente (A-7) — por isso a
+    // asserção é de visibilidade, não de presença. Não enfraquece o contrato:
+    // "não visível" é exatamente o que a pessoa percebe.
+    expect(screen.getByText('Tinta azul, ponta 1.0mm')).not.toBeVisible();
     const trigger = screen.getByRole('button', { name: 'Caneta Azul', expanded: false });
 
     await user.click(trigger);
@@ -172,18 +181,12 @@ describe('ProductsTable — descrição expansível (PT-6)', () => {
   });
 
   /**
-   * NÃO congelado: hoje o nome E o SKU são dois gatilhos separados para a mesma
-   * expansão. A migração funde SKU sob o nome (§18 do Design System), então o
-   * contrato é *poder revelar a descrição*, não *por onde*. Este teste afirma a
-   * capacidade a partir do SKU sem exigir que ela continue existindo ali.
+   * O antigo "PT-6 · hoje o SKU também revela a descrição" foi REMOVIDO na
+   * Task 13, como o próprio teste previa: ele afirmava a capacidade a partir do
+   * SKU "sem exigir que ela continue existindo ali". Com o SKU fundido sob o
+   * nome, existe um gatilho único — coberto pelos testes acima e por
+   * "existe um único gatilho de disclosure por linha".
    */
-  it('PT-6 · hoje o SKU também revela a descrição (capacidade, não a via)', async () => {
-    const user = userEvent.setup();
-    const { props } = renderTable([makeProduct({ id: 'p1', sku: 'CAN-001' })]);
-
-    await user.click(screen.getByRole('button', { name: 'CAN-001' }));
-    expect(props.onToggleExpanded).toHaveBeenCalledWith('p1');
-  });
 });
 
 describe('ProductsTable — ações da linha (PT-7)', () => {
@@ -209,6 +212,73 @@ describe('ProductsTable — ações da linha (PT-7)', () => {
   });
 });
 
+/**
+ * Novos contratos da Task 13 (+ decisão T13-SD1).
+ */
+describe('ProductsTable — evidência do status na linha (C-6, A-6)', () => {
+  it('o estoque mínimo é legível na linha, ao lado do saldo, sem abrir nada', () => {
+    renderTable([makeProduct({ name: 'Caneta Azul', balance: 18, minStock: 10 })]);
+
+    expect(screen.getByText('18')).toBeInTheDocument();
+    // A evidência que produz o status ("Estoque baixo") precisa estar visível
+    // junto do veredito — hoje o mínimo só existia num modal secundário.
+    expect(screen.getByText(/mín\.\s*10/i)).toBeInTheDocument();
+  });
+});
+
+describe('ProductsTable — ordenação da coluna Produto (T13-SD1)', () => {
+  it('a ordenação por SKU continua acionável por um controle nomeado', async () => {
+    const user = userEvent.setup();
+    const { props } = renderTable([makeProduct()]);
+
+    await user.click(screen.getByRole('button', { name: /Ordenar por SKU/i }));
+
+    expect(props.onTogglePrimarySort).toHaveBeenCalledWith('sku');
+  });
+
+  it('ordenando por SKU, a coluna Produto anuncia aria-sort — e é a única', () => {
+    renderTable([makeProduct()], { sorts: [{ by: 'sku', dir: 'asc' }] });
+
+    const sorted = screen
+      .getAllByRole('columnheader')
+      .filter((th) => th.hasAttribute('aria-sort'));
+
+    expect(sorted).toHaveLength(1);
+    expect(sorted[0]).toHaveAttribute('aria-sort', 'ascending');
+    expect(sorted[0]).toContainElement(screen.getByRole('button', { name: /Ordenar por SKU/i }));
+  });
+
+  it('o controle ativo identifica critério E direção no nome acessível', () => {
+    renderTable([makeProduct()], { sorts: [{ by: 'sku', dir: 'desc' }] });
+
+    expect(screen.getByRole('button', { name: /Ordenar por SKU.*decrescente/i })).toBeInTheDocument();
+    // O inativo não anuncia direção nenhuma.
+    expect(screen.getByRole('button', { name: /^Ordenar por Nome$/i })).toBeInTheDocument();
+  });
+});
+
+describe('ProductsTable — disclosure única com aria-controls válido (A-7)', () => {
+  it('aria-controls aponta para um elemento que existe mesmo recolhido', () => {
+    renderTable([makeProduct({ id: 'p1', name: 'Caneta Azul', description: 'Tinta azul' })]);
+
+    const trigger = screen.getByRole('button', { name: 'Caneta Azul', expanded: false });
+    const id = trigger.getAttribute('aria-controls');
+
+    expect(id).toBeTruthy();
+    expect(document.getElementById(id as string)).not.toBeNull();
+  });
+
+  it('existe um único gatilho de disclosure por linha', () => {
+    renderTable([makeProduct({ id: 'p1', name: 'Caneta Azul', sku: 'CAN-001' })]);
+
+    const triggers = screen
+      .getAllByRole('button')
+      .filter((b) => b.hasAttribute('aria-controls'));
+
+    expect(triggers).toHaveLength(1);
+  });
+});
+
 describe('ProductsTable — estado vazio (PT-8)', () => {
   /**
    * Afirma que **existe** um estado vazio customizado, não qual é o texto: o
@@ -220,5 +290,32 @@ describe('ProductsTable — estado vazio (PT-8)', () => {
     renderTable([]);
 
     expect(screen.getByText(/Nenhum produto/i)).toBeInTheDocument();
+  });
+
+  /**
+   * A-10: "nada cadastrado" e "filtro sem resultado" são causas diferentes e
+   * exigem saídas diferentes. Uma frase genérica para os dois é o antipadrão.
+   */
+  it('sem filtro ativo, o vazio nomeia "nada cadastrado" e oferece cadastrar', async () => {
+    const user = userEvent.setup();
+    const onCreateProduct = vi.fn();
+    renderTable([], { hasActiveFilters: false, onCreateProduct });
+
+    expect(screen.getByText(/nenhum produto cadastrado/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Adicionar Produto/i }));
+    expect(onCreateProduct).toHaveBeenCalledTimes(1);
+  });
+
+  it('com filtro ativo, o vazio nomeia a busca/filtro e oferece limpar', async () => {
+    const user = userEvent.setup();
+    const onClearFilters = vi.fn();
+    renderTable([], { hasActiveFilters: true, onClearFilters });
+
+    expect(screen.getByText(/nenhum produto corresponde/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nenhum produto cadastrado/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Limpar filtros/i }));
+    expect(onClearFilters).toHaveBeenCalledTimes(1);
   });
 });

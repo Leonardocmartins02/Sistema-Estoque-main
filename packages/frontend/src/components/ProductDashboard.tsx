@@ -197,6 +197,12 @@ export function ProductDashboard() {
           onToggleSelected={toggleSelected}
           expandedIds={expandedIds}
           onToggleExpanded={toggleExpanded}
+          hasActiveFilters={products.search.trim() !== '' || products.statusFilter.length > 0}
+          onClearFilters={() => {
+            products.setSearch('');
+            products.clearStatus();
+          }}
+          onCreateProduct={() => setOpenCreate(true)}
           actions={actions}
           footer={
             <div className="flex flex-wrap items-center justify-end gap-2">

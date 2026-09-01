@@ -127,6 +127,9 @@ function ProductsTableWithRealHook() {
       onToggleSelected={() => {}}
       expandedIds={{}}
       onToggleExpanded={() => {}}
+      hasActiveFilters={false}
+      onClearFilters={() => {}}
+      onCreateProduct={() => {}}
       actions={makeSpyActions()}
     />
   );
@@ -163,32 +166,40 @@ describe('useProductsQuery.togglePrimarySort — exatamente um critério (3-F1)'
 });
 
 describe('ProductsTable + useProductsQuery — aria-sort exclusivo (3-F1)', () => {
-  it('ao trocar para SKU pelo clique real, só o cabeçalho SKU anuncia ordenação — Nome deixa de anunciar', async () => {
+  /**
+   * Adaptado na Task 13 (decisão T13-SD1). O `<th>` próprio do SKU deixou de
+   * existir: nome e SKU são dois critérios da MESMA coluna "Produto", que
+   * declara `sortKeys: ['name','sku']`. O contrato de 3-F1 — **exclusividade**:
+   * exatamente um cabeçalho anuncia ordenação, e ele reflete o primário real —
+   * continua valendo e é o que este teste afirma. O que mudou foi a estrutura
+   * de colunas, ALTERAR INTENCIONALMENTE declarado pela Task 13.
+   */
+  const sortedHeaders = () =>
+    screen.getAllByRole('columnheader').filter((th) => th.hasAttribute('aria-sort'));
+
+  it('ao trocar para SKU pelo clique real, exatamente um cabeçalho anuncia ordenação', async () => {
     mockedFetchProducts.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 10 });
     const user = userEvent.setup();
     render(<ProductsTableWithRealHook />, { wrapper });
     await waitFor(() => expect(mockedFetchProducts).toHaveBeenCalled());
 
-    // Estado inicial: Nome é o primário (default do hook).
-    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).toHaveAttribute(
-      'aria-sort',
-      'ascending',
-    );
-    // Não sorted não é "none": Task 11 (A-8ʳ) removeu aria-sort="none" do
-    // não-primário — o atributo passa a existir só na coluna ordenada.
-    expect(screen.getByRole('columnheader', { name: /^SKU/i })).not.toHaveAttribute('aria-sort');
+    // Estado inicial: Nome é o primário (default do hook) — e a coluna que o
+    // contém é a única a anunciar.
+    expect(sortedHeaders()).toHaveLength(1);
+    expect(sortedHeaders()[0]).toHaveAttribute('aria-sort', 'ascending');
+    expect(sortedHeaders()[0]).toContainElement(screen.getByRole('button', { name: /Ordenar por Nome/i }));
 
-    await user.click(screen.getByRole('button', { name: /SKU/i }));
+    await user.click(screen.getByRole('button', { name: /Ordenar por SKU/i }));
 
+    // Depois do clique o primário é SKU: segue exatamente um cabeçalho
+    // anunciando, agora com o controle de SKU declarando a direção.
     await waitFor(() => {
-      expect(screen.getByRole('columnheader', { name: /^SKU/i })).toHaveAttribute('aria-sort', 'ascending');
+      expect(screen.getByRole('button', { name: /Ordenar por SKU.*crescente/i })).toBeInTheDocument();
     });
-    // O critério anterior some do DOM real: nenhuma contradição entre o
-    // aria-sort do <th> e o sr-only interno do SortableHeader.
-    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).not.toHaveAttribute('aria-sort');
-    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).not.toHaveTextContent(
-      /ordenado crescente|ordenado decrescente/,
-    );
+    expect(sortedHeaders()).toHaveLength(1);
+    expect(sortedHeaders()[0]).toHaveAttribute('aria-sort', 'ascending');
+    // O critério anterior não pode continuar declarando direção.
+    expect(screen.getByRole('button', { name: /^Ordenar por Nome$/i })).toBeInTheDocument();
   });
 });
 

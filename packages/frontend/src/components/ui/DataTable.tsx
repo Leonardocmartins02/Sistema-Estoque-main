@@ -15,6 +15,13 @@ export type Column<T> = {
   filterRender?: React.ReactNode;
   /** Algarismos tabulares (design-system.md §5.3) — colunas numéricas comparáveis. */
   tabularNums?: boolean;
+  /**
+   * Aliases de ordenação da coluna (decisão T13-SD1). Uma coluna pode
+   * representar mais de um critério — "Produto" contém nome **e** SKU — e
+   * precisa anunciar `aria-sort` quando qualquer um deles for o primário.
+   * Ausente ⇒ `[String(key)]`, então nenhuma coluna existente muda.
+   */
+  sortKeys?: string[];
 };
 
 export type Sort = { by: string; dir: 'asc' | 'desc' };
@@ -113,7 +120,13 @@ export function DataTable<T>({
                 // anunciar mais de um cabeçalho como ordenado contradiz o
                 // que de fato chega ao backend (só `sorts[0]`).
                 const primary = sorts?.[0];
-                const isSorted = sorts ? primary?.by === String(col.key) : sort?.by === String(col.key);
+                // T13-SD1: a coluna é a "ordenada" quando o primário casa com
+                // QUALQUER um de seus `sortKeys`. Sem `sortKeys`, o conjunto é
+                // `[key]` — exatamente o comportamento anterior.
+                const sortKeys = col.sortKeys ?? [String(col.key)];
+                const isSorted = sorts
+                  ? !!primary && sortKeys.includes(primary.by)
+                  : !!sort && sortKeys.includes(sort.by);
                 const dir = sorts ? (isSorted ? primary?.dir : undefined) : isSorted ? sort?.dir : undefined;
                 return (
                   <th
