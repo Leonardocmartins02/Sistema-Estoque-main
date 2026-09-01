@@ -13,6 +13,8 @@ export type Column<T> = {
   render?: (row: T) => React.ReactNode;
   // Renderizador opcional de filtro por coluna (aparece em uma linha abaixo do cabeçalho)
   filterRender?: React.ReactNode;
+  /** Algarismos tabulares (design-system.md §5.3) — colunas numéricas comparáveis. */
+  tabularNums?: boolean;
 };
 
 export type Sort = { by: string; dir: 'asc' | 'desc' };
@@ -78,7 +80,9 @@ export function DataTable<T>({
     align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
 
   return (
-    <div className={`overflow-hidden rounded-lg border bg-white shadow-sm select-none ${className}`}>
+    // Região de dados, não card (design-system.md §13): borda, sem sombra,
+    // radius-surface. Sem `max-width` próprio — ocupa a largura do shell (D-B).
+    <div className={`overflow-hidden rounded-surface border bg-white ${className}`}>
       {error && (
         <div role="alert" className="border-b border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {error}
@@ -98,7 +102,7 @@ export function DataTable<T>({
               <col key={String(col.key)} className={col.width || ''} />
             ))}
           </colgroup>
-          <thead className="bg-gray-50/90 backdrop-blur-sm select-none" role="rowgroup">
+          <thead className="bg-gray-50" role="rowgroup">
             <tr role="row">
               {columns.map((col) => {
                 // Somente a ordenação PRIMÁRIA (`sorts[0]`) pode anunciar
@@ -116,8 +120,11 @@ export function DataTable<T>({
                     key={String(col.key)}
                     scope="col"
                     role="columnheader"
-                    aria-sort={isSorted ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 first:rounded-tl-lg last:rounded-tr-lg select-none whitespace-nowrap ${
+                    // A-8ʳ: aria-sort só existe na ordenação PRIMÁRIA. Nos demais
+                    // cabeçalhos o atributo é omitido — "none" em todo cabeçalho
+                    // não ordenado virava ruído (§13.3).
+                    {...(isSorted ? { 'aria-sort': dir === 'asc' ? 'ascending' : 'descending' } : {})}
+                    className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 first:rounded-tl-surface last:rounded-tr-surface whitespace-nowrap ${
                       alignClass(col.align)
                     } ${col.width || ''}`}
                   >
@@ -127,14 +134,17 @@ export function DataTable<T>({
                       <button
                         type="button"
                         onClick={(ev) => handleSort(ev, col)}
-                        className="group inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white select-none"
+                        // select-none fica restrito ao cabeçalho CLICÁVEL (§13.2/A-5) —
+                        // as células de dados abaixo voltaram a ser selecionáveis.
+                        className="group inline-flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white select-none"
                         aria-label={`Ordenar por ${col.header}`}
                         title={`Ordenar por ${col.header}`}
                       >
-
+                        {/* M-8: rótulo sempre visível — o indicador acompanha, nunca substitui. */}
+                        <span>{col.header}</span>
                         <span
                           aria-hidden="true"
-                          className={`transition-transform text-gray-400 group-hover:text-gray-700 ${
+                          className={`transition-transform text-text-secondary group-hover:text-gray-700 ${
                             isSorted && dir === 'desc' ? 'rotate-180' : ''
                           }`}
                         >
@@ -163,11 +173,12 @@ export function DataTable<T>({
             )}
           </thead>
 
-          <tbody role="rowgroup" className="select-none">
+          <tbody role="rowgroup">
             {items.length === 0 && !isLoading ? (
               <tr role="row">
                 <td role="cell" colSpan={columns.length} className="px-4 py-8 text-center text-gray-500">
-                  {empty ?? 'Nenhum item encontrado.'}
+                  {/* A-12ʳ: erro e carregando já eram anunciados; vazio ficava mudo. */}
+                  <span role="status">{empty ?? 'Nenhum item encontrado.'}</span>
                 </td>
               </tr>
             ) : (
@@ -178,14 +189,22 @@ export function DataTable<T>({
                   // descrição, movimentar, menu) são controles nativos dentro das
                   // células. Um `tabIndex={0}` aqui só criava uma parada de tab
                   // que não faz nada — por isso foi removido.
+                  //
+                  // Receita de linha selecionada, reservada para a Task 13
+                  // (design-system.md §13.3): fundo `accent-subtle` + barra
+                  // lateral `accent` de 2px — dois sinais, nunca só cor. Esta
+                  // task não introduz o prop de seleção (nenhum critério de
+                  // aceite ou teste exige a API ainda); só documenta o padrão.
                   <tr key={id} role="row" className="hover:bg-gray-50">
                     {columns.map((col) => (
                       <td
                         key={String(col.key)}
                         role="cell"
-                        className={`border-t border-gray-100 px-4 py-3 text-sm text-gray-800 select-none ${alignClass(
+                        // Célula de dados voltou a ser selecionável (A-5) — copiar
+                        // um SKU com o mouse é tarefa diária em estoque.
+                        className={`border-t border-gray-100 px-4 py-3 text-sm text-gray-800 ${alignClass(
                           col.align
-                        )}`}
+                        )} ${col.tabularNums ? 'tabular-nums' : ''}`}
                       >
                         {col.render ? col.render(row) : String((row as any)[col.key])}
                       </td>

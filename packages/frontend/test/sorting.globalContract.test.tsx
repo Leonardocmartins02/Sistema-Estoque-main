@@ -174,7 +174,9 @@ describe('ProductsTable + useProductsQuery — aria-sort exclusivo (3-F1)', () =
       'aria-sort',
       'ascending',
     );
-    expect(screen.getByRole('columnheader', { name: /^SKU/i })).toHaveAttribute('aria-sort', 'none');
+    // Não sorted não é "none": Task 11 (A-8ʳ) removeu aria-sort="none" do
+    // não-primário — o atributo passa a existir só na coluna ordenada.
+    expect(screen.getByRole('columnheader', { name: /^SKU/i })).not.toHaveAttribute('aria-sort');
 
     await user.click(screen.getByRole('button', { name: /SKU/i }));
 
@@ -183,7 +185,7 @@ describe('ProductsTable + useProductsQuery — aria-sort exclusivo (3-F1)', () =
     });
     // O critério anterior some do DOM real: nenhuma contradição entre o
     // aria-sort do <th> e o sr-only interno do SortableHeader.
-    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).toHaveAttribute('aria-sort', 'none');
+    expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).not.toHaveAttribute('aria-sort');
     expect(screen.getByRole('columnheader', { name: /Nome do Produto/i })).not.toHaveTextContent(
       /ordenado crescente|ordenado decrescente/,
     );
