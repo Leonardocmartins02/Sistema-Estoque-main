@@ -91,14 +91,24 @@ Evidências citam teste, contrato de task, QA manual medido ou componente.
 
 Escopo desta versão: estado após as Tasks 13–16, no commit `d424fed`.
 
-**Status da revisão:** AGUARDANDO REVISÃO DO RESPONSÁVEL
+**Status da revisão:** APROVADA
 
 **Responsável pela aprovação:** Leonardo
 
-**Assinatura/aprovação:** PENDENTE
+**Assinatura/aprovação:** APROVADA PELO RESPONSÁVEL
 
-**Data da aprovação:** —
+**Data da aprovação:** 01/09/2026
 
-**Anexo ao PR:** PENDENTE — nenhum PR existe neste checkpoint; o projeto vem sendo
-enviado diretamente para `master`. Este documento fica pronto para ser anexado ou
-referenciado caso o responsável decida abrir PR.
+**Anexo ao PR:** NÃO APLICÁVEL NESTE CHECKPOINT
+
+**Justificativa:** o fluxo atual desta migração utiliza push direto em `master` e não
+existe PR aberto para a Task 16.
+
+**Exceção processual:** APROVADA PELO RESPONSÁVEL
+
+**Revalidação:** a matriz deverá ser revalidada e finalizada na **Task 28**, incluindo o
+QA responsivo amplo previsto no `implementation-plan.md`.
+
+> A aprovação acima é da **primeira versão**, com as lacunas desta seção anterior
+> ("Lacunas desta primeira versão") **explicitamente registradas e mantidas** — em
+> particular, os itens 31–33 seguem `NÃO PROVADO`.
