@@ -1,12 +1,16 @@
 import { Check, ChevronDown } from 'lucide-react';
 
 import type { StatusKey } from '../../hooks/useProductsQuery';
+import Badge from '../ui/Badge';
 import MenuPopover, { MenuItem, MenuItemCheckbox } from '../ui/MenuPopover';
 
+// Vocabulário único (Task 14): as mesmas três palavras da tabela e do card —
+// o filtro tinha um TERCEIRO conjunto de rótulos ("OK / Atenção / Em falta"),
+// enquanto backend, tabela e card já usavam vocabulários diferentes entre si.
 const OPTIONS: Array<{ value: StatusKey; label: string; dot: string }> = [
-  { value: 'OK', label: 'OK', dot: 'bg-emerald-600' },
-  { value: 'ATTN', label: 'Atenção', dot: 'bg-amber-600' },
-  { value: 'OUT', label: 'Em falta', dot: 'bg-rose-600' },
+  { value: 'OK', label: 'Em estoque', dot: 'bg-emerald-600' },
+  { value: 'ATTN', label: 'Estoque baixo', dot: 'bg-amber-600' },
+  { value: 'OUT', label: 'Sem estoque', dot: 'bg-rose-600' },
 ];
 
 type Props = {
@@ -31,22 +35,21 @@ export function StatusFilterMenu({ selected, onToggle, onClear }: Props) {
       triggerLabel={count > 0 ? `Filtrar por Status (${count} ativo(s))` : 'Filtrar por Status'}
       triggerContent={
         <>
-          <span>Status</span>
-          {count > 0 && (
-            <span className="ml-1 inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-800 ring-1 ring-inset ring-indigo-300">
-              {count}
-            </span>
-          )}
+          <span className="text-caption">Status</span>
+          {/* M-3: contador legível — 10px arbitrário vira o token caption
+              (12px), reaproveitando o primitivo Badge (radius-control, cores
+              semânticas) no lugar de uma pílula desenhada à mão. */}
+          {count > 0 && <Badge variant="info">{count}</Badge>}
           <ChevronDown className="h-3.5 w-3.5 text-gray-600" aria-hidden="true" />
         </>
       }
-      triggerClassName="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-semibold tracking-wide text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+      triggerClassName="inline-flex items-center gap-1.5 rounded-control border border-border-strong bg-white px-2 py-1 text-caption font-semibold tracking-wide text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       menuLabel="Filtrar por status"
       width={224}
     >
       {() => (
         <>
-          <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+          <p className="px-3 pb-1 pt-2 text-table-header uppercase tracking-wide text-gray-600">
             Filtrar Status
           </p>
           {OPTIONS.map((opt) => (

@@ -15,11 +15,11 @@ import type { StatusKey } from '../src/hooks/useProductsQuery';
  * O comportamento de teclado do menu (setas, Home/End, Escape) NÃO é testado
  * aqui: já está em `MenuPopover.test.tsx`.
  *
- * NÃO congelado: o vocabulário "OK / Atenção / Em falta" é um **terceiro**
- * vocabulário para os mesmos três estados, divergente da tabela ("Em Estoque /
- * Estoque Baixo / Fora de Estoque"). É bug conhecido (§12) — as asserções
- * localizam as opções pelo texto atual porque é a única forma de acioná-las
- * hoje, mas nenhum teste afirma que esse vocabulário deve permanecer.
+ * Task 14 unificou o vocabulário: o filtro usava um **terceiro** conjunto de
+ * rótulos ("OK / Atenção / Em falta"), divergente da tabela e do card ("Em
+ * estoque / Estoque baixo / Sem estoque"). As opções agora usam as mesmas
+ * três palavras — SFM-1 e SFM-4 protegem a capacidade e a contagem, não as
+ * palavras em si.
  */
 
 function renderMenu(selected: StatusKey[] = []) {
@@ -55,8 +55,8 @@ describe('StatusFilterMenu — seleção múltipla de status (SFM-1)', () => {
     // O menu permanece aberto a cada marcação — é isso que torna a seleção
     // múltipla praticável. Fechar a cada clique obrigaria a reabrir o menu
     // uma vez por status, e a sheet mobile (§15.1) herda esse contrato.
-    await user.click(screen.getByRole('menuitemcheckbox', { name: /Atenção/i }));
-    await user.click(screen.getByRole('menuitemcheckbox', { name: /Em falta/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /Estoque baixo/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /Sem estoque/i }));
 
     expect(onToggle).toHaveBeenCalledWith('ATTN');
     expect(onToggle).toHaveBeenCalledWith('OUT');
@@ -69,9 +69,9 @@ describe('StatusFilterMenu — seleção múltipla de status (SFM-1)', () => {
 
     await openMenu(user);
 
-    expect(screen.getByRole('menuitemcheckbox', { name: /Atenção/i })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('menuitemcheckbox', { name: /Em falta/i })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('menuitemcheckbox', { name: /OK/i })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('menuitemcheckbox', { name: /Estoque baixo/i })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemcheckbox', { name: /Sem estoque/i })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Em estoque/i })).toHaveAttribute('aria-checked', 'false');
   });
 });
 

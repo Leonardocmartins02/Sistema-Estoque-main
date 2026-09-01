@@ -105,7 +105,9 @@ describe('ProductDashboard — a seleção não sobrevive à mudança de recorte
     expect(screen.getByRole('button', { name: 'Excluir (1)' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: /Filtrar por Status/i }));
-    await user.click(await screen.findByRole('menuitemcheckbox', { name: /Atenção/i }));
+    // Rótulo atualizado na Task 14 — vocabulário único ("Estoque baixo" no
+    // lugar do antigo "Atenção", exclusivo do filtro).
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /Estoque baixo/i }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Excluir' })).toBeDisabled());
   });
