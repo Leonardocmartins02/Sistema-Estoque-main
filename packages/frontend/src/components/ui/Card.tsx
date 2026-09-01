@@ -8,12 +8,21 @@ export interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 't
   interactive?: boolean;
 }
 
+/**
+ * `Card` NUNCA tem sombra própria (design-system.md §8): o token único de
+ * sombra é reservado a modal/sheet/popover/menu/toast — camadas de verdade
+ * sobre o plano da página. `Card` é uma região que contém, não uma camada.
+ *
+ * PROIBIDO envolver a região de dados (a tabela de produtos) com `Card`: a
+ * região de dados tem tratamento de borda próprio, e "card dentro de card"
+ * anula a proximidade como sinal de agrupamento (§6).
+ */
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ title, subtitle, actions, footer, interactive, className = '', children, ...props }, ref) => {
     return (
       <div
         ref={ref}
-        className={`rounded-lg border bg-white shadow-sm ${interactive ? 'transition hover:shadow-md' : ''} ${className}`}
+        className={`rounded-surface border bg-white ${interactive ? 'transition' : ''} ${className}`}
         {...props}
       >
         {(title || actions || subtitle) && (

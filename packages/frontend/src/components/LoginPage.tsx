@@ -37,10 +37,12 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-900">SimpleStock</h1>
-        <p className="mt-1 text-sm text-gray-500">Entre com sua conta para continuar.</p>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      {/* Largura própria e estreita (design-system.md §4.4): o teto de
+          1536px do shell (D-B) não se aplica a esta superfície. */}
+      <div className="w-full max-w-sm rounded-surface border border-border bg-surface p-6">
+        <h1 className="text-page-title text-text-primary">SimpleStock</h1>
+        <p className="mt-1 text-sm text-text-secondary">Entre com sua conta para continuar.</p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
           <Input
@@ -59,7 +61,7 @@ export function LoginPage() {
           />
 
           {serverError && (
-            <p role="alert" className="text-sm text-red-700">
+            <p role="alert" className="text-sm text-danger">
               {serverError}
             </p>
           )}
