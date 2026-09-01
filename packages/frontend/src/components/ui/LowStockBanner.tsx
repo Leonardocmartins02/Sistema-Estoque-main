@@ -20,7 +20,7 @@ export function LowStockBanner({
   return (
     <div role="status" aria-live="polite">
       {lowStockCount > 0 && summary && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-surface border border-warning bg-warning-subtle px-3 py-2 text-sm text-warning">
           <span>
             {lowStockCount} produto{lowStockCount === 1 ? '' : 's'} com estoque baixo: {summary.attn} em atenção,{' '}
             {summary.out} sem estoque.

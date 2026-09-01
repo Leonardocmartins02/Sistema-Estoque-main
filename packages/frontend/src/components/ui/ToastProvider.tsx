@@ -55,7 +55,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       const id = Math.random().toString(36).slice(2);
       const toast: Toast = { id, type: 'info', durationMs: 3500, ...t };
       setToasts((prev) => [...prev, toast]);
-      if (toast.durationMs && toast.durationMs > 0) {
+      // Erro persiste até dispensa manual (design-system.md §17, A-11): é a
+      // única explicação de por que a operação falhou, e não pode desaparecer
+      // sozinha antes de a pessoa terminar de ler.
+      if (toast.type !== 'error' && toast.durationMs && toast.durationMs > 0) {
         setTimeout(() => dismiss(id), toast.durationMs);
       }
     },

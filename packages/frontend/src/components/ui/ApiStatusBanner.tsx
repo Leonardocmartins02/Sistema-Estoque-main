@@ -41,12 +41,14 @@ export function ApiStatusBanner({ intervalMs = 10000 }: { intervalMs?: number })
   return (
     <div className="mx-auto max-w-5xl px-4" role="status" aria-live="polite">
       {offline && (
-        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        // B-3: severidade distinta da do LowStockBanner — API fora do ar é
+        // falha de sistema, não aviso de negócio. `danger`, não `warning`.
+        <div className="mt-3 rounded-surface border border-danger bg-danger-subtle px-3 py-2 text-sm text-danger">
           A API está indisponível no momento. Algumas ações podem falhar. Tentando reconectar automaticamente...
           {!checking && (
             <button
               type="button"
-              className="ml-2 rounded border border-amber-400 bg-white px-2 py-0.5 text-xs text-amber-900 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+              className="ml-2 rounded-control border border-border-strong bg-surface px-2 py-0.5 text-xs text-text-secondary outline-none transition hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
               onClick={() => void check()}
             >
               Tentar agora

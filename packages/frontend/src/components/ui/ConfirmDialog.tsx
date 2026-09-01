@@ -57,9 +57,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </Button>
       </div>
     }
-  >
-    <p className="text-sm text-gray-700">Confirme para continuar. Esta ação afeta os dados do estoque.</p>
-  </Modal>
+  />
 );
 
 export default ConfirmDialog;

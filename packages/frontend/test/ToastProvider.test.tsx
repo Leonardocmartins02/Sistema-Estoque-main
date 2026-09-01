@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider, useToast } from '../src/components/ui/ToastProvider';
 
@@ -62,5 +62,50 @@ describe('ToastProvider', () => {
     await user.click(close);
 
     expect(screen.getByRole('status')).not.toHaveTextContent('mensagem info');
+  });
+
+  describe('dispensa automática por tipo (A-11)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('toast de erro permanece após o tempo padrão de dispensa e é dispensável manualmente', () => {
+      vi.useFakeTimers();
+      render(
+        <ToastProvider>
+          <Trigger type="error" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'disparar' }));
+      expect(screen.getByRole('alert')).toHaveTextContent('mensagem error');
+
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      // Bem além do durationMs padrão (3500ms) — o erro continua visível.
+      expect(screen.getByRole('alert')).toHaveTextContent('mensagem error');
+
+      const close = screen.getByRole('button', { name: /fechar notificação/i });
+      fireEvent.click(close);
+      expect(screen.getByRole('alert')).not.toHaveTextContent('mensagem error');
+    });
+
+    it('toast de sucesso continua se dispensando sozinho após o tempo padrão', () => {
+      vi.useFakeTimers();
+      render(
+        <ToastProvider>
+          <Trigger type="success" />
+        </ToastProvider>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'disparar' }));
+      expect(screen.getByRole('status')).toHaveTextContent('mensagem success');
+
+      act(() => {
+        vi.advanceTimersByTime(4000);
+      });
+      expect(screen.getByRole('status')).not.toHaveTextContent('mensagem success');
+    });
   });
 });

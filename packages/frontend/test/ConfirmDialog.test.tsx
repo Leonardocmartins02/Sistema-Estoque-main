@@ -25,6 +25,24 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
   });
 
+  it('não repete uma frase genérica no corpo (M-14)', async () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Excluir produto Caneta?"
+        description="Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    await screen.findByRole('dialog');
+    expect(
+      screen.queryByText('Confirme para continuar. Esta ação afeta os dados do estoque.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('chama onConfirm ao confirmar e onCancel ao cancelar', async () => {
     const onConfirm = vi.fn();
     const onCancel = vi.fn();
