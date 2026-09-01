@@ -19,7 +19,7 @@ const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
   return (
     <div
-      className={`pointer-events-auto flex items-start gap-2 rounded-lg border p-3 shadow-sm ring-1 ring-black/5 transition ${
+      className={`pointer-events-auto flex items-start gap-2 rounded-surface border p-3 shadow-overlay ring-1 ring-black/5 transition ${
         toast.type === 'success'
           ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
           : toast.type === 'error'
@@ -34,7 +34,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
       <button
         type="button"
         aria-label={`Fechar notificação: ${toast.message}`}
-        className="rounded-md px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+        className="rounded-md px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         onClick={() => onDismiss(toast.id)}
       >
         Fechar
