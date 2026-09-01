@@ -57,7 +57,7 @@ function Harness() {
       <MovementFormModal
         open={open}
         onOpenChange={setOpen}
-        productId="p1"
+        product={{ id: 'p1', name: 'Caneta Azul', sku: 'CAN-001', balance: 20, minStock: 5 }}
         onSuccess={() => setSuccessCount((n) => n + 1)}
       />
       <p data-testid="success-count">{successCount}</p>
@@ -84,8 +84,17 @@ async function openModal() {
   return user;
 }
 
-function typeSelect(): HTMLSelectElement {
-  return screen.getByLabelText(/^Tipo/i) as HTMLSelectElement;
+/**
+ * Task 17: o `<select>` de tipo virou um `radiogroup` sem opção
+ * pré-selecionada (REV-08). O CONTRATO de MFM-1..MFM-6 é o mesmo — muda apenas
+ * COMO a intenção é declarada, e o primário passa a nomear a consequência.
+ */
+function intentRadio(type: 'IN' | 'OUT'): HTMLInputElement {
+  return screen.getByRole('radio', { name: type === 'IN' ? 'Entrada' : 'Saída' }) as HTMLInputElement;
+}
+
+function submitButton(): HTMLButtonElement {
+  return screen.getByRole('button', { name: /^Registrar (entrada|saída)|^Registrando/i }) as HTMLButtonElement;
 }
 
 function quantityField(): HTMLInputElement {
@@ -100,14 +109,14 @@ async function fillAndSubmit(
   user: ReturnType<typeof userEvent.setup>,
   { type, quantity, note }: { type: 'IN' | 'OUT'; quantity: string; note?: string },
 ) {
-  await user.selectOptions(typeSelect(), type);
+  await user.click(intentRadio(type));
   await user.clear(quantityField());
   await user.type(quantityField(), quantity);
   if (note !== undefined) {
     await user.clear(noteField());
     await user.type(noteField(), note);
   }
-  await user.click(screen.getByRole('button', { name: 'Lançar' }));
+  await user.click(submitButton());
 }
 
 describe('MovementFormModal — payload de submissão (MFM-1)', () => {
@@ -160,11 +169,11 @@ describe('MovementFormModal — falha do servidor (MFM-2, MFM-3)', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(quantityField()).toHaveValue(9);
     expect(noteField()).toHaveValue('Baixa manual');
-    expect(typeSelect()).toHaveValue('OUT');
+    expect(intentRadio('OUT')).toBeChecked();
 
     // Tentar de novo: a mesma submissão, desta vez aceita pela API.
     mockedCreateMovement.mockResolvedValueOnce(makeMovement({ type: 'OUT', quantity: 9 }));
-    await user.click(screen.getByRole('button', { name: 'Lançar' }));
+    await user.click(submitButton());
 
     await waitFor(() => expect(mockedCreateMovement).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -194,9 +203,11 @@ describe('MovementFormModal — submissão duplicada (MFM-4)', () => {
     );
 
     const user = await openModal();
+    // Task 17: a intenção precisa ser declarada antes de existir submissão.
+    await user.click(intentRadio('IN'));
     await user.clear(quantityField());
     await user.type(quantityField(), '4');
-    await user.click(screen.getByRole('button', { name: 'Lançar' }));
+    await user.click(submitButton());
 
     await waitFor(() => expect(mockedCreateMovement).toHaveBeenCalledTimes(1));
 
@@ -205,10 +216,10 @@ describe('MovementFormModal — submissão duplicada (MFM-4)', () => {
     // proteção contra segunda submissão vem do guard do próprio `Button`,
     // não da remoção de foco. Uma segunda tentativa de clique nele não deve
     // gerar uma segunda chamada à API.
-    const submitButton = screen.getByRole('button', { name: /Lançando\.\.\.|Lançar/i });
-    expect(submitButton).not.toBeDisabled();
-    expect(submitButton).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(submitButton);
+    const submit = submitButton();
+    expect(submit).not.toBeDisabled();
+    expect(submit).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(submit);
 
     expect(mockedCreateMovement).toHaveBeenCalledTimes(1);
 
@@ -231,8 +242,13 @@ describe('MovementFormModal — sucesso (MFM-5)', () => {
     await waitFor(() => expect(mockedCreateMovement).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByTestId('success-count')).toHaveTextContent('1'));
-    await waitFor(() =>
-      expect(screen.getAllByText('Movimentação lançada com sucesso.').length).toBeGreaterThan(0),
+    // Task 17: o anúncio continua existindo — mas passou a declarar direção e
+    // quantidade (e o novo saldo, quando o backend o devolve) em vez da frase
+    // genérica "Movimentação lançada com sucesso.". O contrato de MFM-5 é
+    // "anuncia o resultado", não o texto exato.
+    await waitFor(() => expect(screen.getAllByRole('status').length).toBeGreaterThan(0));
+    expect(screen.getAllByRole('status').some((el) => /Entrada de 5 un\./i.test(el.textContent ?? ''))).toBe(
+      true,
     );
   });
 });

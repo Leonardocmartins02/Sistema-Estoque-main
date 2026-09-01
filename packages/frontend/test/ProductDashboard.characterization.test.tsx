@@ -293,11 +293,18 @@ describe('ProductDashboard — cada ação age sobre AQUELE produto (PD-2, REV-0
 
     const table = document.querySelector('[data-surface="table"]') as HTMLElement;
     await user.click(within(table).getAllByRole('button', { name: 'Movimentar' })[1]);
-    await screen.findByRole('dialog', { name: /Movimentar Estoque/i });
+    const dialog = await screen.findByRole('dialog', { name: /Movimentar Estoque/i });
 
-    await user.clear(screen.getByLabelText(/Quantidade/i));
-    await user.type(screen.getByLabelText(/Quantidade/i), '3');
-    await user.click(screen.getByRole('button', { name: 'Lançar' }));
+    // Task 17: o diálogo passou a mostrar o contexto do produto, então a
+    // identidade agora é visível — não só inferível pela chamada de API.
+    expect(within(dialog).getByText('Borracha Branca')).toBeInTheDocument();
+    expect(within(dialog).getByText(/BOR-002/)).toBeInTheDocument();
+
+    // A intenção precisa ser declarada antes da quantidade (D2/P-4).
+    await user.click(within(dialog).getByRole('radio', { name: 'Entrada' }));
+    await user.clear(screen.getByLabelText(/^Quantidade/i));
+    await user.type(screen.getByLabelText(/^Quantidade/i), '3');
+    await user.click(screen.getByRole('button', { name: /^Registrar entrada/i }));
 
     await waitFor(() => expect(vi.mocked(createMovement)).toHaveBeenCalled());
     expect(vi.mocked(createMovement).mock.calls.at(-1)?.[0]).toBe('p2');

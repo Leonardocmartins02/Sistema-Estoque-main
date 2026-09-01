@@ -48,7 +48,9 @@ export function ProductDashboard() {
 
   const [openCreate, setOpenCreate] = useState(false);
   const [editing, setEditing] = useState<ProductWithBalance | null>(null);
-  const [movingProductId, setMovingProductId] = useState<string | null>(null);
+  // Task 17: o diálogo de movimentação precisa do produto INTEIRO (nome, SKU,
+  // saldo e mínimo) para dar contexto e calcular o preview — não só do id.
+  const [movingProduct, setMovingProduct] = useState<ProductWithBalance | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
   const [quickOutProduct, setQuickOutProduct] = useState<ProductWithBalance | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<ProductWithBalance | null>(null);
@@ -91,7 +93,7 @@ export function ProductDashboard() {
 
   const actions: ProductActions = useMemo(
     () => ({
-      onMove: (p) => setMovingProductId(p.id),
+      onMove: (p) => setMovingProduct(p),
       onQuickOut: (p) => setQuickOutProduct(p),
       onEdit: (p) => setEditing(p),
       onHistory: (p) => setHistoryProductId(p.id),
@@ -379,14 +381,22 @@ export function ProductDashboard() {
         }}
       />
 
-      <MovementFormModal
-        open={movingProductId !== null}
-        onOpenChange={(v) => {
-          if (!v) setMovingProductId(null);
-        }}
-        productId={movingProductId ?? ''}
-        onSuccess={invalidateProducts}
-      />
+      {movingProduct && (
+        <MovementFormModal
+          open
+          onOpenChange={(v) => {
+            if (!v) setMovingProduct(null);
+          }}
+          product={{
+            id: movingProduct.id,
+            name: movingProduct.name,
+            sku: movingProduct.sku,
+            balance: movingProduct.balance,
+            minStock: movingProduct.minStock,
+          }}
+          onSuccess={invalidateProducts}
+        />
+      )}
 
       <MovementHistoryModal
         open={historyProductId !== null}

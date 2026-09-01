@@ -1,13 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { createMovement } from '../api/movements';
+import { formatBalanceTransition, formatDelta, formatQuantity } from '../lib/formatNumber';
 
-import Button from './ui/Button';
-import Modal from './ui/Modal';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Modal } from './ui/Modal';
 import { useToast } from './ui/ToastProvider';
 
 export const movementSchema = z.object({
@@ -28,42 +30,103 @@ export const movementSchema = z.object({
 
 export type MovementFormValues = z.infer<typeof movementSchema>;
 
+export type MovementProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  balance: number;
+  minStock: number;
+};
+
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  productId: string;
+  /**
+   * O produto **inteiro**, não só o id (Task 17): sem nome, SKU e saldo o
+   * diálogo não conseguia dar contexto nem calcular o preview.
+   */
+  product: MovementProduct;
   onSuccess?: () => void;
 };
 
-export function MovementFormModal({ open, onOpenChange, productId, onSuccess }: Props) {
+/** Rótulos sem parêntese técnico (UF-20): "Entrada (IN)" virou "Entrada". */
+const INTENTS = [
+  { value: 'IN' as const, label: 'Entrada' },
+  { value: 'OUT' as const, label: 'Saída' },
+];
+
+/**
+ * Diálogo de movimentação com **gramática de operação** (D1/D2, UF-20/UF-21).
+ *
+ * O risco que esta tela carrega é o maior do sistema: uma ENTRADA lançada no
+ * lugar de uma SAÍDA não é detectada por nada e é permanente. Antes, o tipo era
+ * um `<select>` já posicionado em `IN` — bastava um clique distraído.
+ *
+ * Por isso: **nenhuma intenção vem pré-selecionada**, e os campos dependentes
+ * ficam **funcionalmente** inertes (não apenas apagados) até a escolha.
+ * O controle é um `radiogroup` de rádios nativos — que entregam navegação por
+ * setas, ponto único de tabulação e estado `checked` de graça (achado REV-08);
+ * botões soltos perderiam tudo isso.
+ */
+export function MovementFormModal({ open, onOpenChange, product, onSuccess }: Props) {
   const [serverError, setServerError] = useState<string | null>(null);
   const { show: showToast } = useToast();
+  const groupLabelId = useId();
+  const quantityId = useId();
+  const dateId = useId();
+  const noteId = useId();
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
     reset,
   } = useForm<MovementFormValues>({
     resolver: zodResolver(movementSchema),
-    defaultValues: { type: 'IN', quantity: 1, date: '', note: '' },
+    // Sem `type`: a intenção é declarada, nunca herdada.
+    defaultValues: { quantity: 1, date: '', note: '' },
   });
+
+  const type = watch('type');
+  const quantity = Number(watch('quantity'));
+  const hasIntent = type === 'IN' || type === 'OUT';
+  const validQuantity = Number.isFinite(quantity) && quantity > 0;
+
+  const delta = hasIntent && validQuantity ? (type === 'IN' ? quantity : -quantity) : 0;
+  const nextBalance = product.balance + delta;
+  // O bloqueio de saída acima do saldo é da Task 18 (D-F). Aqui o preview
+  // apenas não pode apresentar saldo negativo como futuro plausível.
+  const insufficient = hasIntent && type === 'OUT' && validQuantity && nextBalance < 0;
+
+  const intentLabel = type === 'IN' ? 'entrada' : 'saída';
 
   const mutation = useMutation({
     mutationFn: (values: MovementFormValues) =>
-      createMovement(productId, {
+      createMovement(product.id, {
         type: values.type,
         quantity: values.quantity,
         // `datetime-local` é hora local; `toISOString()` normaliza para UTC.
         date: values.date ? new Date(values.date).toISOString() : undefined,
         note: values.note || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (movement, values) => {
+      const direction = values.type === 'IN' ? 'Entrada' : 'Saída';
+      // O saldo anunciado vem da RESPOSTA do backend. Calcular sobre o snapshot
+      // da listagem (`staleTime` 15s) anunciaria um número que pode já estar
+      // errado. Sem `newQuantity`, o toast declara quantidade e direção e
+      // **omite** o saldo em vez de inventá-lo.
+      const newQuantity = movement?.newQuantity;
+      const message =
+        newQuantity == null
+          ? `${direction} de ${formatQuantity(values.quantity)} un. registrada.`
+          : `${direction} de ${formatQuantity(values.quantity)} un. registrada. Novo saldo: ${formatQuantity(newQuantity)} un.`;
+
       reset();
       setServerError(null);
       onOpenChange(false);
       onSuccess?.();
-      showToast({ type: 'success', message: 'Movimentação lançada com sucesso.' });
+      showToast({ type: 'success', message });
     },
     onError: (error: unknown) => {
       const message = error instanceof Error && error.message ? error.message : 'Falha ao lançar movimentação';
@@ -76,90 +139,114 @@ export function MovementFormModal({ open, onOpenChange, productId, onSuccess }: 
     <Modal
       open={open}
       onClose={() => onOpenChange(false)}
-      title="Movimentar Estoque"
-      description="Lance uma entrada (IN) ou saída (OUT) para este produto."
+      // Antes da escolha o título não pode afirmar intenção nenhuma; depois
+      // dela, afirma (design-system.md §12: o título nomeia o objeto).
+      title={hasIntent ? `Registrar ${intentLabel} · ${product.name}` : 'Movimentar Estoque'}
+      description="Declare a intenção para liberar os demais campos."
     >
       <form
         onSubmit={handleSubmit((values) => {
           setServerError(null);
           mutation.mutate(values);
         })}
-        className="space-y-3"
+        className="space-y-4"
       >
-        <div>
-          <label htmlFor="movement-type" className="block text-sm font-medium text-gray-700">
-            Tipo*
-          </label>
-          <select
-            id="movement-type"
-            aria-invalid={!!errors.type}
-            aria-describedby={errors.type ? 'movement-type-error' : undefined}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-            {...register('type')}
-          >
-            <option value="IN">Entrada (IN)</option>
-            <option value="OUT">Saída (OUT)</option>
-          </select>
+        {/* Contexto: o diálogo sequer sabia o nome do produto (UF-20). */}
+        <div className="rounded-surface border bg-surface-subtle px-3 py-2">
+          <div className="text-sm font-medium text-gray-900">{product.name}</div>
+          <div className="text-xs text-gray-600">SKU: {product.sku}</div>
+          <div className="mt-1 text-sm tabular-nums text-gray-900">
+            {formatQuantity(product.balance)} <span className="font-normal text-gray-600">un.</span>{' '}
+            <span className="text-xs text-gray-600">mín. {formatQuantity(product.minStock)}</span>
+          </div>
+        </div>
+
+        <fieldset role="radiogroup" aria-labelledby={groupLabelId}>
+          <legend id={groupLabelId} className="text-sm font-medium text-gray-700">
+            Intenção*
+          </legend>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {INTENTS.map((intent) => (
+              // O nome acessível é exatamente "Entrada"/"Saída" — sem o
+              // parêntese técnico de antes (UF-20) e sem texto auxiliar
+              // dentro do rótulo, que entraria no nome do controle.
+              <label
+                key={intent.value}
+                className="flex h-11 cursor-pointer items-center gap-2 rounded-control border border-border-strong px-3 has-[:checked]:border-accent has-[:checked]:bg-accent-subtle"
+              >
+                <input
+                  type="radio"
+                  value={intent.value}
+                  className="h-4 w-4 text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                  {...register('type')}
+                />
+                <span className="text-sm text-gray-900">{intent.label}</span>
+              </label>
+            ))}
+          </div>
           {errors.type && (
-            <p id="movement-type-error" className="mt-1 text-xs text-red-700" role="alert">
+            <p className="mt-1 text-xs text-danger" role="alert">
               {errors.type.message}
             </p>
           )}
-        </div>
+        </fieldset>
+
+        {/* Inércia FUNCIONAL: `disabled` de verdade, não opacidade (D2-B). */}
+        <Input
+          id={quantityId}
+          label="Quantidade*"
+          type="number"
+          min={1}
+          disabled={!hasIntent}
+          error={errors.quantity?.message}
+          {...register('quantity')}
+        />
+
+        {hasIntent && validQuantity && (
+          <div
+            data-testid="movement-preview"
+            className={`rounded-surface border px-3 py-2 text-sm tabular-nums ${
+              insufficient ? 'border-danger bg-danger-subtle text-danger' : 'bg-surface-subtle text-gray-900'
+            }`}
+          >
+            {insufficient ? (
+              <>
+                <span className="font-medium">Saldo insuficiente.</span> A saída de{' '}
+                {formatQuantity(quantity)} un. excede o saldo de {formatQuantity(product.balance)} un.
+              </>
+            ) : (
+              <>
+                {formatBalanceTransition(product.balance, nextBalance)} un.{' '}
+                <span className="text-gray-600">({formatDelta(delta)})</span>
+              </>
+            )}
+          </div>
+        )}
+
+        <Input
+          id={dateId}
+          label="Data (opcional)"
+          type="datetime-local"
+          disabled={!hasIntent}
+          error={errors.date?.message}
+          {...register('date')}
+        />
 
         <div>
-          <label htmlFor="movement-quantity" className="block text-sm font-medium text-gray-700">
-            Quantidade*
-          </label>
-          <input
-            id="movement-quantity"
-            type="number"
-            min={1}
-            aria-invalid={!!errors.quantity}
-            aria-describedby={errors.quantity ? 'movement-quantity-error' : undefined}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-            {...register('quantity')}
-          />
-          {errors.quantity && (
-            <p id="movement-quantity-error" className="mt-1 text-xs text-red-700" role="alert">
-              {errors.quantity.message}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label htmlFor="movement-date" className="block text-sm font-medium text-gray-700">
-            Data (opcional)
-          </label>
-          <input
-            id="movement-date"
-            type="datetime-local"
-            aria-invalid={!!errors.date}
-            aria-describedby={errors.date ? 'movement-date-error' : undefined}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-            {...register('date')}
-          />
-          {errors.date && (
-            <p id="movement-date-error" className="mt-1 text-xs text-red-700" role="alert">
-              {errors.date.message}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label htmlFor="movement-note" className="block text-sm font-medium text-gray-700">
+          <label htmlFor={noteId} className="block text-sm font-medium text-gray-700">
             Observação (opcional)
           </label>
           <textarea
-            id="movement-note"
+            id={noteId}
             rows={3}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
+            disabled={!hasIntent}
+            className="mt-1 w-full rounded-control border border-border-strong p-2 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:text-text-muted"
             {...register('note')}
           />
         </div>
 
         {serverError && (
-          <p className="text-sm text-red-700" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {serverError}
           </p>
         )}
@@ -168,9 +255,15 @@ export function MovementFormModal({ open, onOpenChange, productId, onSuccess }: 
           <Button type="button" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary" isLoading={mutation.isPending}>
-            {mutation.isPending ? 'Lançando...' : 'Lançar'}
-          </Button>
+          {/* Sem intenção não existe caminho de submissão — o primário só
+              aparece quando há uma consequência para nomear. */}
+          {hasIntent && (
+            <Button type="submit" variant="primary" isLoading={mutation.isPending}>
+              {mutation.isPending
+                ? 'Registrando...'
+                : `Registrar ${intentLabel}${validQuantity ? ` de ${formatQuantity(quantity)} un.` : ''}`}
+            </Button>
+          )}
         </div>
       </form>
     </Modal>
