@@ -49,9 +49,12 @@ export function ProductCardList({ items, isLoading, error, actions }: Props) {
                 <div className="text-right">
                   <div className="text-sm font-semibold text-gray-900">Saldo: {p.balance}</div>
                   <div className="mt-1">
-                    {status === 'OK' && <Badge variant="success">Em Estoque</Badge>}
-                    {status === 'ATTN' && <Badge variant="warning">Estoque Baixo</Badge>}
-                    {status === 'OUT' && <Badge variant="danger">Fora de Estoque</Badge>}
+                    {/* Vocabulário único (Task 14): as mesmas três palavras da
+                        tabela e do filtro. Só o texto muda aqui — layout, ações
+                        e composição do card são da Task 15. */}
+                    {status === 'OK' && <Badge variant="success">Em estoque</Badge>}
+                    {status === 'ATTN' && <Badge variant="warning">Estoque baixo</Badge>}
+                    {status === 'OUT' && <Badge variant="danger">Sem estoque</Badge>}
                   </div>
                 </div>
               </div>

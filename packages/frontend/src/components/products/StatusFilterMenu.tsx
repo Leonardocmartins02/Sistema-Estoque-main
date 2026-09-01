@@ -1,7 +1,7 @@
 import { Check, ChevronDown } from 'lucide-react';
 
 import type { StatusKey } from '../../hooks/useProductsQuery';
-import Badge from '../ui/Badge';
+import { Badge } from '../ui/Badge';
 import MenuPopover, { MenuItem, MenuItemCheckbox } from '../ui/MenuPopover';
 
 // Vocabulário único (Task 14): as mesmas três palavras da tabela e do card —

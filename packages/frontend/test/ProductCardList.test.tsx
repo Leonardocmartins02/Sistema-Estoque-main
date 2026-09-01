@@ -40,22 +40,23 @@ describe('ProductCardList — dados do card (PCL-1, PCL-2)', () => {
     expect(screen.getByText('Caneta Azul')).toBeInTheDocument();
     expect(screen.getByText(/CAN-001/)).toBeInTheDocument();
     expect(screen.getByText(/20/)).toBeInTheDocument();
-    expect(screen.getByText('Em Estoque')).toBeInTheDocument();
+    expect(screen.getByText('Em estoque')).toBeInTheDocument();
   });
 
   it('PCL-2 · o status do card usa o mesmo vocabulário da tabela', () => {
     // Um caso representativo basta: os três ramos da regra já estão em PS-1.
     // O que se protege aqui é desktop e mobile não divergirem — divergir seria
-    // pior que a ausência.
+    // pior que a ausência. Vocabulário unificado na Task 14 ("Em estoque /
+    // Estoque baixo / Sem estoque"), igual em tabela, card e filtro.
     renderCards([makeProduct({ balance: 2, minStock: 5 })]);
 
-    expect(screen.getByText('Estoque Baixo')).toBeInTheDocument();
+    expect(screen.getByText('Estoque baixo')).toBeInTheDocument();
   });
 
-  it('PCL-2 · saldo zero é comunicado como fora de estoque', () => {
+  it('PCL-2 · saldo zero é comunicado como sem estoque', () => {
     renderCards([makeProduct({ balance: 0, minStock: 5 })]);
 
-    expect(screen.getByText('Fora de Estoque')).toBeInTheDocument();
+    expect(screen.getByText('Sem estoque')).toBeInTheDocument();
   });
 });
 
