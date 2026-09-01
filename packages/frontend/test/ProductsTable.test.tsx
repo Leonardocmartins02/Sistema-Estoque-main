@@ -210,6 +210,22 @@ describe('ProductsTable — ações da linha (PT-7)', () => {
 
     expect(actions.onQuickOut).toHaveBeenCalledWith(product);
   });
+
+  /**
+   * Decisão de superfície da Task 15: a baixa rápida no overflow existe apenas
+   * na lista de cards. No desktop ela já é o atalho neutro da própria linha —
+   * repeti-la no menu seria duplicar a mesma ação em dois lugares.
+   */
+  it('PT-7 · o menu de overflow do desktop NÃO repete a baixa rápida', async () => {
+    const user = userEvent.setup();
+    const product = makeProduct({ id: 'p1', name: 'Caneta Azul' });
+    renderTable([product]);
+
+    await user.click(screen.getByRole('button', { name: `Mais ações para ${product.name}` }));
+    await screen.findByRole('menu');
+
+    expect(screen.queryByRole('menuitem', { name: /Baixa rápida/i })).not.toBeInTheDocument();
+  });
 });
 
 /**

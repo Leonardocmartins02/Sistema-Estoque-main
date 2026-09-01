@@ -236,7 +236,19 @@ export function ProductsTable({
           >
             <ArrowDownToLine className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <ProductActionsMenu product={p} actions={actions} />
+          {/* Decisão de superfície (Task 15): sem `onQuickOut` aqui. No desktop
+              a baixa rápida já é o atalho neutro ao lado — repeti-la no
+              overflow duplicaria a mesma ação em dois lugares. */}
+          <ProductActionsMenu
+            product={p}
+            actions={{
+              onEdit: actions.onEdit,
+              onHistory: actions.onHistory,
+              onAdjust: actions.onAdjust,
+              onZeroBalance: actions.onZeroBalance,
+              onDelete: actions.onDelete,
+            }}
+          />
         </div>
       ),
     },

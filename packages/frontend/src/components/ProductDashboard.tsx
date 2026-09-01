@@ -252,7 +252,18 @@ export function ProductDashboard() {
 
       {/* Cards (mobile) */}
       <div className="mt-4 md:hidden">
-        <ProductCardList items={viewItems} isLoading={query.isLoading} error={errorMessage} actions={actions} />
+        <ProductCardList
+          items={viewItems}
+          isLoading={query.isLoading}
+          error={errorMessage}
+          hasActiveFilters={products.search.trim() !== '' || products.statusFilter.length > 0}
+          onClearFilters={() => {
+            products.setSearch('');
+            products.clearStatus();
+          }}
+          onCreateProduct={() => setOpenCreate(true)}
+          actions={actions}
+        />
       </div>
 
       {/* Diálogos — uma instância de cada (antes MovementFormModal e

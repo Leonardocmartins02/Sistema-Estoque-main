@@ -87,6 +87,48 @@ describe('ProductActionsMenu', () => {
  * ligação que a migração visual quebra em silêncio, porque o menu continua
  * abrindo e os itens continuam na tela — só deixam de fazer efeito.
  */
+/**
+ * Task 15 — decisão de superfície declarada: a baixa rápida no menu existe
+ * apenas onde a ação é passada (cards). No desktop ela duplicaria o atalho da
+ * própria linha, então o menu recebe `onQuickOut` como OPCIONAL.
+ */
+describe('ProductActionsMenu — baixa rápida opcional (P-1)', () => {
+  it('sem onQuickOut, o menu não renderiza o item de baixa rápida', async () => {
+    const product = makeProduct();
+    render(<ProductActionsMenu product={product} actions={makeActions()} />);
+    await openMenu(product);
+
+    expect(screen.queryByRole('menuitem', { name: /Baixa rápida/i })).not.toBeInTheDocument();
+  });
+
+  it('com onQuickOut, o item existe e dispara a ação com o produto', async () => {
+    const product = makeProduct();
+    const actions = { ...makeActions(), onQuickOut: vi.fn() };
+    render(<ProductActionsMenu product={product} actions={actions} />);
+    const user = await openMenu(product);
+
+    await user.click(screen.getByRole('menuitem', { name: /Baixa rápida/i }));
+
+    expect(actions.onQuickOut).toHaveBeenCalledWith(product);
+  });
+
+  it('a baixa rápida fica ANTES do separador destrutivo — é atalho, não ação destrutiva', async () => {
+    const product = makeProduct();
+    const actions = { ...makeActions(), onQuickOut: vi.fn() };
+    render(<ProductActionsMenu product={product} actions={actions} />);
+    await openMenu(product);
+
+    const menu = await screen.findByRole('menu');
+    const children = [...menu.children];
+    const separatorIndex = children.findIndex((c) => c.getAttribute('role') === 'separator');
+    const quickOutIndex = children.findIndex((c) => /Baixa rápida/i.test(c.textContent ?? ''));
+
+    expect(separatorIndex).toBeGreaterThan(-1);
+    expect(quickOutIndex).toBeGreaterThan(-1);
+    expect(quickOutIndex).toBeLessThan(separatorIndex);
+  });
+});
+
 describe('ProductActionsMenu — fiação das demais ações (PAM-1)', () => {
   const cases = [
     { label: 'Editar', callback: 'onEdit' },

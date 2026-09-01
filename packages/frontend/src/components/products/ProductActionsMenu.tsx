@@ -7,7 +7,13 @@ import type { ProductActions } from './types';
 
 type Props = {
   product: ProductWithBalance;
-  actions: Pick<ProductActions, 'onEdit' | 'onHistory' | 'onAdjust' | 'onZeroBalance' | 'onDelete'>;
+  /**
+   * `onQuickOut` é OPCIONAL por decisão de superfície (Task 15, P-1): o item
+   * de baixa rápida só aparece onde a ação é passada — na lista de cards. No
+   * desktop ele duplicaria o atalho que já existe na própria linha.
+   */
+  actions: Pick<ProductActions, 'onEdit' | 'onHistory' | 'onAdjust' | 'onZeroBalance' | 'onDelete'> &
+    Partial<Pick<ProductActions, 'onQuickOut'>>;
 };
 
 /**
@@ -23,7 +29,10 @@ export function ProductActionsMenu({ product, actions }: Props) {
     <MenuPopover
       triggerLabel={`Mais ações para ${product.name}`}
       triggerContent={<MoreHorizontal className="h-4 w-4" aria-hidden="true" />}
-      triggerClassName="inline-flex items-center rounded-md border bg-white p-1.5 text-gray-600 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+      // Alvo de toque de 44×44 no mobile (design-system.md §15.2 regra 4); a
+      // partir de `md` — onde só a tabela é renderizada — volta à densidade da
+      // região de dados (D5). Mesmo componente, duas superfícies.
+      triggerClassName="inline-flex h-11 w-11 items-center justify-center rounded-md border bg-white text-gray-600 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:h-auto md:w-auto md:p-1.5"
       menuLabel={`Ações para ${product.name}`}
       width={192}
     >
@@ -32,6 +41,11 @@ export function ProductActionsMenu({ product, actions }: Props) {
           <MenuItem onSelect={() => actions.onEdit(product)}>Editar</MenuItem>
           <MenuItem onSelect={() => actions.onHistory(product)}>Ver Histórico</MenuItem>
           <MenuItem onSelect={() => actions.onAdjust(product)}>Ajustar Estoque</MenuItem>
+          {/* P-1: baixa rápida vive no overflow no mobile. Fica ANTES do
+              separador porque é atalho de operação, não ação destrutiva. */}
+          {actions.onQuickOut && (
+            <MenuItem onSelect={() => actions.onQuickOut?.(product)}>Baixa rápida</MenuItem>
+          )}
           {/* UF-16: bloco destrutivo separado — "Zerar Estoque" e "Excluir"
               não ficam à mesma distância do cursor que as ações banais. */}
           <MenuSeparator />

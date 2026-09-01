@@ -20,18 +20,55 @@ import { makeSpyActions } from './helpers/render';
  * (§15.1 do Design System) será verificada na Fase 8.
  */
 
-function renderCards(items: ProductWithBalance[], overrides: { isLoading?: boolean; error?: string | null } = {}) {
+function renderCards(
+  items: ProductWithBalance[],
+  overrides: {
+    isLoading?: boolean;
+    error?: string | null;
+    hasActiveFilters?: boolean;
+    onClearFilters?: () => void;
+    onCreateProduct?: () => void;
+  } = {},
+) {
   const actions = makeSpyActions();
   render(
     <ProductCardList
       items={items}
       isLoading={overrides.isLoading ?? false}
       error={overrides.error ?? null}
+      hasActiveFilters={overrides.hasActiveFilters ?? false}
+      onClearFilters={overrides.onClearFilters ?? (() => {})}
+      onCreateProduct={overrides.onCreateProduct ?? (() => {})}
       actions={actions}
     />,
   );
   return { actions };
 }
+
+/**
+ * Novos contratos da Task 15 — paridade de capacidades no mobile.
+ */
+describe('ProductCardList — paridade de capacidades (C-5, UF-23)', () => {
+  it('a baixa rápida é alcançável a partir do card e dispara onQuickOut com o produto', async () => {
+    const user = userEvent.setup();
+    const product = makeProduct({ id: 'p1', name: 'Caneta Azul' });
+    const { actions } = renderCards([product]);
+
+    // Afirma que a capacidade EXISTE e é alcançável — não onde ela vive.
+    // Hoje o plano a coloca no overflow (P-1), mas o contrato é a capacidade.
+    await user.click(screen.getByRole('button', { name: `Mais ações para ${product.name}` }));
+    await user.click(await screen.findByRole('menuitem', { name: /Baixa rápida/i }));
+
+    expect(actions.onQuickOut).toHaveBeenCalledWith(product);
+  });
+
+  it('o estoque mínimo é legível no card, ao lado do saldo', () => {
+    renderCards([makeProduct({ balance: 18, minStock: 10 })]);
+
+    expect(screen.getByText(/18/)).toBeInTheDocument();
+    expect(screen.getByText(/mín\.\s*10/i)).toBeInTheDocument();
+  });
+});
 
 describe('ProductCardList — dados do card (PCL-1, PCL-2)', () => {
   it('PCL-1 · expõe nome, SKU, saldo e status de cada produto', () => {
