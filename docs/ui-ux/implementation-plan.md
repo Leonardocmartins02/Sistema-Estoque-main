@@ -938,15 +938,43 @@ Tasks 2, 3, 5, 7, 11 e 12.
 - Vocabulário: "Em estoque" / "Estoque baixo" / "Sem estoque".
 - Estados vazios distintos: "nada cadastrado" × "filtro sem resultado", cada um com sua ação.
 - Aplicar o helper da Task 2 a saldo e mínimo.
+- **Ordenação da coluna "Produto":** ver a decisão **T13-SD1** abaixo.
+
+#### Decisão T13-SD1 — coluna "Produto" e `aria-sort`
+
+Fundir o SKU sob o nome elimina o `<th>` que hoje ordena por SKU (REV-16). O `DataTable` amarra `aria-sort` a **uma** chave por coluna, então uma coluna "Produto" com `key: 'name'` deixaria a tabela **sem nenhum** `aria-sort` ao ordenar por SKU — contradizendo §13.3 e PT-3. Esta decisão fecha o ponto.
+
+1. Depois da fusão existe **uma** coluna visual e semântica: **"Produto"**.
+2. Essa coluna representa **dois critérios ordenáveis**: `name` e `sku`.
+3. O `DataTable` passa a aceitar aliases de ordenação por coluna, por uma capacidade **aditiva**:
+
+   ```ts
+   sortKeys?: string[]
+   ```
+
+4. **Compatibilidade:** quando `sortKeys` não é informado, vale `sortKeys = [String(column.key)]`. **Nenhuma coluna existente muda de comportamento.**
+5. `ProductsTable` declara na coluna "Produto": `sortKeys: ['name', 'sku']`.
+6. O `<th>` de "Produto" recebe `aria-sort` quando o sort primário for **`name` OU `sku`**.
+7. Continua existindo **exatamente um** `aria-sort` na tabela: o contrato de ordenação primária única da Task 3 permanece intacto.
+8. Dentro do cabeçalho "Produto" existem **dois controles separados e acessivelmente nomeados**: "Ordenar por Nome" e "Ordenar por SKU".
+9. O controle do critério **ativo** fornece contexto acessível suficiente para identificar também a **direção** atual — o nome acessível do botão precisa cobrir **critério + direção** (ex.: "Ordenar por SKU (ordenado crescente)"), já que o `aria-sort` do `<th>` anuncia só "Produto, crescente" e não distingue o subcritério. `aria-sort` continua pertencendo ao `columnheader`, **não** aos botões.
+10. **Proibido:** manter coluna SKU escondida; criar `<th>` invisível; tornar `column.key` dinâmico; remover `aria-sort` quando a ordenação for SKU; transformar a `table` em `grid`; criar seleção ou estado novo.
+
+**Escopo da API.** A alteração em `DataTable.tsx` está autorizada **somente** para suportar `sortKeys`. Nenhuma outra API nova do primitivo é autorizada por esta decisão — em particular **não** criar agora `selectedIds`, `selectedRow`, context, reducer, nova abstração de ordenação, multi-sort ou semântica de `grid`.
+
+**PT-3.** Permanece contrato **PRESERVAR**, mas a **implementação do teste pode ser adaptada**, porque a Task 13 ALTERA INTENCIONALMENTE a estrutura de colunas. O contrato preservado é: ao ordenar por SKU, a coluna "Produto" (que contém nome + SKU) anuncia `aria-sort`; **somente** ela anuncia; e o controle "Ordenar por SKU" continua acessivelmente identificável. **Não** é requisito preservar um `<th>` independente chamado "SKU" — essa estrutura é exatamente o que a Task 13 remove. Não desenhar produção apenas para manter o seletor antigo do teste.
+
+**Saldo.** O cabeçalho continua **"Saldo Atual"**. A task aproxima saldo + mínimo **dentro da célula**, e **não** exige renomear o cabeçalho. PT-4 permanece sem alteração conceitual.
 
 #### Comportamentos PRESERVAR
-- PT-1 (nome, SKU e saldo legíveis), PT-2 (três status traduzidos), PT-3 (`aria-sort` na primária), PT-4 (troca de ordenação), PT-5 (checkbox com nome acessível por linha), PT-6 (**a capacidade** de revelar/recolher a descrição — não a via), PT-7 (Movimentar e baixa rápida com nome acessível), PT-8 (estado vazio renderizado) — `ProductsTable.test.tsx`.
+- PT-1 (nome, SKU e saldo legíveis), PT-2 (três status traduzidos), PT-3 (`aria-sort` na primária — **conforme T13-SD1**), PT-4 (troca de ordenação), PT-5 (checkbox com nome acessível por linha), PT-6 (**a capacidade** de revelar/recolher a descrição — não a via), PT-7 (Movimentar e baixa rápida com nome acessível), PT-8 (estado vazio renderizado) — `ProductsTable.test.tsx`.
 - PS-1: a regra de status permanece em `products/types.ts` — `productStatus.test.ts` (6 testes, incluindo o limite `0/0 → OUT`).
 
 #### Comportamentos ALTERAR INTENCIONALMENTE
 - Texto exato do estado vazio (A-10) — PT-8 afirma que **existe** estado vazio, não a frase.
 - Cor destrutiva do atalho de baixa rápida (A-1).
 - Fusão do SKU sob o nome e o par saldo/mínimo.
+- **Estrutura de colunas: o `<th>` próprio do SKU deixa de existir** — a ordenação por SKU passa ao cabeçalho "Produto" (T13-SD1).
 - Dois gatilhos de disclosure passam a um só — PT-6 protege o efeito.
 
 #### Bugs que NÃO devem ser congelados
