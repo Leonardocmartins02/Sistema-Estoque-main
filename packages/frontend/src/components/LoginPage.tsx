@@ -69,7 +69,6 @@ export function LoginPage() {
             variant="primary"
             className="w-full"
             isLoading={isSubmitting}
-            disabled={isSubmitting}
           >
             Entrar
           </Button>
