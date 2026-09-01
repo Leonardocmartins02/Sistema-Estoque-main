@@ -1,12 +1,18 @@
 import React from 'react';
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  hint?: string;
-  error?: string;
-  leftIcon?: React.ReactNode;
-  rightIcon?: React.ReactNode;
-}
+// Nome acessível obrigatório pelo tipo, não pela convenção (design-system.md
+// §11): `label` ou `aria-label`, nunca nenhum dos dois.
+type LabelledProps =
+  | { label: string; 'aria-label'?: string }
+  | { label?: string; 'aria-label': string };
+
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement> &
+  LabelledProps & {
+    hint?: string;
+    error?: string;
+    leftIcon?: React.ReactNode;
+    rightIcon?: React.ReactNode;
+  };
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ label, id, hint, error, leftIcon, rightIcon, className = '', ...props }, ref) => {
@@ -14,6 +20,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const describedByIds: string[] = [];
     if (hint) describedByIds.push(`${inputId}-hint`);
     if (error) describedByIds.push(`${inputId}-error`);
+
+    // Contorno de controle (design-system.md §3.4): `border-strong` atende
+    // 3:1 contra a superfície; `border-gray-300`/`border-red-300` não
+    // atendiam. Erro escolhe `danger` no lugar de `border-strong` — nunca os
+    // dois juntos.
+    const borderColor = error ? 'border-danger' : 'border-border-strong';
 
     return (
       <div className="w-full">
@@ -33,9 +45,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             aria-invalid={!!error}
             aria-describedby={describedByIds.join(' ') || undefined}
-            className={`w-full rounded-md border bg-white py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 ${
-              error ? 'border-red-300' : 'border-gray-300'
-            } ${leftIcon ? 'pl-9 pr-3' : rightIcon ? 'pl-3 pr-9' : 'px-3'} ${className}`}
+            className={`w-full rounded-control border ${borderColor} bg-surface py-2 text-sm outline-none transition hover:border-border-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-subtle disabled:text-text-muted ${leftIcon ? 'pl-9 pr-3' : rightIcon ? 'pl-3 pr-9' : 'px-3'} ${className}`}
             {...props}
           />
           {rightIcon && (

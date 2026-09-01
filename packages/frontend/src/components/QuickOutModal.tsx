@@ -191,6 +191,7 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
               
               <Input
                 id="quantity"
+                aria-label="Quantidade"
                 type="number"
                 min={1}
                 max={product.currentBalance > 0 ? product.currentBalance * 2 : undefined}

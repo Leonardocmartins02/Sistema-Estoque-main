@@ -92,3 +92,11 @@ describe('QuickOutModal — erro do servidor não é duplicado na tela (C-3)', (
     expect(screen.getAllByText('Estoque insuficiente.', { selector: 'h3' })).toHaveLength(1);
   });
 });
+
+describe('QuickOutModal — campo de quantidade tem nome acessível (N-8 / Task 6)', () => {
+  it('o campo de quantidade é alcançável por getByLabelText', () => {
+    renderModal();
+
+    expect(screen.getByLabelText(/Quantidade/i)).toBeInTheDocument();
+  });
+});
