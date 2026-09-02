@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -29,6 +29,31 @@ export const movementSchema = z.object({
 });
 
 export type MovementFormValues = z.infer<typeof movementSchema>;
+
+/**
+ * Teto de saída (Task 18 / D-F): em `OUT`, a quantidade não pode exceder o
+ * saldo disponível; em `IN`, nada muda — entrada não tem teto.
+ *
+ * Vive **fora** de `movementSchema` de propósito. O schema base não conhece
+ * saldo nenhum e continua sendo o contrato validável fora da UI (autofill,
+ * extensão, teste); o teto só existe onde há um produto com saldo em mãos.
+ *
+ * Isto **previne** o erro do usuário — não é a autoridade da regra. Quem
+ * decide continua sendo o backend, dentro da transação com lock de linha
+ * (`stockService.recordMovementInTx`): entre abrir o formulário e enviá-lo o
+ * saldo pode ter mudado, e nesse caso o 422 é a resposta correta.
+ */
+export function movementSchemaForBalance(balance: number) {
+  return movementSchema.refine((values) => values.type !== 'OUT' || values.quantity <= balance, {
+    path: ['quantity'],
+    message: overBalanceMessage(balance),
+  });
+}
+
+/** Nomeia o impedimento e informa o saldo disponível — nunca só "não pode". */
+function overBalanceMessage(balance: number): string {
+  return `Quantidade acima do saldo disponível (${formatQuantity(balance)} un.).`;
+}
 
 export type MovementProduct = {
   id: string;
@@ -76,6 +101,8 @@ export function MovementFormModal({ open, onOpenChange, product, onSuccess }: Pr
   const dateId = useId();
   const noteId = useId();
 
+  const schema = useMemo(() => movementSchemaForBalance(product.balance), [product.balance]);
+
   const {
     register,
     handleSubmit,
@@ -83,7 +110,7 @@ export function MovementFormModal({ open, onOpenChange, product, onSuccess }: Pr
     formState: { errors },
     reset,
   } = useForm<MovementFormValues>({
-    resolver: zodResolver(movementSchema),
+    resolver: zodResolver(schema),
     // Sem `type`: a intenção é declarada, nunca herdada.
     defaultValues: { quantity: 1, date: '', note: '' },
   });
@@ -95,9 +122,15 @@ export function MovementFormModal({ open, onOpenChange, product, onSuccess }: Pr
 
   const delta = hasIntent && validQuantity ? (type === 'IN' ? quantity : -quantity) : 0;
   const nextBalance = product.balance + delta;
-  // O bloqueio de saída acima do saldo é da Task 18 (D-F). Aqui o preview
-  // apenas não pode apresentar saldo negativo como futuro plausível.
+  // Saída acima do saldo (Task 18 / D-F): impedimento, não destino. O preview
+  // já não desenhava saldo negativo como futuro plausível; agora a
+  // confirmação também fica indisponível enquanto a quantidade for impossível.
+  // Saída IGUAL ao saldo não é impedimento — resulta em zero, que é legítimo.
   const insufficient = hasIntent && type === 'OUT' && validQuantity && nextBalance < 0;
+
+  // O impedimento derivado vale a partir da primeira tecla; o erro do schema
+  // só existiria depois de uma tentativa de envio, tarde demais para explicar.
+  const quantityError = insufficient ? overBalanceMessage(product.balance) : errors.quantity?.message;
 
   const intentLabel = type === 'IN' ? 'entrada' : 'saída';
 
@@ -192,19 +225,34 @@ export function MovementFormModal({ open, onOpenChange, product, onSuccess }: Pr
         </fieldset>
 
         {/* Inércia FUNCIONAL: `disabled` de verdade, não opacidade (D2-B). */}
+        {/*
+          `max` só existe em `OUT` (em `IN` não há teto). Ele governa a seta do
+          `number`; digitar ou colar acima do saldo continua possível — por
+          isso o impedimento real não depende dele. A mensagem chega ao campo
+          por `aria-describedby` + `aria-invalid`, sem `role="alert"` por campo
+          (design-system.md §11.0), responsabilidade do primitivo `Input`.
+        */}
         <Input
           id={quantityId}
           label="Quantidade*"
           type="number"
           min={1}
+          max={type === 'OUT' ? product.balance : undefined}
           disabled={!hasIntent}
-          error={errors.quantity?.message}
+          error={quantityError}
           {...register('quantity')}
         />
 
         {hasIntent && validQuantity && (
+          // `aria-live="polite"` (mesmo padrão do `AdjustmentFormModal`): a
+          // consequência muda sem interação direta com este bloco, e o
+          // impedimento precisa ser ANUNCIADO no momento em que ocorre — uma
+          // troca de `aria-describedby` não é anunciada se o foco já está no
+          // campo. Polite, não `role="alert"`: §11.0 reserva o assertivo ao
+          // erro assíncrono do servidor.
           <div
             data-testid="movement-preview"
+            aria-live="polite"
             className={`rounded-surface border px-3 py-2 text-sm tabular-nums ${
               insufficient ? 'border-danger bg-danger-subtle text-danger' : 'bg-surface-subtle text-gray-900'
             }`}
@@ -257,8 +305,27 @@ export function MovementFormModal({ open, onOpenChange, product, onSuccess }: Pr
           </Button>
           {/* Sem intenção não existe caminho de submissão — o primário só
               aparece quando há uma consequência para nomear. */}
+          {/*
+            Indisponível enquanto a saída for impossível — por `aria-disabled`,
+            não `disabled` (design-system.md §11.2: é a regra, não a exceção).
+            Um `disabled` nativo sai da tabulação, e a pessoa que usa leitor de
+            tela descobriria o bloqueio pela AUSÊNCIA de um controle, sem nada
+            que explicasse o motivo. Assim o botão continua focável e é
+            anunciado como indisponível.
+
+            Quem de fato impede o envio é o schema (`movementSchemaForBalance`),
+            não este atributo: a tentativa de submissão falha na validação, e o
+            `shouldFocusError` do react-hook-form leva o foco ao campo — onde a
+            explicação está associada por `aria-describedby`.
+          */}
           {hasIntent && (
-            <Button type="submit" variant="primary" isLoading={mutation.isPending}>
+            <Button
+              type="submit"
+              variant="primary"
+              aria-disabled={insufficient}
+              className={insufficient ? 'cursor-not-allowed opacity-50' : ''}
+              isLoading={mutation.isPending}
+            >
               {mutation.isPending
                 ? 'Registrando...'
                 : `Registrar ${intentLabel}${validQuantity ? ` de ${formatQuantity(quantity)} un.` : ''}`}
