@@ -51,7 +51,10 @@ export function ProductDashboard() {
   // Task 17: o diálogo de movimentação precisa do produto INTEIRO (nome, SKU,
   // saldo e mínimo) para dar contexto e calcular o preview — não só do id.
   const [movingProduct, setMovingProduct] = useState<ProductWithBalance | null>(null);
-  const [historyProductId, setHistoryProductId] = useState<string | null>(null);
+  // Task 19: o histórico passou a precisar do produto inteiro — sem nome e SKU
+  // o título não podia nomear o produto (UF-35). O saldo NÃO vem daqui: o
+  // diálogo o busca na rota do produto (REV-06).
+  const [historyProduct, setHistoryProduct] = useState<ProductWithBalance | null>(null);
   const [quickOutProduct, setQuickOutProduct] = useState<ProductWithBalance | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<ProductWithBalance | null>(null);
   const [openQuickOutList, setOpenQuickOutList] = useState(false);
@@ -96,7 +99,7 @@ export function ProductDashboard() {
       onMove: (p) => setMovingProduct(p),
       onQuickOut: (p) => setQuickOutProduct(p),
       onEdit: (p) => setEditing(p),
-      onHistory: (p) => setHistoryProductId(p.id),
+      onHistory: (p) => setHistoryProduct(p),
       onAdjust: (p) => setAdjustingProduct(p),
       onZeroBalance: async (p) => {
         if (p.balance <= 0) return;
@@ -398,13 +401,15 @@ export function ProductDashboard() {
         />
       )}
 
-      <MovementHistoryModal
-        open={historyProductId !== null}
-        onOpenChange={(v) => {
-          if (!v) setHistoryProductId(null);
-        }}
-        productId={historyProductId ?? ''}
-      />
+      {historyProduct && (
+        <MovementHistoryModal
+          open
+          onOpenChange={(v) => {
+            if (!v) setHistoryProduct(null);
+          }}
+          product={{ id: historyProduct.id, name: historyProduct.name, sku: historyProduct.sku }}
+        />
+      )}
 
       <QuickOutListModal
         open={openQuickOutList}

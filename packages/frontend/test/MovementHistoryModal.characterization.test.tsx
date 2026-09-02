@@ -4,11 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchMovements } from '../src/api/movements';
+import { fetchProduct } from '../src/api/products';
 import { MovementHistoryModal } from '../src/components/MovementHistoryModal';
 
-import { makeMovement, paged } from './helpers/factories';
+import { makeMovement, makeProduct, paged } from './helpers/factories';
 
 vi.mock('../src/api/movements', () => ({ fetchMovements: vi.fn() }));
+// Task 19: o saldo ancorado do cabeçalho vem de `fetchProduct`, não do
+// snapshot da listagem (REV-06) — o diálogo passou a fazer duas consultas.
+vi.mock('../src/api/products', () => ({ fetchProduct: vi.fn() }));
 
 const mockedFetchMovements = vi.mocked(fetchMovements);
 
@@ -40,7 +44,11 @@ function renderHistory() {
   const onOpenChange = vi.fn();
   const view = render(
     <QueryClientProvider client={client}>
-      <MovementHistoryModal open onOpenChange={onOpenChange} productId="p1" />
+      <MovementHistoryModal
+        open
+        onOpenChange={onOpenChange}
+        product={{ id: 'p1', name: 'Caneta Azul', sku: 'CAN-001' }}
+      />
     </QueryClientProvider>,
   );
   return { ...view, onOpenChange, user: userEvent.setup() };
@@ -55,6 +63,8 @@ function lastQuery() {
 beforeEach(() => {
   mockedFetchMovements.mockReset();
   mockedFetchMovements.mockResolvedValue(paged([makeMovement()], { total: 30 }));
+  vi.mocked(fetchProduct).mockReset();
+  vi.mocked(fetchProduct).mockResolvedValue(makeProduct({ id: 'p1', balance: 20 }));
 });
 
 describe('MovementHistoryModal — filtros que faltavam (MHM-1, MHM-2)', () => {
@@ -109,7 +119,10 @@ describe('MovementHistoryModal — semântica de diálogo já correta (MHM-4)', 
 
     // Vem do Radix. A migração para o primitivo único precisa preservar isto —
     // é o contrato que `Modal.test.tsx` já garante para os outros diálogos.
-    expect(await screen.findByRole('dialog', { name: 'Histórico de Movimentações' })).toBeInTheDocument();
+    // Task 19: o título passou a nomear o produto (UF-35), então o nome
+    // acessível mudou de texto. O CONTRATO — o diálogo se anuncia COM um nome
+    // — é o que MHM-4 trava, e continua valendo.
+    expect(await screen.findByRole('dialog', { name: /Caneta Azul/ })).toBeInTheDocument();
   });
 
   it('MHM-4 · Escape fecha o diálogo', async () => {

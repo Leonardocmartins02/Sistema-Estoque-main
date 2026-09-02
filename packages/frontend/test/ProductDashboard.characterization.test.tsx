@@ -158,7 +158,9 @@ describe('ProductDashboard — cada ação de linha abre o diálogo corresponden
     await user.click(screen.getAllByRole('button', { name: 'Mais ações para Caneta Azul' })[0]);
     await user.click(await screen.findByRole('menuitem', { name: 'Ver Histórico' }));
 
-    expect(await screen.findByRole('dialog', { name: 'Histórico de Movimentações' })).toBeInTheDocument();
+    // Task 19: o título passou a nomear o produto (UF-35) — dois históricos de
+    // produtos diferentes deixaram de ser indistinguíveis pelo nome acessível.
+    expect(await screen.findByRole('dialog', { name: /Histórico · Caneta Azul/ })).toBeInTheDocument();
   });
 
   it('PD-2 · "Ajustar Estoque" abre o diálogo de ajuste', async () => {
@@ -281,9 +283,14 @@ describe('ProductDashboard — cada ação age sobre AQUELE produto (PD-2, REV-0
     await user.click(within(table).getByRole('button', { name: 'Mais ações para Borracha Branca' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Ver Histórico' }));
 
-    await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog');
     await waitFor(() => expect(vi.mocked(fetchMovements)).toHaveBeenCalled());
     expect(vi.mocked(fetchMovements).mock.calls.at(-1)?.[0]).toBe('p2');
+
+    // Task 19: a identidade deixou de ser só inferível pela chamada de API —
+    // o título nomeia o produto acionado (UF-35), como já ocorre no formulário.
+    expect(within(dialog).getByText(/Histórico · Borracha Branca/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/BOR-002/)).toBeInTheDocument();
   });
 
   it('PD-2 · "Movimentar" no segundo produto lança a movimentação no segundo produto', async () => {
