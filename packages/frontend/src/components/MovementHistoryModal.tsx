@@ -157,10 +157,26 @@ export function MovementHistoryModal({ open, onOpenChange, product }: Props) {
       description={`SKU ${product.sku} · o saldo do produto não muda com os filtros abaixo.`}
       size="3xl"
       headerActions={
-        <div className="text-right" data-testid="history-balance">
+        // N3 (achado do accessibility-reviewer): loading, erro e "sem saldo"
+        // mostravam o mesmo "—" — indistinguíveis, e o saldo é a âncora do
+        // extrato (§14.3). `role="status"`/`aria-live="polite"` no MESMO nó,
+        // sempre montado, para que a transição loading → sucesso/erro seja
+        // anunciada (uma região criada junto com o conteúdo não é anunciada —
+        // mesmo padrão de `ui/ApiStatusBanner`). Não é `role="alert"`: a
+        // falha aqui não é uma interrupção urgente.
+        <div
+          className="text-right"
+          data-testid="history-balance"
+          role="status"
+          aria-live="polite"
+        >
           <div className="text-xs text-gray-600">Saldo atual</div>
           <div className="text-base font-semibold tabular-nums text-gray-900">
-            {balanceQuery.data ? `${formatQuantity(balanceQuery.data.balance)} un.` : '—'}
+            {balanceQuery.isError
+              ? 'Saldo indisponível'
+              : balanceQuery.data
+                ? `${formatQuantity(balanceQuery.data.balance)} un.`
+                : 'Carregando saldo…'}
           </div>
         </div>
       }

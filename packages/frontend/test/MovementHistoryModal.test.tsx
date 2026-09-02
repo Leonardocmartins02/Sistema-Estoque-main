@@ -340,6 +340,85 @@ describe('MovementHistoryModal — saldo ancorado no cabeçalho (decisão 4)', (
     expect(await screen.findByText(/20/)).toBeInTheDocument();
   });
 
+  /**
+   * N3 (achado do accessibility-reviewer na Task 19): antes do fetch resolver
+   * e quando `fetchProduct` falha, o readout mostrava o mesmo "—" — carregando,
+   * erro e "sem saldo" eram visualmente indistinguíveis. Como o saldo é a
+   * âncora do extrato (§14.3), uma falha de rede podia passar por informação
+   * legítima.
+   */
+  describe('MovementHistoryModal — saldo indistinguível entre loading/erro (N3)', () => {
+    it('mostra "Carregando saldo…" antes do fetchProduct resolver', async () => {
+      mockedFetchMovements.mockResolvedValue(paged([]));
+      // Nunca resolve dentro deste teste — mantém o estado de loading.
+      mockedFetchProduct.mockImplementation(() => new Promise(() => {}));
+      renderHistory();
+
+      const saldo = await screen.findByTestId('history-balance');
+      expect(saldo).toHaveTextContent('Carregando saldo…');
+    });
+
+    it('mostra o saldo formatado quando o fetchProduct resolve', async () => {
+      mockedFetchMovements.mockResolvedValue(paged([]));
+      mockedFetchProduct.mockResolvedValue(makeProduct({ id: 'p1', balance: 24 }));
+      renderHistory();
+
+      await waitFor(() => expect(screen.getByTestId('history-balance')).toHaveTextContent('24 un.'));
+    });
+
+    it('mostra "Saldo indisponível" quando o fetchProduct falha — nunca apenas "—"', async () => {
+      mockedFetchMovements.mockResolvedValue(paged([]));
+      mockedFetchProduct.mockRejectedValue(new Error('Falha de rede'));
+      renderHistory();
+
+      const saldo = await screen.findByTestId('history-balance');
+      await waitFor(() => expect(saldo).toHaveTextContent('Saldo indisponível'));
+      // O erro nunca é apresentado como um dado legítimo — nem em silêncio,
+      // nem disfarçado de traço neutro.
+      expect(saldo.textContent).not.toBe('Saldo atual—');
+      expect(saldo.textContent).not.toMatch(/^Saldo atual—$/);
+    });
+
+    it('a região do saldo é role="status" e persiste como o MESMO nó entre loading e sucesso', async () => {
+      mockedFetchMovements.mockResolvedValue(paged([]));
+      let resolveFetch: (value: ReturnType<typeof makeProduct>) => void = () => {};
+      mockedFetchProduct.mockImplementation(
+        () => new Promise((resolve) => { resolveFetch = resolve; }),
+      );
+      renderHistory();
+
+      const saldo = await screen.findByTestId('history-balance');
+      expect(saldo).toHaveAttribute('role', 'status');
+      expect(saldo).toHaveAttribute('aria-live', 'polite');
+      expect(saldo).toHaveTextContent('Carregando saldo…');
+
+      resolveFetch(makeProduct({ id: 'p1', balance: 24 }));
+
+      // Mesma referência de nó — não é uma região recriada, é a mesma
+      // montada desde o início. Recriar quebraria o anúncio (NVDA/JAWS não
+      // anunciam uma live region criada junto com seu conteúdo).
+      await waitFor(() => expect(saldo).toHaveTextContent('24 un.'));
+      expect(screen.getByTestId('history-balance')).toBe(saldo);
+    });
+
+    it('a região do saldo é a MESMA entre loading e erro', async () => {
+      mockedFetchMovements.mockResolvedValue(paged([]));
+      let rejectFetch: (err: Error) => void = () => {};
+      mockedFetchProduct.mockImplementation(
+        () => new Promise((_resolve, reject) => { rejectFetch = reject; }),
+      );
+      renderHistory();
+
+      const saldo = await screen.findByTestId('history-balance');
+      expect(saldo).toHaveTextContent('Carregando saldo…');
+
+      rejectFetch(new Error('Falha de rede'));
+
+      await waitFor(() => expect(saldo).toHaveTextContent('Saldo indisponível'));
+      expect(screen.getByTestId('history-balance')).toBe(saldo);
+    });
+  });
+
   it('o saldo do cabeçalho NÃO muda ao aplicar filtro', async () => {
     mockedFetchMovements.mockResolvedValue(paged([]));
     const user = userEvent.setup();
@@ -368,7 +447,13 @@ describe('MovementHistoryModal — saldo ancorado no cabeçalho (decisão 4)', (
     // Montada desde o primeiro render: uma região criada junto com o conteúdo
     // não é anunciada por NVDA/JAWS — era o defeito que deixava os três
     // estados mudos (A-12ʳ). O diálogo vive num portal, fora do `container`.
-    const live = document.querySelector('[role="status"][aria-live="polite"]');
+    //
+    // N3 introduziu uma SEGUNDA região `[role="status"][aria-live="polite"]`
+    // (o readout de saldo, `[data-testid="history-balance"]`) — o seletor
+    // exclui essa para continuar mirando a região de resultados da tabela.
+    const live = [...document.querySelectorAll('[role="status"][aria-live="polite"]')].find(
+      (el) => el.getAttribute('data-testid') !== 'history-balance',
+    );
     expect(live).toBeInTheDocument();
 
     await waitFor(() => expect(live).toHaveTextContent(/nenhuma movimentação encontrada para o filtro atual/i));
