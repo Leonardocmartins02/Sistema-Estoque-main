@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +6,7 @@ import { fetchProducts } from '../src/api/products';
 import QuickOutListModal from '../src/components/QuickOutListModal';
 
 import { makeProduct, paged } from './helpers/factories';
+import { renderWithProviders } from './helpers/render';
 
 vi.mock('../src/api/products', () => ({ fetchProducts: vi.fn() }));
 
@@ -43,11 +44,19 @@ const rows = [
   makeProduct({ id: 'p2', name: 'Borracha Branca', sku: 'BOR-002', balance: 2, minStock: 8 }),
 ];
 
+/**
+ * Harness com os providers reais (achado DEP-02, Task 22).
+ *
+ * Trocado ANTES da migração do componente, com o produto ainda inalterado: no
+ * instante em que `QuickOutListModal` passa a usar `useQuery`, um `render` puro
+ * — sem `QueryClientProvider` — derruba os 14 testes em bloco, e a quebra
+ * pareceria da migração quando na verdade é do harness.
+ */
 function renderList(overrides: { onOpenHistory?: () => void } = {}) {
   const onOpenChange = vi.fn();
   const onPick = vi.fn();
   const onOpenHistory = overrides.onOpenHistory ?? vi.fn();
-  render(
+  renderWithProviders(
     <QuickOutListModal open onOpenChange={onOpenChange} onPick={onPick} onOpenHistory={onOpenHistory} />,
   );
   return { onOpenChange, onPick, onOpenHistory, user: userEvent.setup() };
@@ -233,5 +242,139 @@ describe('QuickOutListModal — saídas do diálogo (QOL-9, QOL-10)', () => {
     await user.click(searchField());
 
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Requisitos da Task 22 — o que a migração **corrige**.
+ *
+ * Os casos acima congelam o que precisa sobreviver; estes descrevem o que
+ * precisa mudar. Nenhum deles passava antes da migração: o componente não era
+ * um diálogo (C-1), a linha só existia para o mouse, a falha de consulta virava
+ * "Nenhum produto disponível." (N-6), o status era recalculado à mão e
+ * divergia no limite `balance=0, minStock=0` (N-5) e a busca não tinha rótulo
+ * (B-7).
+ */
+describe('QuickOutListModal — requisitos da migração (Task 22)', () => {
+  it('se anuncia como diálogo modal rotulado pelo título (C-1)', async () => {
+    renderList();
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAccessibleName('Selecionar Produto para Baixa');
+  });
+
+  it('Escape fecha o diálogo (ALTERAR INTENCIONALMENTE — §9.3 item 12)', async () => {
+    const { onOpenChange, user } = renderList();
+    await screen.findByText('Caneta Azul');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it('a linha do produto é acionável por teclado, sem perder o alvo grande do clique', async () => {
+    const { onPick, user } = renderList();
+
+    const row = await screen.findByRole('row', { name: /Caneta Azul/ });
+    // O alvo do mouse continua sendo a linha inteira (QOL-3); o que falta hoje
+    // é um controle real dentro dela para quem navega por teclado.
+    const trigger = within(row).queryByRole('button', { name: /Caneta Azul/i });
+    expect(trigger, 'a linha precisa expor um controle operável por teclado').not.toBeNull();
+
+    trigger!.focus();
+    expect(trigger).toHaveFocus();
+    await user.keyboard('{Enter}');
+
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }));
+  });
+
+  it('falha de consulta é comunicada e não se confunde com lista vazia (N-6)', async () => {
+    mockedFetchProducts.mockRejectedValue(new Error('Falha ao carregar produtos'));
+    renderList();
+
+    // A mensagem da API aparece; o texto de vazio **não** — os dois estados
+    // dizem coisas diferentes sobre o que fazer a seguir.
+    expect(await screen.findByText('Falha ao carregar produtos')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum produto disponível.')).not.toBeInTheDocument();
+  });
+
+  it('no erro, o contador não afirma "0 item(ns)" (N-6, achado do accessibility-reviewer)', async () => {
+    mockedFetchProducts.mockRejectedValue(new Error('Falha ao carregar produtos'));
+    renderList();
+    await screen.findByText('Falha ao carregar produtos');
+
+    // O texto secundário não pode desdizer a célula principal: "0 item(ns)" é
+    // a leitura "não há nada aqui" que N-6 tirou da tabela, reaparecendo ao
+    // lado da busca. Quando a consulta falhou, o total é desconhecido.
+    expect(screen.queryByText(/0 item\(ns\)/i)).not.toBeInTheDocument();
+  });
+
+  it('a direção da ordenação é anunciada pelo aria-sort da coluna ativa (M-5)', async () => {
+    const { user } = renderList();
+    await screen.findByText('Caneta Azul');
+
+    // A seta `▲` é `aria-hidden`; sem `aria-sort` o estado de ordenação teria
+    // deixado de existir para o leitor de tela em vez de melhorar.
+    const nameHeader = screen.getByRole('columnheader', { name: /Nome do Produto/i });
+    expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
+    // Só a coluna ativa anuncia (A-8ʳ, mesma decisão de `ui/DataTable`).
+    expect(screen.getByRole('columnheader', { name: /^SKU/i })).not.toHaveAttribute('aria-sort');
+
+    await user.click(screen.getByRole('button', { name: /Nome do Produto/i }));
+
+    await waitFor(() => expect(nameHeader).toHaveAttribute('aria-sort', 'descending'));
+  });
+
+  it('as live regions são o mesmo nó entre carregando, sucesso e erro', async () => {
+    const status = () => screen.getByTestId('quick-out-list-status');
+    const alert = () => screen.getByTestId('quick-out-list-alert');
+
+    // Uma região criada junto com o conteúdo costuma não ser anunciada: as duas
+    // precisam estar sempre montadas e só trocar de texto.
+    const { user } = renderList();
+    const firstStatus = status();
+    const firstAlert = alert();
+
+    await waitFor(() => expect(status()).toHaveTextContent(/produtos encontrados/i));
+    expect(status()).toBe(firstStatus);
+    expect(alert()).toBe(firstAlert);
+
+    // Buscar de novo com a API falhando: consulta nova, mesmas regiões.
+    mockedFetchProducts.mockRejectedValue(new Error('Falha ao carregar produtos'));
+    await user.type(searchField(), 'x');
+
+    await waitFor(() => expect(alert()).toHaveTextContent(/Falha ao carregar produtos/));
+    expect(status()).toBe(firstStatus);
+    expect(alert()).toBe(firstAlert);
+  });
+
+  it('o resultado vazio continua distinto do erro', async () => {
+    mockedFetchProducts.mockResolvedValue(paged([], { total: 0 }));
+    renderList();
+
+    expect(await screen.findByText('Nenhum produto disponível.')).toBeInTheDocument();
+  });
+
+  it('no limite saldo 0 com mínimo 0 a linha mostra um único status (N-5, PS-1)', async () => {
+    mockedFetchProducts.mockResolvedValue(
+      paged([makeProduct({ id: 'p9', name: 'Grampeador', sku: 'GRA-009', balance: 0, minStock: 0 })], {
+        total: 1,
+      }),
+    );
+    renderList();
+
+    const row = await screen.findByRole('row', { name: /Grampeador/ });
+    expect(within(row).getByText('Fora de Estoque')).toBeInTheDocument();
+    // Hoje `isOut` e `isOk` são ambos verdadeiros e a linha renderiza dois
+    // badges contraditórios. A regra canônica prioriza OUT (PS-1).
+    expect(within(row).queryByText('Em Estoque')).not.toBeInTheDocument();
+  });
+
+  it('a busca tem rótulo associado, não só placeholder (B-7)', async () => {
+    renderList();
+
+    expect(screen.getByLabelText(/Buscar por Nome ou SKU/i)).toBe(searchField());
   });
 });
