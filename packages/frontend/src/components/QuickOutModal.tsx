@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -18,6 +18,35 @@ const schema = z.object({
 });
 
 type QuickOutFormValues = z.infer<typeof schema>;
+
+/**
+ * Teto da baixa (Task 21 / F-01): a quantidade não pode exceder o saldo
+ * disponível. **Simétrica à Task 18 (D-F)**, que aplica a mesma regra à saída
+ * manual — duas saídas do mesmo sistema não podem ter regras diferentes sobre
+ * a mesma quantidade.
+ *
+ * Vive **fora** de `schema` de propósito, pelo mesmo motivo do
+ * `movementSchemaForBalance`: o schema base não conhece saldo nenhum e continua
+ * sendo o contrato validável fora da UI; o teto só existe onde há um produto
+ * com saldo em mãos.
+ *
+ * Isto **previne** o erro do usuário — não é a autoridade da regra. Quem decide
+ * continua sendo o backend, dentro da transação com lock de linha
+ * (`stockService.recordMovementInTx`, `SELECT … FOR UPDATE` + `newQuantity < 0`
+ * ⇒ 422): entre abrir o diálogo e enviá-lo o saldo pode ter mudado, e nesse
+ * caso o 422 é a resposta correta.
+ */
+export function quickOutSchemaForBalance(balance: number) {
+  return schema.refine((values) => values.quantity <= balance, {
+    path: ['quantity'],
+    message: overBalanceMessage(balance),
+  });
+}
+
+/** Nomeia o impedimento e informa o saldo disponível — nunca só "não pode". */
+function overBalanceMessage(balance: number): string {
+  return `Quantidade acima do saldo disponível (${formatQuantity(balance)} un.).`;
+}
 
 type Props = {
   open: boolean;
@@ -68,6 +97,11 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
   // não protege o atalho de teclado.
   const submittingRef = useRef(false);
 
+  const balanceSchema = useMemo(
+    () => quickOutSchemaForBalance(product.currentBalance),
+    [product.currentBalance],
+  );
+
   const {
     register,
     handleSubmit,
@@ -76,12 +110,24 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
     setValue,
     watch,
   } = useForm<QuickOutFormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(balanceSchema),
     defaultValues: { quantity: 1, note: '' },
   });
 
   const quantity = watch('quantity', 1);
-  const newBalance = Math.max(0, product.currentBalance - (quantity || 0));
+  // Sem `Math.max(0, …)`: o clamp é o que produzia o ramo morto "Estoque
+  // negativo" (N-4) e fazia a quantidade impossível aparecer como um zero
+  // plausível. Agora o saldo resultante é o número real, e o caso impossível é
+  // tratado como impedimento — nunca renderizado como futuro.
+  const validQuantity = Number.isFinite(quantity) && quantity > 0;
+  const newBalance = product.currentBalance - (quantity || 0);
+  const insufficient = validQuantity && newBalance < 0;
+
+  // O impedimento derivado vale a partir da primeira tecla; o erro do schema só
+  // existiria depois de uma tentativa de envio, tarde demais para explicar.
+  const quantityError = insufficient
+    ? overBalanceMessage(product.currentBalance)
+    : errors.quantity?.message;
 
   const { ref: registerQuantityRef, ...quantityField } = register('quantity');
 
@@ -175,16 +221,38 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
           */}
           <div aria-live="polite" aria-atomic="true">
             <span className="block text-caption text-text-secondary">Novo Saldo</span>
-            <span
-              className={`text-section-title tabular-nums ${
-                newBalance === 0 ? 'text-warning' : 'text-text-primary'
-              }`}
-            >
-              {formatQuantity(newBalance)}{' '}
-              <span className="text-body font-normal text-text-secondary">un.</span>
-            </span>
-            {newBalance === 0 && (
-              <span className="block text-caption text-warning">Estoque zerado</span>
+            {insufficient ? (
+              // O impossível não tem saldo resultante para mostrar. `—` é a
+              // mesma convenção de ausência do `formatBalanceTransition`, e o
+              // motivo aparece abaixo — nunca um zero que pareça plausível.
+              //
+              // O teto vem JUNTO no texto desta célula, e não só na mensagem do
+              // campo: quando o impedimento ocorre o foco já está no campo, e
+              // uma troca de `aria-describedby` não é reanunciada com o foco
+              // parado. Sem o número aqui, quem usa leitor de tela ouviria
+              // "Saldo insuficiente" sem nunca saber qual é o saldo.
+              <>
+                <span className="text-section-title tabular-nums text-danger">—</span>
+                <span className="block text-caption text-danger">
+                  Saldo insuficiente · máx. {formatQuantity(product.currentBalance)} un.
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  className={`text-section-title tabular-nums ${
+                    newBalance === 0 ? 'text-warning' : 'text-text-primary'
+                  }`}
+                >
+                  {formatQuantity(newBalance)}{' '}
+                  <span className="text-body font-normal text-text-secondary">un.</span>
+                </span>
+                {/* "Estoque zerado" continua legítimo AQUI: a saída igual ao
+                    saldo resulta em zero, que é um destino possível. */}
+                {newBalance === 0 && (
+                  <span className="block text-caption text-warning">Estoque zerado</span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -230,19 +298,25 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
             // de fato, via `aria-required` nativo do spinbutton.
             required
             min={1}
-            // O teto continua sendo `saldo × 2` nesta task: trocá-lo por `saldo`
-            // é a Task 21 (F-01), com o vocabulário de impedimento que ele exige.
-            max={product.currentBalance > 0 ? product.currentBalance * 2 : undefined}
+            // Teto = saldo disponível (F-01). Governa a seta do `number` e o
+            // `aria-valuemax` do spinbutton — anunciar o dobro do saldo era
+            // declarar à tecnologia assistiva um teto que o domínio recusa.
+            // Digitar ou colar acima continua possível: por isso o impedimento
+            // real não depende dele, e sim do schema.
+            max={product.currentBalance}
             step={1}
             className="h-11 text-center tabular-nums"
-            error={errors.quantity?.message}
+            error={quantityError}
             // Composto à mão porque o preview é externo ao primitivo: o `Input`
             // monta `aria-describedby` a partir de `hint`/`error`, e a prop
-            // passada aqui o substitui — então o id do erro entra junto. A
-            // convenção `${id}-error` é do próprio `ui/Input`.
-            aria-describedby={
-              errors.quantity?.message ? `${previewId} ${quantityId}-error` : previewId
-            }
+            // passada aqui o substitui. A convenção `${id}-error` é do próprio
+            // `ui/Input`.
+            //
+            // Impedido, a descrição é SÓ a mensagem: encadear o preview junto
+            // faria o mesmo fato ser lido duas vezes, em duas redações — e a
+            // mensagem já carrega o saldo. Fora do impedimento, o preview é a
+            // descrição útil do campo.
+            aria-describedby={quantityError ? `${quantityId}-error` : previewId}
             {...quantityField}
             ref={(el) => {
               registerQuantityRef(el);
@@ -256,11 +330,9 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
 
           <div className="flex justify-between text-caption text-text-secondary">
             <span>Mín: 1 un.</span>
-            <span>
-              {product.currentBalance > 0
-                ? `Máx: ${formatQuantity(product.currentBalance * 2)} un.`
-                : 'Sem limite máximo'}
-            </span>
+            {/* O texto acompanha o teto real. Dizer "Sem limite máximo" com
+                saldo zero era o convite exato que F-01 fecha. */}
+            <span>Máx: {formatQuantity(product.currentBalance)} un.</span>
           </div>
         </div>
 
@@ -297,12 +369,31 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
           >
             Cancelar
           </Button>
+          {/*
+            Indisponível enquanto a saída for impossível — por `aria-disabled`,
+            não `disabled` (design-system.md §11.2: é a regra, não a exceção, e
+            é o que a Task 18 aplicou à saída manual). Um `disabled` nativo sai
+            da tabulação, e quem usa leitor de tela descobriria o bloqueio pela
+            AUSÊNCIA de um controle, sem nada que explicasse o motivo.
+
+            O `disabled` nativo permanece só para `quantidade <= 0` (QOM-8): ali
+            não há razão a alcançar — o campo está vazio ou zerado.
+
+            Quem de fato impede o envio é o schema
+            (`quickOutSchemaForBalance`), não este atributo: a submissão falha
+            na validação e o `shouldFocusError` do react-hook-form leva o foco
+            ao campo, onde a explicação está associada por `aria-describedby`.
+          */}
           <Button
             type="submit"
             variant="destructive"
             disabled={quantity <= 0}
+            // `|| undefined` para não emitir `aria-disabled="false"` junto do
+            // `disabled` nativo de `quantidade <= 0`: os dois no mesmo elemento
+            // se contradizem, e ARIA in HTML proíbe a combinação.
+            aria-disabled={insufficient || undefined}
+            className={insufficient ? 'w-full cursor-not-allowed opacity-50 sm:w-auto' : 'w-full sm:w-auto'}
             isLoading={isSubmitting}
-            className="w-full sm:w-auto"
           >
             {isSubmitting ? 'Processando...' : 'Confirmar Baixa'}
           </Button>

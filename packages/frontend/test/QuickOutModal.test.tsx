@@ -261,3 +261,204 @@ describe('QuickOutModal — o sucesso declara o saldo devolvido pela API (§4.2)
     expect(screen.queryByText(/Novo saldo: \d/i)).toBeNull();
   });
 });
+
+/**
+ * F-01 — Task 21: impedir baixa rápida maior que o saldo disponível.
+ *
+ * Simétrica à Task 18 (D-F), que aplica a mesma regra à saída manual: duas
+ * saídas do mesmo sistema não podem ter regras diferentes sobre a mesma
+ * quantidade. A UI **previne**; o backend **decide** — a regra de saldo
+ * continua no `StockService`, dentro da transação com lock de linha.
+ */
+
+const overBalance = () => String(product.currentBalance + 1);
+
+async function setQuantity(user: ReturnType<typeof userEvent.setup>, value: string) {
+  const field = screen.getByLabelText(/Quantidade/i);
+  await user.clear(field);
+  await user.type(field, value);
+}
+
+describe('QuickOutModal — quantidade acima do saldo é impedida (F-01)', () => {
+  beforeEach(() => {
+    mockedQuickOutProduct.mockReset();
+    mockedQuickOutProduct.mockResolvedValue({} as never);
+  });
+
+  it('(a) com quantidade > saldo, a confirmação fica indisponível e a API não é chamada', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await setQuantity(user, overBalance());
+
+    const confirm = screen.getByRole('button', { name: /Confirmar Baixa/i });
+    expect(confirm).toHaveAttribute('aria-disabled', 'true');
+
+    // Acionar mesmo assim não pode gravar: quem impede é o schema, não o
+    // atributo — o atributo só ANUNCIA. Uma baixa indevida é permanente.
+    await user.click(confirm);
+    expect(mockedQuickOutProduct).not.toHaveBeenCalled();
+  });
+
+  it('(b) a razão do impedimento é comunicada e associada ao campo', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await setQuantity(user, overBalance());
+
+    const field = screen.getByLabelText(/Quantidade/i);
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+
+    // A explicação chega no momento do impedimento — sem precisar submeter — e
+    // nomeia o saldo disponível, nunca só "não pode".
+    const describedBy = field.getAttribute('aria-describedby');
+    const explanation = describedBy!
+      .split(' ')
+      .map((id) => document.getElementById(id))
+      .find((node) => /acima do saldo/i.test(node?.textContent ?? ''));
+
+    expect(explanation).toBeTruthy();
+    expect(explanation).toHaveTextContent(`${product.currentBalance} un.`);
+  });
+
+  it('(c) com quantidade = saldo, a confirmação continua disponível e o preview mostra zero', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await setQuantity(user, String(product.currentBalance));
+
+    const confirm = screen.getByRole('button', { name: /Confirmar Baixa/i });
+    expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
+    expect(confirm).toBeEnabled();
+
+    // Saída IGUAL ao saldo não é impedimento: resulta em zero, que é legítimo —
+    // e "Estoque zerado" continua sendo o rótulo certo para ESSE caso.
+    expect(screen.getByText('0')).toBeInTheDocument();
+    expect(screen.getByText(/Estoque zerado/i)).toBeInTheDocument();
+
+    await user.click(confirm);
+    await waitFor(() =>
+      expect(mockedQuickOutProduct).toHaveBeenCalledWith(
+        expect.objectContaining({ quantity: product.currentBalance }),
+      ),
+    );
+  });
+
+  it('(d) nenhum caminho da UI representa saldo negativo nem o rotula "Estoque zerado"', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await setQuantity(user, '999');
+
+    // Escopo: a célula "Novo Saldo" — é ela que projeta o futuro do saldo, e é
+    // o único lugar onde um número negativo poderia aparecer. O diálogo inteiro
+    // não serve como alvo porque o SKU ("CAN-001") contém hífen seguido de
+    // dígito.
+    const projecao = screen.getByRole('dialog').querySelector('[aria-live="polite"]')!;
+    expect(projecao).toHaveTextContent(/Novo Saldo/i);
+
+    // Nem o sinal tipográfico (−, U+2212) nem o hífen-menos podem preceder um
+    // número na projeção: o impossível é bloqueio, não destino.
+    expect(projecao.textContent).not.toMatch(/[−-]\s*\d/);
+    // E o impossível não pode ser representado APENAS como "Estoque zerado",
+    // que é o vício que F-01 corrige.
+    expect(screen.queryByText(/Estoque zerado/i)).toBeNull();
+    expect(mockedQuickOutProduct).not.toHaveBeenCalled();
+  });
+
+  it('corrigir a quantidade reabilita a confirmação sem perder a observação', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.type(screen.getByLabelText(/Observação/i), 'Requisição setor B');
+    await setQuantity(user, overBalance());
+    expect(screen.getByRole('button', { name: /Confirmar Baixa/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+
+    await setQuantity(user, '2');
+
+    expect(screen.getByRole('button', { name: /Confirmar Baixa/i })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByLabelText(/Observação/i)).toHaveValue('Requisição setor B');
+  });
+
+  it('a projeção anunciada nomeia o teto, não só "insuficiente"', async () => {
+    // Achado do accessibility-reviewer (F1). Quando o impedimento ocorre o foco
+    // JÁ está no campo — e uma troca de `aria-describedby` não é reanunciada
+    // com o foco parado. Se o saldo só existisse na mensagem do campo, quem usa
+    // leitor de tela ouviria "Saldo insuficiente" sem nunca saber o teto.
+    const user = userEvent.setup();
+    renderModal();
+
+    await setQuantity(user, overBalance());
+
+    const projecao = screen.getByRole('dialog').querySelector('[aria-live="polite"]')!;
+    expect(projecao).toHaveTextContent(new RegExp(`${product.currentBalance} un\\.`));
+  });
+
+  it('não emite aria-disabled="false" junto do disabled nativo', async () => {
+    // Achado do accessibility-reviewer (F4): os dois no mesmo elemento se
+    // contradizem. `quantidade <= 0` usa o `disabled` nativo (QOM-8); o
+    // atributo ARIA não pode aparecer ao lado dele nem para dizer "false".
+    const user = userEvent.setup();
+    renderModal();
+
+    await setQuantity(user, '0');
+
+    const confirm = screen.getByRole('button', { name: /Confirmar Baixa/i });
+    expect(confirm).toBeDisabled();
+    expect(confirm).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('impedido, a descrição do campo não repete o mesmo fato duas vezes', async () => {
+    // Achado do accessibility-reviewer (F7): encadear o preview junto da
+    // mensagem fazia o bloqueio ser lido em duas redações a cada re-foco.
+    const user = userEvent.setup();
+    renderModal();
+
+    await setQuantity(user, overBalance());
+
+    const ids = screen.getByLabelText(/Quantidade/i).getAttribute('aria-describedby')!.split(' ');
+    expect(ids).toHaveLength(1);
+    expect(document.getElementById(ids[0])).toHaveTextContent(/acima do saldo/i);
+  });
+
+  it('o teto do campo é o saldo disponível, não o dobro dele', async () => {
+    renderModal();
+
+    // `max` governa a seta do `number` e o `aria-valuemax` anunciado pelo
+    // spinbutton — anunciar o dobro do saldo era declarar um teto que o
+    // domínio recusa.
+    expect(screen.getByLabelText(/Quantidade/i)).toHaveAttribute(
+      'max',
+      String(product.currentBalance),
+    );
+  });
+});
+
+describe('QuickOutModal — o backend continua sendo a autoridade (saldo stale)', () => {
+  beforeEach(() => {
+    mockedQuickOutProduct.mockReset();
+  });
+
+  it('quantidade válida no cliente que o backend recusa com 422 preserva o diálogo e os valores', async () => {
+    // Outra pessoa deu baixa enquanto este diálogo estava aberto: a validação
+    // de cliente estava satisfeita e ainda assim a operação é impossível.
+    mockedQuickOutProduct.mockRejectedValue(new ApiRequestError(422, 'Estoque insuficiente.'));
+    const user = userEvent.setup();
+    const { onOpenChange } = renderModal();
+
+    await setQuantity(user, '2');
+    await user.click(screen.getByRole('button', { name: /Confirmar Baixa/i }));
+
+    await waitFor(() =>
+      expect(screen.getAllByText('Estoque insuficiente.').length).toBeGreaterThan(0),
+    );
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(screen.getByLabelText(/Quantidade/i)).toHaveValue(2);
+  });
+});
