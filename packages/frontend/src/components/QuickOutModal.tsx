@@ -1,14 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { ApiRequestError } from '../api/httpClient';
 import { quickOutProduct } from '../api/quickOut';
+import { formatQuantity } from '../lib/formatNumber';
 
 import Button from './ui/Button';
 import Input from './ui/Input';
+import { Modal } from './ui/Modal';
 import { useToast } from './ui/ToastProvider';
 
 const schema = z.object({
@@ -30,12 +31,42 @@ type Props = {
   onSuccess?: () => void;
 };
 
+/** Valores frequentes de operação — o caminho curto que justifica a baixa rápida. */
+const QUICK_AMOUNTS = [1, 5, 10, 25, 50];
+
+/**
+ * Baixa rápida migrada para o primitivo único de diálogo (Task 20).
+ *
+ * Este componente tinha **a melhor ideia de interação do produto** — o saldo
+ * resultante recalculado a cada tecla — dentro do pior invólucro técnico:
+ * portal montado à mão, sem `role="dialog"`, sem `aria-modal`, sem focus trap,
+ * sem retorno de foco, sem bloqueio de scroll (C-1), sem `max-height` (A-13), e
+ * com um listener de teclado **global no `window`** que interceptava o Enter da
+ * página inteira. A ideia sobrevive; a embalagem, não.
+ *
+ * O que substitui o listener global: Escape e o trap vêm do Radix, através do
+ * `Modal`; Enter volta a ser a **submissão nativa do `<form>`** — por isso as
+ * ações ficam dentro do formulário, e não na região `footer` do primitivo (mesmo
+ * arranjo do `MovementFormModal`). A proteção contra baixa duplicada deixa de
+ * depender do listener e passa a viver no próprio envio (`submittingRef`).
+ *
+ * **F-01 não entra aqui** — o teto do campo (`saldo × 2`) e o vocabulário do
+ * preview são da Task 21, imediatamente a seguir; T20 + T21 são uma unidade
+ * atômica de entrega.
+ */
 export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const { show: showToast } = useToast();
-  const formRef = useRef<HTMLFormElement | null>(null);
-  const [highlight, setHighlight] = useState(false);
+  const quantityId = useId();
+  const noteId = useId();
+  const previewId = useId();
+  const quantityRef = useRef<HTMLInputElement | null>(null);
+  // Guarda de reentrância: com a submissão nativa de volta, dois Enter seguidos
+  // chegariam ao mesmo handler antes de o estado re-renderizar. Uma baixa
+  // duplicada é permanente e não tem desfazer — o atributo `disabled` do botão
+  // não protege o atalho de teclado.
+  const submittingRef = useRef(false);
 
   const {
     register,
@@ -52,55 +83,45 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
   const quantity = watch('quantity', 1);
   const newBalance = Math.max(0, product.currentBalance - (quantity || 0));
 
-  // Atalhos de teclado: ESC para fechar, Enter para confirmar
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onOpenChange(false);
-      }
-      if (e.key === 'Enter') {
-        // evita submit quando focado no textarea com Shift+Enter
-        const el = document.activeElement as HTMLElement | null;
-        const isTextArea = el && el.tagName === 'TEXTAREA';
-        const isShift = (e as any).shiftKey;
-        if (!isShift && !isSubmitting && !isTextArea) {
-          e.preventDefault();
-          formRef.current?.requestSubmit();
-        }
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onOpenChange, isSubmitting]);
+  const { ref: registerQuantityRef, ...quantityField } = register('quantity');
 
-  // Animação sutil ao alterar a quantidade (realça o novo saldo)
+  // Foco inicial declarado (REV-14): o Radix focaria o primeiro elemento
+  // tabulável do diálogo, que é o "Fechar" no cabeçalho — tecnicamente "foco
+  // dentro do diálogo", na prática um passo a mais antes de digitar. O
+  // `setTimeout` roda depois do foco automático do Radix, dentro do trap.
   useEffect(() => {
     if (!open) return;
-    setHighlight(true);
-    const t = setTimeout(() => setHighlight(false), 250);
-    return () => clearTimeout(t);
-  }, [quantity, open]);
+    const id = window.setTimeout(() => quantityRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [open]);
 
   async function onSubmit(values: QuickOutFormValues) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setServerError(null);
     setIsSubmitting(true);
-    
+
     try {
-      await quickOutProduct({
+      const response = await quickOutProduct({
         productId: product.id,
         quantity: values.quantity,
         note: values.note || undefined,
       });
-      
+
       reset();
       onOpenChange(false);
       onSuccess?.();
-      
+
+      // O saldo anunciado vem da RESPOSTA do backend (`newBalance`), nunca de
+      // cálculo sobre o cache da listagem — que pode estar velho. Sem ele, o
+      // toast declara a quantidade e **omite** o saldo em vez de inventá-lo.
+      const balance = response?.newBalance;
       showToast({
         type: 'success',
-        message: `Baixa de ${values.quantity} unidade(s) registrada com sucesso!`,
+        message:
+          balance == null
+            ? `Baixa de ${formatQuantity(values.quantity)} unidade(s) registrada com sucesso!`
+            : `Baixa de ${formatQuantity(values.quantity)} unidade(s) registrada com sucesso! Novo saldo: ${formatQuantity(balance)} un.`,
       });
     } catch (e) {
       // O projeto não usa axios: `apiFetch` lança `ApiRequestError` com a mensagem
@@ -111,161 +132,162 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
       setServerError(errorMessage);
       showToast({ type: 'error', message: errorMessage });
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   }
 
-  if (!open) {
-    return null;
-  }
-
-  // Versão simplificada do modal para debug
-  // Valores pré-definidos para baixa rápida
-  const quickAmounts = [1, 5, 10, 25, 50];
-
-  const modalContent = (
-    <div
-      data-testid="quick-out-modal"
-      className="fixed inset-0 z-[10000] p-4 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onOpenChange(false)}
+  return (
+    <Modal
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title="Baixa Rápida de Estoque"
+      description={`${product.name} · SKU ${product.sku}`}
+      size="md"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
-        {/* Cabeçalho */}
-        <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-b from-white to-gray-50">
-          <h2 className="text-[18px] font-semibold tracking-tight text-gray-900">Baixa Rápida de Estoque</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            {product.name} <span className="text-gray-400">({product.sku})</span>
-          </p>
-        </div>
-        
-        <div className="p-6">
-          <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Saldo Atual e Novo Saldo */}
-            <div className="mb-6 grid grid-cols-2 gap-4 rounded-xl border border-gray-200 bg-gray-50/70 p-4">
-              <div className="text-center">
-                <label className="mb-1 block text-sm font-medium text-gray-600">Saldo Atual</label>
-                <div className="text-2xl font-bold text-gray-900">
-                  {product.currentBalance.toLocaleString('pt-BR')} <span className="font-normal text-gray-500">un.</span>
-                </div>
-              </div>
-              <div className="text-center">
-                <label className="mb-1 block text-sm font-medium text-gray-600">Novo Saldo</label>
-                <div className={`text-2xl font-bold transition-all duration-200 ${
-                  newBalance < 0 ? 'text-rose-600' : newBalance === 0 ? 'text-amber-600' : 'text-emerald-600'
-                } ${highlight ? 'scale-[1.03]' : ''}`}>
-                  {newBalance.toLocaleString('pt-BR')} <span className="font-normal text-gray-500">un.</span>
-                  {newBalance < 0 && (
-                    <div className="mt-1 text-xs font-normal text-rose-600">Estoque negativo</div>
-                  )}
-                  {newBalance === 0 && (
-                    <div className="mt-1 text-xs font-normal text-amber-600">Estoque zerado</div>
-                  )}
-                </div>
-              </div>
-            </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {/*
+          Preview vivo (QOM-7) — promovido a elemento do sistema, sem o número
+          gigante, o gradiente e o realce em `scale` (transformação em elemento
+          não interativo, proibida por §16).
 
-            {/* Quantidade */}
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Quantidade para Baixa *
-              </label>
-              
-              {/* Botões de quantidade rápida */}
-              <div className="mb-3 grid grid-cols-5 gap-2">
-                {quickAmounts.map((amount) => (
-                  <button
-                    key={amount}
-                    type="button"
-                    aria-pressed={quantity === amount}
-                    onClick={() => setValue('quantity', amount, { shouldValidate: true })}
-                    className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                      quantity === amount
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {amount}
-                  </button>
-                ))}
-              </div>
-              
-              <Input
-                id="quantity"
-                aria-label="Quantidade"
-                type="number"
-                min={1}
-                max={product.currentBalance > 0 ? product.currentBalance * 2 : undefined}
-                step={1}
-                className="w-full text-center text-lg py-3 font-medium"
-                {...register('quantity')}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value) || 0;
-                  setValue('quantity', value, { shouldValidate: true });
-                }}
-              />
-              
-              {errors.quantity && (
-                <p className="mt-1 text-sm text-red-600 text-center">
-                  {errors.quantity.message}
-                </p>
-              )}
-              
-              <div className="flex justify-between text-sm text-gray-500 mt-1">
-                <span>Mín: 1 un.</span>
-                <span>
-                  {product.currentBalance > 0
-                    ? `Máx: ${(product.currentBalance * 2).toLocaleString('pt-BR')} un.`
-                    : 'Sem limite máximo'}
-                </span>
-              </div>
-            </div>
-
-            {/* Observação (mantida apenas uma seção) */}
-            <div className="space-y-2">
-              <label htmlFor="note" className="block text-sm font-medium text-gray-700">
-                Observação (opcional)
-              </label>
-              <textarea
-                id="note"
-                rows={3}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="Ex: Motivo da baixa, destino, responsável..."
-                {...register('note')}
-              />
-              <p className="text-xs text-gray-500">
-                Máx. 255 caracteres
-              </p>
-            </div>
-
-            {serverError && (
-              <div className="rounded-md bg-red-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg
-                      className="h-5 w-5 text-red-400"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800">
-                      {serverError}
-                    </h3>
-                  </div>
-                </div>
-              </div>
+          `aria-live="polite"`: a consequência muda a cada tecla, sem interação
+          direta com este bloco. Também é o alvo do `aria-describedby` do campo
+          (A-14ʳ), para que quem chega ao campo saiba o que ele produz.
+        */}
+        <div
+          id={previewId}
+          className="grid grid-cols-2 gap-4 rounded-surface border border-border bg-surface-subtle p-3"
+        >
+          <div>
+            <span className="block text-caption text-text-secondary">Saldo Atual</span>
+            <span className="text-section-title tabular-nums text-text-primary">
+              {formatQuantity(product.currentBalance)}{' '}
+              <span className="text-body font-normal text-text-secondary">un.</span>
+            </span>
+          </div>
+          {/*
+            A live region é a CÉLULA, não o container, e é `aria-atomic`: só o
+            novo saldo muda, e um `aria-live` no container anunciaria o número
+            sozinho — "7 un.", indistinguível do saldo atual. Atômica na célula,
+            o que se ouve é "Novo Saldo 7 un.". O container continua sendo o
+            alvo do `aria-describedby` do campo, com os dois valores.
+          */}
+          <div aria-live="polite" aria-atomic="true">
+            <span className="block text-caption text-text-secondary">Novo Saldo</span>
+            <span
+              className={`text-section-title tabular-nums ${
+                newBalance === 0 ? 'text-warning' : 'text-text-primary'
+              }`}
+            >
+              {formatQuantity(newBalance)}{' '}
+              <span className="text-body font-normal text-text-secondary">un.</span>
+            </span>
+            {newBalance === 0 && (
+              <span className="block text-caption text-warning">Estoque zerado</span>
             )}
+          </div>
+        </div>
 
-        {/* Ações */}
-        <div className="flex flex-col justify-end gap-2 pt-6 sm:flex-row sm:space-x-3">
+        <div className="space-y-2">
+          {/*
+            Alvos de 44px em 320–375px: cinco colunas de `h-11`, sem quebra.
+
+            O grupo é nomeado porque o rótulo visível do campo passou a vir do
+            primitivo `Input` — ou seja, DEPOIS da grade. Sem isto, quem chega
+            aqui por Shift+Tab ouve "50, botão alternar" e não tem como saber
+            que o botão define uma quantidade.
+
+            O nome do grupo evita a palavra "Quantidade" de propósito: ele
+            entraria em `getByLabelText(/Quantidade/i)` junto com o campo, e o
+            nome do CAMPO é o que precisa ser inequívoco.
+          */}
+          <div role="group" aria-label="Valores frequentes" className="grid grid-cols-5 gap-2">
+            {QUICK_AMOUNTS.map((amount) => (
+              <Button
+                key={amount}
+                type="button"
+                variant="shortcut"
+                aria-pressed={quantity === amount}
+                onClick={() => setValue('quantity', amount, { shouldValidate: true })}
+                className={`h-11 w-full border ${
+                  quantity === amount
+                    ? 'border-accent bg-accent-subtle text-accent-subtle-text'
+                    : 'border-border-strong'
+                }`}
+              >
+                {amount}
+              </Button>
+            ))}
+          </div>
+
+          <Input
+            id={quantityId}
+            label="Quantidade*"
+            type="number"
+            // O `*` do rótulo é convenção visual e não chega à tecnologia
+            // assistiva (NVDA silencia a pontuação). `required` expõe o estado
+            // de fato, via `aria-required` nativo do spinbutton.
+            required
+            min={1}
+            // O teto continua sendo `saldo × 2` nesta task: trocá-lo por `saldo`
+            // é a Task 21 (F-01), com o vocabulário de impedimento que ele exige.
+            max={product.currentBalance > 0 ? product.currentBalance * 2 : undefined}
+            step={1}
+            className="h-11 text-center tabular-nums"
+            error={errors.quantity?.message}
+            // Composto à mão porque o preview é externo ao primitivo: o `Input`
+            // monta `aria-describedby` a partir de `hint`/`error`, e a prop
+            // passada aqui o substitui — então o id do erro entra junto. A
+            // convenção `${id}-error` é do próprio `ui/Input`.
+            aria-describedby={
+              errors.quantity?.message ? `${previewId} ${quantityId}-error` : previewId
+            }
+            {...quantityField}
+            ref={(el) => {
+              registerQuantityRef(el);
+              quantityRef.current = el;
+            }}
+            onChange={(e) => {
+              const value = parseInt(e.target.value) || 0;
+              setValue('quantity', value, { shouldValidate: true });
+            }}
+          />
+
+          <div className="flex justify-between text-caption text-text-secondary">
+            <span>Mín: 1 un.</span>
+            <span>
+              {product.currentBalance > 0
+                ? `Máx: ${formatQuantity(product.currentBalance * 2)} un.`
+                : 'Sem limite máximo'}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor={noteId} className="block text-label text-text-primary">
+            Observação (opcional)
+          </label>
+          {/* A ajuda "Máx. 255 caracteres" saiu (N-1): não era validada no Zod
+              do frontend, nem no do backend, nem no Prisma. */}
+          <textarea
+            id={noteId}
+            rows={3}
+            className="w-full rounded-control border border-border-strong bg-surface p-2 text-body outline-none transition-colors duration-120 hover:border-border-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            placeholder="Ex: Motivo da baixa, destino, responsável..."
+            {...register('note')}
+          />
+        </div>
+
+        {/* Erro assíncrono do servidor: `role="alert"` é o caso em que ele de
+            fato ajuda (§11.0), e a mensagem é persistente até nova ação. */}
+        {serverError && (
+          <div role="alert" className="rounded-control bg-danger-subtle p-3">
+            <h3 className="text-body font-medium text-danger">{serverError}</h3>
+          </div>
+        )}
+
+        <div className="flex flex-col justify-end gap-2 pt-2 sm:flex-row">
           <Button
             type="button"
             variant="ghost"
@@ -286,13 +308,8 @@ export function QuickOutModal({ open, onOpenChange, product, onSuccess }: Props)
           </Button>
         </div>
       </form>
-      </div>
-    </div>
-  </div>
+    </Modal>
   );
-
-  // Usa portal para evitar problemas de z-index/stacking context
-  return createPortal(modalContent, document.body);
 }
 
 export default QuickOutModal;
