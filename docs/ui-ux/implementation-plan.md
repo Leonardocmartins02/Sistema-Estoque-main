@@ -1829,6 +1829,12 @@ Remover o que sobrou do vocabulário antigo e transformar o sistema em algo que 
 
 > **Escopo apertado (achado REV-21).** Permitir "resíduos pontuais em qualquer arquivo" transformaria o gate numa **segunda migração transversal**, duplicando o trabalho das tasks donas. **Cada task zera os utilitários banidos dos arquivos que toca**, e isso é critério de aceite dela. A Task 27 apenas (a) remove os tokens legados do config, (b) adiciona a regra de lint e (c) **falha com lista nominal** se encontrar resíduo — que volta para a task dona.
 
+> **Lista de arquivos reconciliada em 03/09/2026 (D-27.4/D-27.5, §9.3.4).** O "e nada mais, por desenho" acima é **anterior** a duas exigências do próprio plano: a remoção do peso 700 da Inter (que só existe em `index.html`) e o teste versionado exigido por REV-22 (que precisa morar em algum arquivo). A lista permitida passa a ser explícita, e **continua fechada**:
+> **implementação** — `eslint.config.js` (raiz do monorepo, **não** `packages/frontend/`), `packages/frontend/tailwind.config.js`, `packages/frontend/index.html`;
+> **teste REV-22** — `packages/frontend/test/designSystemLintRule.test.ts`;
+> **documentação** — este arquivo, em commit documental **separado** do funcional.
+> Nenhum arquivo de `src/` entra: o "e nada mais, por desenho" continua valendo **integralmente para código de produção**, que é o que REV-21 protege.
+
 #### Mudanças previstas
 - Remover `colors.brand` do `tailwind.config.js`; remover `animate-fade-in` (usada 1×, **nunca definida**).
 - Remover o peso 700 da Inter no `index.html` — **só se** os 3 usos de `font-bold` já tiverem saído (Tasks 10 e 20). Verificar antes.
@@ -2299,6 +2305,11 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 | **SD-4** | A Task 24 implementa o resumo de múltiplos erros do `design-system.md` §11.0? | **24** | **RESOLVIDA em 03/09/2026** — ver §9.3.2 |
 | **SD-5** | Task 25 precisa expor o heading do `ui/Modal` para foco programático (A1, transições `form`→`confirm` e `confirm`→`conflict`) | **25** | **RESOLVIDA em 03/09/2026** — ver §9.3.3 |
 | **SD-6** | Task 25: migrar o campo Motivo para `ui/Textarea` ou manter `<textarea>` manual? | **25** | **RESOLVIDA em 03/09/2026** — ver §9.3.3 |
+| **D-27.1** | Escopo do enforcement: só literais de `className` em JSX, ou também mapas de classe em nível de módulo? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
+| **D-27.2** | Severidade da regra: `error` agora ou `warn` promovido depois (§4.3)? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
+| **D-27.3** | `rounded-full` admite exceção semântica para círculos legítimos? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
+| **D-27.4** | Reconciliar as imprecisões textuais I-1 (`brand` por substring), I-2 (`focus` × `focus-visible`) e I-3 (`index.html`) | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
+| **D-27.5** | Onde vive o teste versionado exigido por REV-22, dado "e nada mais, por desenho"? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
 
 #### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
 
@@ -2429,6 +2440,188 @@ O teste RED deve provar **identidade do nó**, não apenas presença.
 10. commit funcional previsto (`refactor(adjustments): alinhar o ajuste aos tokens e pagar dividas de foco`).
 
 Tasks 27/28 continuam fora do escopo.
+
+#### 9.3.4 · D-27.1 a D-27.5 — sub-decisões da Task 27 (RESOLVIDAS em 03/09/2026)
+
+Fechadas **antes** de qualquer RED, sobre inventário read-only do estado pós Tasks 1–26 (`58213d9`) e
+revisão independente do Codex (`codex-cli 0.150.1`, `--sandbox read-only`).
+
+**Inventário que fundamenta as decisões.** Na varredura da lista fechada sobre
+`packages/frontend/src` (43 arquivos) restam **exatamente 3 violações reais**, todas de tasks já
+concluídas:
+
+| Ocorrência | Arquivo:linha | Task dona |
+|---|---|---|
+| `rounded-full` | `src/components/products/ProductFiltersSheet.tsx:66` | **16** |
+| `rounded-full` | `src/components/products/StatusFilterMenu.tsx:62` | **14** |
+| `ring-blue-200` | `src/components/ui/Badge.tsx:18` | **7** |
+
+Todas as demais ocorrências dos termos banidos (`text-gray-400` ×5, `border-gray-300` ×2) estão
+**dentro de comentários** que documentam por que o token foi rejeitado (contraste M-4 / WCAG 1.4.11)
+— não são uso, e a regra escolhida não as alcança (comentário não é nó da AST).
+
+---
+
+**D-27.1 · escopo do enforcement — decisão aprovada:**
+
+- a regra **não** se limita a literais de `className` em JSX;
+- alcança também **strings e templates de código de produção**, inclusive mapas de classe em nível
+  de módulo (`const styles`, `sizeClass`, `variantClass`, `itemClass`, `SURFACE`);
+- continua usando **`no-restricted-syntax`**, regra nativa: **nenhum plugin novo, nenhuma dependência
+  nova**.
+
+**Motivo.** O objetivo literal da task é "não se consegue mais violar sem falhar o CI". Uma regra
+restrita ao atributo JSX teria ponto cego exatamente sobre o padrão dominante do design system: em
+`Badge.tsx` a classe `ring-blue-200` vive no mapa `styles` (linha 18) e só chega ao JSX por
+interpolação `${styles[variant]}` (linha 26) — seria **invisível** para a regra estreita. Ponto
+levantado pelo Codex e confirmado contra o código.
+
+**Forma técnica fechada.** Uma entrada por utilitário; cada entrada cobre os dois tipos de nó numa
+única lista de seletores esquery, com mensagem apontando o token correto:
+
+```
+Literal[value=/(?<![\w-])TOKEN(?![\w-])/], TemplateElement[value.raw=/(?<![\w-])TOKEN(?![\w-])/]
+```
+
+Fronteira `(?<![\w-]) … (?![\w-])` nos utilitários exatos; só a fronteira à esquerda nos prefixos
+(`ring-indigo-`, `ring-blue-`, `bg-gradient-`); `text-\[[0-9]+px\]` para o valor arbitrário.
+**19 entradas no total** — a lista fechada da linha 1835, sem acréscimos.
+
+**Verificado experimentalmente** (ESLint 9.35.0 + `@typescript-eslint/parser`, em memória) — a regra
+acusa as três formas e ignora comentário:
+
+| Forma | Resultado |
+|---|---|
+| `className="ring-blue-200"` | acusa |
+| `const styles = { info: 'ring-blue-200' }` | acusa |
+| `` `border ${c ? 'ring-blue-200' : ''}` `` | acusa |
+| `` className={`h-2 w-2 rounded-full ${d}`} `` | acusa |
+| `// ring-blue-200 foi rejeitado` | **não** acusa |
+| `{/* text-gray-400 reprovado no M-4 */}` | **não** acusa |
+| `className="rounded-control ring-accent"` | **não** acusa |
+
+Rodada contra `src/` real: **43 arquivos, 3 violações, zero falso-positivo** — exatamente o
+inventário acima.
+
+**Alvo.** `packages/{frontend,backend}/src` — o que `pnpm -r run lint` já linta. `test/` **não** é
+alvo da proibição: não é código de produção e o contrato não o exige.
+
+**Falso negativo registrado, sem owner atribuído.** A lista fechada proíbe `ring-blue-*` mas **não**
+`ring-emerald-*`, `ring-amber-*` nem `ring-rose-*` — que o `Badge` usa nas outras três variantes
+(linhas 15–17). A regra reprovará **1 de 4** anéis irmãos. Ampliar a lista **não é** desta task
+(ela é fechada por REV-21); fica como follow-up da task dona do `Badge`.
+
+---
+
+**D-27.2 · severidade — decisão aprovada:** **`error`**.
+
+`warn` não atende ao objetivo literal de impedir regressão no CI. A alternativa progressiva do §4.3
+(`warn` + promoção) fica **descartada** para esta task.
+
+**Consequência de sequenciamento, registrada explicitamente.** `error` + REV-21 (a Task 27 **não**
+edita arquivos de `src/`) implicam que a regra só pode entrar como `error` **depois** que os três
+resíduos acima forem tratados **pelas tasks donas**. Isto **não** autoriza a Task 27 a corrigi-los:
+ela detecta, nomeia e devolve. Enquanto os resíduos existirem, a "Definição de pronto" da Task 27
+(checklist verde) **não é alcançável** — e essa é a ordem correta, não um impedimento.
+
+---
+
+**D-27.3 · `rounded-full` — decisão aprovada:**
+
+- `rounded-full` **permanece na lista proibida**, globalmente;
+- círculos **semanticamente legítimos** podem receber **exceção explícita, local e auditável**;
+- os dois usos atuais **são** exceção legítima.
+
+**Confirmado lendo os dois consumidores inteiros:** em ambos o nó é
+`<span className={`h-2 w-2 rounded-full ${opt.dot}`} aria-hidden="true" />` — um glifo decorativo de
+8×8px que só carrega cor (`bg-emerald-600`/`bg-amber-600`/`bg-rose-600`), irmão de um
+`<span className="flex-1">{opt.label}</span>` que carrega o nome acessível inteiro. **Não** é
+controle, card nem badge improvisado: é indicador circular puro. Isso não colide com o
+`design-system.md` §7, cujas duas razões para eliminar `rounded-full` tratam de **badges de status**
+e do **botão "Movimentar"** — nenhum dos dois é o caso aqui.
+
+**Forma da exceção (a única compatível com `no-restricted-syntax`, sem enfraquecer a regra):**
+
+```
+{/* eslint-disable-next-line no-restricted-syntax -- dot decorativo 8x8 (aria-hidden), D-27.3 */}
+```
+
+acompanhada de `linterOptions: { reportUnusedDisableDirectives: 'error' }` no `eslint.config.js`, que
+faz uma exceção **obsoleta falhar o lint** — é o que a torna auditável em vez de permanente.
+
+**Explicitamente proibido** como alternativa: trocar por valor arbitrário (`rounded-[9999px]`), usar
+`style={{ borderRadius: '50%' }}`, ou remover `rounded-full` da lista global. Qualquer um dos três
+burla o gate em vez de declarar a exceção.
+
+**Quem aplica a exceção:** a **task dona** do arquivo (14 e 16), não a Task 27.
+
+---
+
+**D-27.4 · imprecisões textuais reconciliadas:**
+
+- **I-1 — `brand`.** O critério de aceite "`grep -r "brand\|animate-fade-in"` retorna zero" **falha
+  hoje por falso positivo linguístico**: a palavra portuguesa "que**brand**o"
+  (`MovementHistoryModal.tsx:356`) contém `brand` como substring. O critério passa a ser: **zero usos
+  do token/utilitário**, verificado com fronteira apropriada
+  (`grep -rnE '\bbrand\b|brand-|-brand'`), que hoje retorna **zero**. O token `brand` está limpo e
+  `colors.brand` pode sair do `tailwind.config.js`.
+- **I-2 — foco.** O texto "zero variantes de anel de foco além de `focus`" está **invertido em
+  relação ao que as Tasks 5–25 implementaram**. O padrão real e correto é
+  **`focus-visible:ring-accent` + `ring-offset`** (34 usos), com `focus:outline-none` (19) apenas
+  como reset. `focus:ring` e `focus-within:ring` são **zero**. O critério passa a ser: **zero
+  variantes legadas além do padrão semântico `focus-visible`** — hoje **satisfeito**. **O código não
+  volta para `focus:`.**
+- **I-3 — `index.html`.** A pré-condição declarada ("só se os 3 usos de `font-bold` já tiverem
+  saído") está **cumprida**: `font-bold` é **zero** em `src`. O peso 700 sobrevive apenas na URL da
+  Inter (`index.html:9`). Portanto `packages/frontend/index.html` é **explicitamente permitido** na
+  lista de arquivos da Task 27.
+
+---
+
+**D-27.5 · teste versionado do REV-22 — decisão aprovada:**
+
+- caminho: **`packages/frontend/test/designSystemLintRule.test.ts`**;
+- roda na **suíte frontend já existente** (Vitest) — **nenhum runner novo**, nenhuma dependência
+  nova, **nenhuma alteração de `tsconfig.json`**;
+- usa `Linter` do **ESLint 9.35.0 já instalado**;
+- exercita a **configuração REAL**, carregada da raiz por
+  `createRequire(import.meta.url)('../../../eslint.config.js')` — **não** uma cópia do seletor.
+
+**Por que a config real, e não uma cópia.** É exatamente o que REV-22 pede: uma cópia do seletor
+continuaria verde depois de uma regressão no seletor real, e o achado existe para impedir isso.
+Como `createRequire(...)` devolve `any`, não há resolução estática de módulo — por isso `allowJs:
+false` no `tsconfig` do frontend **não** é obstáculo, e nada precisa ser afrouxado.
+
+**RED discriminativo (verificado).** Carregando hoje a config real a partir de
+`packages/frontend/test/`, os 9 blocos carregam e o bloco com `no-restricted-syntax` é **AUSENTE**.
+O teste falha por **ausência da regra** — falha comportamental, não erro de import/setup. O GREEN é
+a regra passar a existir e reprovar um literal proibido enquanto aceita um permitido.
+
+**Reconciliação com "e nada mais, por desenho":** o teste é arquivo de **teste**, não de produção; a
+lista fechada de arquivos permitidos está no bloco da Task 27, reconciliada junto com I-3.
+
+---
+
+**Resíduos e ownership — a Task 27 NÃO os corrige (REV-21 soberano):**
+
+| Resíduo | Classificação | Destino |
+|---|---|---|
+| `rounded-full` — `ProductFiltersSheet.tsx:66` | **exceção legítima** (D-27.3) | **Task 16** aplica a diretiva de exceção documentada |
+| `rounded-full` — `StatusFilterMenu.tsx:62` | **exceção legítima** (D-27.3) | **Task 14** aplica a diretiva de exceção documentada |
+| `ring-blue-200` — `Badge.tsx:18` | **violação real** | **Task 7** — e decide o substituto semântico, junto do falso negativo dos irmãos `ring-{emerald,amber,rose}-200`. **Este plano não inventa o token substituto** |
+
+**Ordem TDD registrada:**
+
+1. decisão documental (este registro);
+2. RED de `designSystemLintRule.test.ts`;
+3. GREEN: `no-restricted-syntax` + `reportUnusedDisableDirectives` no `eslint.config.js`;
+4. `colors.brand` fora do `tailwind.config.js`;
+5. peso 700 da Inter fora do `index.html`;
+6. varredura versionada (fronteira de palavra, conforme I-1/I-2);
+7. gates completos + QA visual + `accessibility-reviewer`;
+8. commit funcional previsto (`chore(ui): proibir utilitarios fora do design system no lint`).
+
+A Task 28 continua fora do escopo.
 
 ### 9.4 · Gate executável das decisões
 
