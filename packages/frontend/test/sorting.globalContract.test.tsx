@@ -12,7 +12,7 @@ import { DataTable } from '../src/components/ui/DataTable';
 import { useProductsQuery } from '../src/hooks/useProductsQuery';
 
 import { makeProduct } from './helpers/factories';
-import { makeSpyActions } from './helpers/render';
+import { makeSpyActions, renderWithProviders } from './helpers/render';
 
 vi.mock('../src/api/products', () => ({ fetchProducts: vi.fn() }));
 vi.mock('../src/api/quickOut', () => ({ fetchQuickOutHistory: vi.fn() }));
@@ -278,7 +278,7 @@ describe('QuickOutHistoryModal — delega a ordenação ao backend (F-03)', () =
 
   it('envia sortBy e sortDir na consulta inicial, com o default do contrato', async () => {
     mockedFetchHistory.mockResolvedValue({ items, total: 2, page: 1, pageSize: 10 });
-    render(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
+    renderWithProviders(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
 
     await waitFor(() => expect(mockedFetchHistory).toHaveBeenCalled());
     const params = mockedFetchHistory.mock.calls.at(-1)?.[0];
@@ -288,7 +288,7 @@ describe('QuickOutHistoryModal — delega a ordenação ao backend (F-03)', () =
   it('acionar um cabeçalho pede a nova ordenação à API', async () => {
     const user = userEvent.setup();
     mockedFetchHistory.mockResolvedValue({ items, total: 2, page: 1, pageSize: 10 });
-    render(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
+    renderWithProviders(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(mockedFetchHistory).toHaveBeenCalled());
 
     await user.click(screen.getByTitle('Ordenar por Quantidade'));
@@ -308,7 +308,7 @@ describe('QuickOutHistoryModal — delega a ordenação ao backend (F-03)', () =
       page: 1,
       pageSize: 10,
     });
-    render(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
+    renderWithProviders(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText('Bravo')).toBeInTheDocument());
 
@@ -348,7 +348,7 @@ describe('QuickOutHistoryModal — trocar a ordenação reseta a página (3-F4 /
   it('busca e intervalo de datas já aplicados permanecem; ordenar na página 2 volta para page=1 com o novo critério', async () => {
     mockedFetchHistory.mockResolvedValue({ items, total: 25, page: 1, pageSize: 10 });
     const user = userEvent.setup();
-    render(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
+    renderWithProviders(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(mockedFetchHistory).toHaveBeenCalled());
 
     // Busca e datas já definidas ANTES de ordenar — precisam sobreviver.
@@ -385,7 +385,7 @@ describe('QuickOutHistoryModal — trocar a ordenação reseta a página (3-F4 /
   it('acionar a mesma coluna de novo (asc → desc) também volta para a página 1', async () => {
     mockedFetchHistory.mockResolvedValue({ items, total: 25, page: 1, pageSize: 10 });
     const user = userEvent.setup();
-    render(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
+    renderWithProviders(<QuickOutHistoryModal open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(mockedFetchHistory).toHaveBeenCalled());
 
     await user.click(screen.getByRole('button', { name: 'Próxima' }));

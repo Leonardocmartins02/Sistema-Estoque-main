@@ -1,15 +1,21 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { fetchProducts } from '../src/api/products';
 import { fetchQuickOutHistory } from '../src/api/quickOut';
 import QuickOutHistoryModal from '../src/components/QuickOutHistoryModal';
+import QuickOutListModal from '../src/components/QuickOutListModal';
 
-import { FIXTURE_DATE_ISO, makeQuickOutHistoryItem, paged } from './helpers/factories';
+import { FIXTURE_DATE_ISO, makeProduct, makeQuickOutHistoryItem, paged } from './helpers/factories';
+import { renderWithProviders } from './helpers/render';
 
 vi.mock('../src/api/quickOut', () => ({ fetchQuickOutHistory: vi.fn() }));
+vi.mock('../src/api/products', () => ({ fetchProducts: vi.fn() }));
 
 const mockedFetchHistory = vi.mocked(fetchQuickOutHistory);
+const mockedFetchProducts = vi.mocked(fetchProducts);
 
 /**
  * Characterization tests do `QuickOutHistoryModal` (`characterization-plan.md` §4).
@@ -37,14 +43,37 @@ const mockedFetchHistory = vi.mocked(fetchQuickOutHistory);
  * é pedido à API), nunca o estado interno do componente.
  */
 
+/**
+ * Harness com os providers reais (achado DEP-02, Task 22).
+ *
+ * Trocado ANTES da migração do componente, com o produto ainda inalterado —
+ * mesmo motivo da Task 22.
+ *
+ * **Por que um componente de casca em vez de `rerender`:** QOH-8 fecha e
+ * reabre o diálogo, e o `rerender` do RTL substitui a árvore inteira passada
+ * ao `render` — inclusive o `QueryClientProvider`, que renasceria com um cache
+ * vazio a cada alternância. O teste passaria a medir a reconstrução do cache,
+ * não a preservação do recorte (N-9). Aqui só o `open` muda: o provider, o
+ * `QueryClient` e a instância do componente sobrevivem — que é exatamente o
+ * que `ProductDashboard` faz.
+ */
 function renderHistory() {
   const onOpenChange = vi.fn();
-  const view = render(<QuickOutHistoryModal open onOpenChange={onOpenChange} />);
+  let setOpen!: (v: boolean) => void;
+
+  function Harness() {
+    const [open, setOpenState] = useState(true);
+    setOpen = setOpenState;
+    return <QuickOutHistoryModal open={open} onOpenChange={onOpenChange} />;
+  }
+
+  const view = renderWithProviders(<Harness />);
   return {
     onOpenChange,
+    client: view.client,
     user: userEvent.setup(),
-    close: () => view.rerender(<QuickOutHistoryModal open={false} onOpenChange={onOpenChange} />),
-    reopen: () => view.rerender(<QuickOutHistoryModal open onOpenChange={onOpenChange} />),
+    close: () => act(() => setOpen(false)),
+    reopen: () => act(() => setOpen(true)),
   };
 }
 
@@ -64,6 +93,10 @@ function lastQuery() {
 beforeEach(() => {
   mockedFetchHistory.mockReset();
   mockedFetchHistory.mockResolvedValue(paged([makeQuickOutHistoryItem()], { total: 1 }));
+  mockedFetchProducts.mockReset();
+  mockedFetchProducts.mockResolvedValue(
+    paged([makeProduct({ id: 'p1', name: 'Caneta Azul', sku: 'CAN-001' })], { total: 1 }),
+  );
 });
 
 describe('QuickOutHistoryModal — filtros (QOH-1, QOH-2)', () => {
@@ -243,5 +276,154 @@ describe('QuickOutHistoryModal — o recorte sobrevive a fechar e reabrir (QOH-8
     );
     expect(searchField()).toHaveValue('caneta');
     expect(dateFields()[0]).toHaveValue('2026-08-01');
+  });
+});
+
+/**
+ * Requisitos da Task 23 — o que a migração **corrige**.
+ *
+ * Os casos acima congelam o que precisa sobreviver; estes descrevem o que
+ * precisa mudar. Nenhum deles passava antes da migração: o componente não era
+ * um diálogo (C-1), a falha de consulta virava "Nenhuma baixa encontrada."
+ * (N-6), e busca e datas não tinham rótulo (N-8).
+ */
+describe('QuickOutHistoryModal — requisitos da migração (Task 23)', () => {
+  it('se anuncia como diálogo modal rotulado pelo título (C-1)', async () => {
+    renderHistory();
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAccessibleName('Histórico de Baixas');
+  });
+
+  it('Escape fecha o diálogo (ALTERAR INTENCIONALMENTE — §9.3 item 20)', async () => {
+    const { onOpenChange, user } = renderHistory();
+    await screen.findByRole('dialog');
+
+    await user.keyboard('{Escape}');
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('falha de consulta é comunicada e não se confunde com lista vazia (N-6)', async () => {
+    mockedFetchHistory.mockRejectedValue(new Error('Servidor indisponível'));
+    renderHistory();
+
+    expect(await screen.findByText(/Servidor indisponível/)).toBeInTheDocument();
+    // O texto de vazio afirmaria "não há baixas" — conclusão oposta à real.
+    expect(screen.queryByText(/Nenhuma baixa/i)).not.toBeInTheDocument();
+  });
+
+  it('no erro, o contador não afirma "0 registro(s)" (N-6)', async () => {
+    mockedFetchHistory.mockRejectedValue(new Error('Servidor indisponível'));
+    renderHistory();
+
+    await screen.findByText(/Servidor indisponível/);
+    expect(screen.queryByText(/0 registro\(s\)/)).not.toBeInTheDocument();
+  });
+
+  it('a busca tem rótulo associado, não só placeholder (N-8)', async () => {
+    renderHistory();
+
+    expect(await screen.findByRole('searchbox')).toHaveAccessibleName(/buscar/i);
+  });
+
+  it('os campos de data têm rótulo associado (N-8)', async () => {
+    renderHistory();
+    await screen.findByText('Caneta Azul');
+
+    const [fromField, toField] = dateFields();
+    expect(fromField).toHaveAccessibleName(/de/i);
+    expect(toField).toHaveAccessibleName(/até/i);
+  });
+
+  it('ordenar envia o critério à consulta e volta para a primeira página (contrato da Task 3)', async () => {
+    mockedFetchHistory.mockResolvedValue(paged([makeQuickOutHistoryItem()], { total: 25 }));
+    const { user } = renderHistory();
+    await screen.findByText('Caneta Azul');
+
+    await user.click(screen.getByRole('button', { name: 'Próxima' }));
+    await waitFor(() => expect(lastQuery()?.page).toBe(2));
+
+    await user.click(screen.getByRole('button', { name: /Produto/ }));
+
+    // A ordenação é global e server-side desde a Task 3: o critério viaja na
+    // consulta, e a página volta a 1 para não cair num recorte vazio.
+    await waitFor(() => expect(lastQuery()?.sortBy).toBe('productName'));
+    expect(lastQuery()?.page).toBe(1);
+  });
+});
+
+/**
+ * Empilhamento lista→histórico (achados ORD-01 e REV-15), decidido na Task 23.
+ *
+ * O teste vive aqui, e não em `QuickOutListModal.test.tsx`, porque o critério
+ * só existe com os **dois** lados migrados — foi exatamente por isso que a
+ * Task 22 o adiou. `ProductDashboard` mantém dois estados `open` irmãos e as
+ * duas instâncias montadas o tempo todo; o harness abaixo reproduz essa fiação
+ * sem arrastar o dashboard inteiro para o teste.
+ */
+function renderStack() {
+  const onPick = vi.fn();
+
+  function Harness() {
+    const [listOpen, setListOpen] = useState(true);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    return (
+      <>
+        <QuickOutListModal
+          open={listOpen}
+          onOpenChange={setListOpen}
+          onPick={onPick}
+          onOpenHistory={() => setHistoryOpen(true)}
+        />
+        <QuickOutHistoryModal open={historyOpen} onOpenChange={setHistoryOpen} />
+      </>
+    );
+  }
+
+  renderWithProviders(<Harness />);
+  return { onPick, user: userEvent.setup() };
+}
+
+describe('Empilhamento lista→histórico (Task 23)', () => {
+  it('com o histórico aberto, só ele é exposto e o foco fica preso nele', async () => {
+    const { user } = renderStack();
+    const trigger = await screen.findByRole('button', { name: 'Histórico de Baixas' });
+
+    await user.click(trigger);
+    await screen.findByText(/Consulte todas as baixas/);
+
+    // Um único diálogo na árvore de acessibilidade: a lista continua montada,
+    // mas inerte. Dois aria-modal ativos seriam dois traps concorrentes.
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]).toHaveAccessibleName('Histórico de Baixas');
+
+    // O foco entrou no diálogo do topo e não escapa por Tab.
+    expect(dialogs[0].contains(document.activeElement)).toBe(true);
+    await user.tab();
+    await user.tab();
+    expect(dialogs[0].contains(document.activeElement)).toBe(true);
+  });
+
+  it('ao fechar o histórico, o foco volta ao gatilho dentro da lista', async () => {
+    const { user } = renderStack();
+    const trigger = await screen.findByRole('button', { name: 'Histórico de Baixas' });
+
+    await user.click(trigger);
+    await screen.findByText(/Consulte todas as baixas/);
+
+    await user.keyboard('{Escape}');
+
+    // A lista volta a ser o único diálogo exposto, e o foco reaparece no
+    // controle de onde a pessoa saiu — não no <body>.
+    await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Selecionar Produto para Baixa');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Histórico de Baixas' }),
+      ),
+    );
   });
 });

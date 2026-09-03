@@ -43,6 +43,47 @@ const variantClass: Record<ModalVariant, string> = {
 };
 
 /**
+ * Pilha de diálogos abertos, compartilhada por todas as instâncias do
+ * primitivo — a peça que faz o empilhamento ter **um** diálogo exposto.
+ *
+ * O Radix já resolve trap e Escape empilhados sozinho (`FocusScope` mantém
+ * uma pilha e pausa o escopo de baixo; `DismissableLayer` só entrega Escape à
+ * camada do topo). O que ele NÃO resolve aqui é a ocultação para tecnologia
+ * assistiva: `DialogContentModal` chama `hideOthers()` do pacote
+ * `aria-hidden`, e essa função **preserva deliberadamente** todo nó
+ * `[aria-live]` da página e, com ele, todos os seus ancestrais
+ * (`aria-hidden/src/index.ts`: `targets.push(...parent.querySelectorAll('[aria-live], script'))`).
+ *
+ * Consequência medida: um diálogo que contenha uma live region montada — como
+ * as de `QuickOutListModal` (`role="status"` + `role="alert"`, montadas
+ * sempre, por regra do `CLAUDE.md`) — **nunca** é ocultado pelo diálogo que
+ * abre por cima dele. Ficam dois `aria-modal="true"` expostos: exatamente o
+ * cenário que ORD-01/REV-15 mandaram evitar.
+ *
+ * Por isso a camada que não é o topo recebe `aria-hidden` aqui, no primitivo:
+ * é a única instância que sabe que existe uma camada acima. Não se usa
+ * `inert` — o trap do Radix já impede o teclado de chegar lá, e `inert` no
+ * caminho da restauração de foco é risco sem ganho.
+ */
+const openStack: symbol[] = [];
+const stackListeners = new Set<() => void>();
+
+function emitStackChange() {
+  stackListeners.forEach((listener) => listener());
+}
+
+function subscribeToStack(listener: () => void) {
+  stackListeners.add(listener);
+  return () => {
+    stackListeners.delete(listener);
+  };
+}
+
+function topOfStack() {
+  return openStack[openStack.length - 1];
+}
+
+/**
  * Primitivo ÚNICO de diálogo do projeto — wrapper fino sobre `@radix-ui/react-dialog`.
  *
  * A API pública é a mesma do antigo `Modal` custom (`open`/`onClose`/`title`/
@@ -77,6 +118,25 @@ export const Modal: React.FC<ModalProps> = ({
     if (open) lastActiveRef.current = document.activeElement as HTMLElement | null;
   }, [open]);
 
+  // Identidade estável desta instância dentro da pilha de diálogos abertos.
+  const tokenRef = React.useRef<symbol>();
+  if (!tokenRef.current) tokenRef.current = Symbol('modal');
+  const token = tokenRef.current;
+
+  React.useEffect(() => {
+    if (!open) return;
+    openStack.push(token);
+    emitStackChange();
+    return () => {
+      const index = openStack.indexOf(token);
+      if (index >= 0) openStack.splice(index, 1);
+      emitStackChange();
+    };
+  }, [open, token]);
+
+  const top = React.useSyncExternalStore(subscribeToStack, topOfStack, topOfStack);
+  const isTop = !open || top === undefined || top === token;
+
   return (
     <Dialog.Root
       open={open}
@@ -88,6 +148,9 @@ export const Modal: React.FC<ModalProps> = ({
         <Dialog.Overlay className="fixed inset-0 z-[1000] bg-black/40 backdrop-blur-sm" />
         <Dialog.Content
           aria-modal="true"
+          // Só o topo é exposto à tecnologia assistiva; ver a nota da pilha
+          // acima para o motivo de o `hideOthers()` do Radix não bastar.
+          aria-hidden={isTop ? undefined : true}
           // Sem descrição, o Radix apontaria `aria-describedby` para um id
           // inexistente; `undefined` explícito é o contrato dele para isso.
           {...(description ? {} : { 'aria-describedby': undefined })}
