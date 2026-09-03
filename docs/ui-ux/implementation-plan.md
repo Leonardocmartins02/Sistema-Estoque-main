@@ -1714,6 +1714,14 @@ Tasks 1, 5, 6, 7, 9. (A6 foi paga na Task 6; A5 é compartilhada com a Task 19.)
 #### Componentes e arquivos prováveis
 `src/components/AdjustmentFormModal.tsx`
 
+> **Escopo de arquivos ampliado em 03/09/2026 por SD-5 (§9.3.3).** O rascunho listava só o
+> `AdjustmentFormModal.tsx`. Pagar A1 (foco deliberado nas trocas `form`→`confirm` e
+> `confirm`→`conflict`) exige alcançar o heading (`Dialog.Title`) do primitivo `ui/Modal`, que hoje
+> não expõe nenhuma API para isso. O escopo passa a incluir também `src/components/ui/Modal.tsx`
+> (prop aditiva `titleRef`) e `test/Modal.test.tsx` (contrato do primitivo testado antes de
+> `AdjustmentFormModal` depender dele). Nenhum outro arquivo de produção é tocado; `ui/Input.tsx` e
+> `ui/Textarea.tsx` continuam fora (ver SD-6).
+
 #### Mudanças previstas
 - Tokens, foco único, `radius`, fim de `ring-brand`.
 - **A1:** mover o foco deliberadamente a cada troca de passo.
@@ -2289,6 +2297,8 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 | **SD-2** | `sortBy=balance` continua global no serviço ou migra para coluna computada no banco | **3** | Mantido no serviço, com o teto de volume medido no PR; a coluna computada fica como follow-up |
 | **SD-3** | Campo Descrição do `ProductFormModal`: o "textarea equivalente" é primitivo novo ou markup local? | **24** | **RESOLVIDA em 03/09/2026** — ver §9.3.2 |
 | **SD-4** | A Task 24 implementa o resumo de múltiplos erros do `design-system.md` §11.0? | **24** | **RESOLVIDA em 03/09/2026** — ver §9.3.2 |
+| **SD-5** | Task 25 precisa expor o heading do `ui/Modal` para foco programático (A1, transições `form`→`confirm` e `confirm`→`conflict`) | **25** | **RESOLVIDA em 03/09/2026** — ver §9.3.3 |
+| **SD-6** | Task 25: migrar o campo Motivo para `ui/Textarea` ou manter `<textarea>` manual? | **25** | **RESOLVIDA em 03/09/2026** — ver §9.3.3 |
 
 #### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
 
@@ -2345,6 +2355,80 @@ itens** (ordenação por saldo no banco, UF-08, política de SKU/F-05) e este pl
 genérica de follow-ups — cada um é registrado na task que o origina. Atribuir o resumo §11.0 a uma
 task existente, ou criar task própria para ele, é decisão de quem assumir essa etapa; **não é da
 Task 24** e nenhuma task atual o herda por omissão.
+
+#### 9.3.3 · SD-5 e SD-6 — sub-decisões da Task 25 (RESOLVIDAS em 03/09/2026)
+
+**SD-5 · foco programático no heading do `Modal` — decisão aprovada:**
+
+- ampliar a Task 25 para incluir `src/components/ui/Modal.tsx` e `test/Modal.test.tsx`;
+- `ui/Modal` ganha uma prop opcional `titleRef?: React.Ref<HTMLHeadingElement>`;
+- a ref é encaminhada para `Dialog.Title`;
+- `tabIndex={-1}` é aplicado **somente** quando `titleRef` está presente;
+- consumidores que não passam `titleRef` mantêm o comportamento e o markup semântico atuais;
+- não usar `querySelector`/workaround local;
+- `test/Modal.test.tsx` recebe RED próprio, **antes** do GREEN do primitivo.
+
+**Alvos de foco fechados para A1:**
+
+- `form` → `confirm`: heading "Ajustar estoque?";
+- `confirm` → `conflict`: heading "O estoque deste produto mudou";
+- `conflict` → `form` via "Revisar": campo "Nova quantidade".
+
+**Mecanismo:**
+
+- o heading é focado depois do commit/render do novo step;
+- um efeito controlado pela mudança de `step` dispara o foco, sem refocar em renders não relacionados;
+- o retorno via "Revisar" usa sinalização (ref) + `setFocus` do react-hook-form, chamado somente
+  depois que o step `form` estiver novamente montado — evita a corrida entre a atualização de
+  estado e o campo ainda não existir no DOM.
+
+**SD-6 · campo Motivo — decisão aprovada:**
+
+**MANTER** o `<textarea>` manual nesta task (**não** migrar para `ui/Textarea`).
+
+Razão:
+
+- o erro atual de Motivo possui `role="alert"`;
+- `ui/Textarea` não replica esse comportamento;
+- migrar removeria um comportamento acessível existente e ampliaria a mudança além da intenção da
+  Task 25.
+
+Preservar no textarea manual: `label`/`id`, `aria-invalid`, `aria-describedby`, `role="alert"` da
+mensagem `errors.reason`.
+
+Durante o GREEN, alterar **somente** o necessário para: tokens; `radius`; foco; remoção de
+`ring-brand`/`brand`.
+
+**Não alterar `ui/Textarea.tsx`. Não alterar `ui/Input.tsx`.**
+
+**Interpretação de A4 (live region) registrada:**
+
+"Live region sempre montada" significa sempre montada **durante o step `form`**, independentemente
+de `hasValidPreview`. Não precisa persistir através dos steps `confirm`/`conflict`.
+
+No `form`:
+
+- o mesmo nó `aria-live` existe mesmo sem preview válido;
+- quando o preview se torna válido, o conteúdo desse **mesmo** nó é atualizado;
+- no fluxo pós-conflito, após "Revisar", o nó já existe e a nova quantidade atualiza sua mesma
+  instância.
+
+O teste RED deve provar **identidade do nó**, não apenas presença.
+
+**Ordem TDD registrada:**
+
+1. decisão documental;
+2. RED de `Modal.test.tsx`;
+3. GREEN mínimo de `ui/Modal`;
+4. RED de `AdjustmentFormModal` para A1/A4;
+5. GREEN de `AdjustmentFormModal`, incluindo tokens do Motivo;
+6. regressão;
+7. `accessibility-reviewer`;
+8. QA manual teclado + leitor de tela, incluindo conflito;
+9. checklist completo;
+10. commit funcional previsto (`refactor(adjustments): alinhar o ajuste aos tokens e pagar dividas de foco`).
+
+Tasks 27/28 continuam fora do escopo.
 
 ### 9.4 · Gate executável das decisões
 
