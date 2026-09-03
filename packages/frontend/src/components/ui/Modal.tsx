@@ -22,6 +22,14 @@ export interface ModalProps {
   headerActions?: React.ReactNode;
   /** Classe do corpo do diálogo (para padding customizado). */
   bodyClassName?: string;
+  /**
+   * Ref opcional para o heading real (`Dialog.Title`) — SD-5
+   * (`implementation-plan.md` §9.3.3). Aditiva: quando ausente, nada muda no
+   * comportamento existente. Quando presente, o heading recebe `tabIndex={-1}`
+   * para ficar programaticamente focável (ex.: devolver o foco a ele após uma
+   * ação assíncrona), sem entrar na ordem natural de tabulação.
+   */
+  titleRef?: React.Ref<HTMLHeadingElement>;
 }
 
 const sizeClass: Record<ModalSize, string> = {
@@ -108,6 +116,7 @@ export const Modal: React.FC<ModalProps> = ({
   variant = 'dialog',
   headerActions,
   bodyClassName = 'px-4 py-3',
+  titleRef,
 }) => {
   // O Radix devolve o foco para `Dialog.Trigger`, mas neste projeto `open` é
   // sempre controlado por estado (não existe Trigger). Guardamos o elemento
@@ -162,7 +171,13 @@ export const Modal: React.FC<ModalProps> = ({
         >
           <div className="flex shrink-0 items-start justify-between gap-4 border-b px-4 py-3">
             <div>
-              <Dialog.Title className="text-lg font-semibold text-gray-900">{title}</Dialog.Title>
+              <Dialog.Title
+                ref={titleRef}
+                tabIndex={titleRef ? -1 : undefined}
+                className="text-lg font-semibold text-gray-900"
+              >
+                {title}
+              </Dialog.Title>
               {description && (
                 <Dialog.Description className="text-sm text-gray-600">{description}</Dialog.Description>
               )}

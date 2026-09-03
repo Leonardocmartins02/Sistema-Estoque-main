@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -490,5 +490,140 @@ describe('AdjustmentFormModal — correções pós-review', () => {
       expectedPreviousQuantity: 20,
       reason: 'Contagem física mensal',
     });
+  });
+});
+
+/**
+ * A1/A4 (Task 25, `implementation-plan.md` §9.3.3) — foco programático nas
+ * transições de step e identidade da live region do step `form`.
+ *
+ * RED escrito ANTES do GREEN de `AdjustmentFormModal` (ordem TDD registrada
+ * em §9.3.3, passo 4) — o `Modal` já aceita `titleRef` (SD-5, GREEN), mas
+ * `AdjustmentFormModal` ainda não o utiliza.
+ */
+describe('AdjustmentFormModal — A1/A4 (foco programático e live region)', () => {
+  beforeEach(() => {
+    mockedCreateAdjustment.mockReset();
+    mockedFetchProduct.mockReset();
+  });
+
+  it('A1: form → confirm — o heading "Ajustar estoque?" recebe foco', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await fillValidFormAndAdvance(user);
+
+    // Role + nome acessível, nunca seletor CSS: é o mesmo heading que rotula
+    // o diálogo (`Dialog.Title` via `ui/Modal`).
+    expect(await screen.findByRole('heading', { name: 'Ajustar estoque?' })).toHaveFocus();
+  });
+
+  it('A1: confirm → conflict — o heading "O estoque deste produto mudou" recebe foco', async () => {
+    const user = userEvent.setup();
+    // Reaproveita exatamente o padrão de mock 409 já usado pela suíte de
+    // conflito (describe "conflito de concorrência").
+    mockedCreateAdjustment.mockRejectedValueOnce(new ApiRequestError(409, 'Conflito.'));
+    mockedFetchProduct.mockResolvedValueOnce({ ...product, balance: 15 });
+    renderModal();
+
+    await fillValidFormAndAdvance(user);
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+    await screen.findByRole('button', { name: 'Revisar' }); // marca a chegada ao passo de conflito
+
+    expect(
+      await screen.findByRole('heading', { name: 'O estoque deste produto mudou' }),
+    ).toHaveFocus();
+  });
+
+  it('A1: conflict → form via "Revisar" — o campo "Nova quantidade" recebe foco', async () => {
+    const user = userEvent.setup();
+    mockedCreateAdjustment.mockRejectedValueOnce(new ApiRequestError(409, 'Conflito.'));
+    mockedFetchProduct.mockResolvedValueOnce({ ...product, balance: 15 });
+    renderModal();
+
+    await fillValidFormAndAdvance(user);
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+    await user.click(await screen.findByRole('button', { name: 'Revisar' }));
+
+    expect(await screen.findByLabelText(/Nova quantidade/i)).toHaveFocus();
+  });
+
+  /**
+   * A4 — interpretação registrada em §9.3.3: "sempre montada" = sempre
+   * montada DURANTE o step `form`, independentemente de `hasValidPreview`.
+   * Hoje o nó só existe quando `hasValidPreview` é `true`
+   * (`{hasValidPreview && <p aria-live="polite">}`), e `setValue('targetQuantity',
+   * '')` em `handleReview` zera o valor — o nó é DESMONTADO logo depois de
+   * "Revisar", exatamente quando o contrato exige que ele já exista.
+   *
+   * A busca é escopada ao `role="dialog"` real (`screen.getByRole('dialog')
+   * .querySelector('[aria-live="polite"]')`), não à página inteira: `<p
+   * aria-live="polite">` não carrega role/nome acessível próprio que
+   * discrimine sua identidade, e `ToastProvider` — sempre montado por este
+   * harness — expõe um `<div role="status" aria-live="polite">` permanente
+   * FORA do diálogo. Escopar ao diálogo isola o nó do `AdjustmentFormModal`
+   * sem depender da tag `<p>` nem de nenhum detalhe de implementação além da
+   * semântica (é uma live region dentro do diálogo do formulário).
+   */
+  /**
+   * A5 (§14.2 regra 3, precedente de Task 19 — `MovementHistoryModal.test.tsx`,
+   * "a seta recebe texto sr-only, pagando a dívida A5"): a transição visual
+   * "20 → 18" é `aria-hidden`; quem usa leitor de tela precisa do
+   * equivalente textual "de 20 para 18", num nó separado.
+   *
+   * `getByText` casa pelo texto INTEIRO de um nó — o `<span aria-hidden>`
+   * contém literalmente "20 → 18" (nunca a frase "de 20 para 18"), então esta
+   * busca só pode ser satisfeita pelo `<span className="sr-only">`. Não é
+   * necessário inspecionar `className` para discriminar: a frase em si já é
+   * exclusiva do nó acessível, exatamente como no precedente citado.
+   */
+  it('A5: na confirmação, existe o equivalente textual sr-only da transição de saldo', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await fillValidFormAndAdvance(user);
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByText('de 20 para 18')).toBeInTheDocument();
+  });
+
+  it('A4: após "Revisar", a live region do step form já existe (mesmo sem preview válido) e é o MESMO nó ao ganhar conteúdo', async () => {
+    const user = userEvent.setup();
+    mockedCreateAdjustment.mockRejectedValueOnce(new ApiRequestError(409, 'Conflito.'));
+    mockedFetchProduct.mockResolvedValueOnce({ ...product, balance: 15 });
+    renderModal();
+
+    await fillValidFormAndAdvance(user);
+    await user.click(await screen.findByRole('button', { name: 'Confirmar ajuste' }));
+    await user.click(await screen.findByRole('button', { name: 'Revisar' }));
+
+    // 1. Volta ao `form`: a quantidade está vazia (`hasValidPreview` falso
+    // hoje), mas o nó da live region precisa existir mesmo assim.
+    await screen.findByLabelText(/Nova quantidade/i);
+    const liveRegionAfterReview = screen.getByRole('dialog').querySelector('[aria-live="polite"]');
+    expect(liveRegionAfterReview).not.toBeNull();
+
+    // 2. Sem preview válido ainda, o nó não pode exibir o preview da
+    // tentativa anterior (20 → 18) — seria uma leitura obsoleta para quem usa
+    // leitor de tela.
+    expect(liveRegionAfterReview).not.toHaveTextContent(/20 → 18/);
+
+    // 3-4. Digita uma nova quantidade válida.
+    await user.type(screen.getByLabelText(/Nova quantidade/i), '12');
+
+    // 5. Identidade: é o MESMO nó que ganhou conteúdo, não um novo `<p>`
+    // remontado quando `hasValidPreview` voltou a ser verdadeiro.
+    const liveRegionNow = screen.getByRole('dialog').querySelector('[aria-live="polite"]');
+    expect(liveRegionNow).toBe(liveRegionAfterReview);
+
+    // 6. Conteúdo atualizado com o preview correto: saldo real pós-conflito
+    // (15, não o saldo original 20) → nova quantidade (12), diferença -3.
+    expect(liveRegionNow).toHaveTextContent(/15 → 12/);
+    expect(liveRegionNow).toHaveTextContent(/-3/);
+
+    // 7. A5: o mesmo nó também expõe o equivalente textual sr-only — não
+    // basta o texto decorativo `aria-hidden` "15 → 12"; `getByText` só casa
+    // com a frase completa "de 15 para 12", que só existe no span acessível.
+    expect(within(liveRegionNow as HTMLElement).getByText('de 15 para 12')).toBeInTheDocument();
   });
 });

@@ -1,18 +1,32 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { createRef, useState, type Ref } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import Modal from '../src/components/ui/Modal';
 
-function Harness({ title = 'Título A' }: { title?: string }) {
+// `titleRef` é opcional e, quando ausente, não é repassado ao `Modal` —
+// os testes existentes continuam exercitando exatamente o mesmo caminho.
+function Harness({
+  title = 'Título A',
+  titleRef,
+}: {
+  title?: string;
+  titleRef?: Ref<HTMLHeadingElement>;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" onClick={() => setOpen(true)}>
         abrir
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title={title} description="Uma descrição">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={title}
+        description="Uma descrição"
+        {...(titleRef ? { titleRef } : {})}
+      >
         <input aria-label="campo" />
       </Modal>
     </>
@@ -134,6 +148,93 @@ describe('Modal (primitivo único do design system)', () => {
       </Modal>,
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * `titleRef` (SD-5, `implementation-plan.md` §9.3.3) — API aditiva para foco
+ * programático no heading real (`Dialog.Title`), usada pela Task 25 nas
+ * transições `form`→`confirm` e `confirm`→`conflict` do `AdjustmentFormModal`.
+ *
+ * Contrato: a ref aponta para o heading real; `tabIndex={-1}` aparece
+ * SOMENTE quando `titleRef` é fornecido; sem `titleRef`, nada muda; o nome
+ * acessível do diálogo continua vindo do título nos dois casos; e a presença
+ * de `titleRef` não pode regredir trap, Escape ou retorno de foco.
+ *
+ * Estes testes são o RED do primitivo — vêm ANTES do GREEN de `ui/Modal`
+ * (ordem TDD registrada em §9.3.3, passo 2).
+ */
+describe('Modal — titleRef (SD-5, foco programático no heading)', () => {
+  it('titleRef aponta exatamente para o heading real (Dialog.Title)', async () => {
+    const titleRef = createRef<HTMLHeadingElement>();
+    const user = userEvent.setup();
+    render(<Harness titleRef={titleRef} />);
+    await user.click(screen.getByRole('button', { name: 'abrir' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const labelledBy = dialog.getAttribute('aria-labelledby');
+    expect(labelledBy).toBeTruthy();
+    const heading = document.getElementById(labelledBy!);
+
+    // Identidade, não uma cópia: a ref precisa ser o MESMO nó que rotula o
+    // diálogo — nunca um `querySelector` local que poderia divergir.
+    expect(titleRef.current).not.toBeNull();
+    expect(titleRef.current).toBe(heading);
+  });
+
+  it('com titleRef: o heading recebe tabIndex=-1 e pode receber focus() programático', async () => {
+    const titleRef = createRef<HTMLHeadingElement>();
+    const user = userEvent.setup();
+    render(<Harness titleRef={titleRef} />);
+    await user.click(screen.getByRole('button', { name: 'abrir' }));
+
+    await screen.findByRole('dialog');
+    expect(titleRef.current).not.toBeNull();
+    expect(titleRef.current).toHaveAttribute('tabindex', '-1');
+
+    titleRef.current?.focus();
+    await waitFor(() => expect(titleRef.current).toHaveFocus());
+  });
+
+  it('sem titleRef: o heading não ganha tabindex novo (comportamento atual preservado)', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'abrir' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const labelledBy = dialog.getAttribute('aria-labelledby');
+    const heading = document.getElementById(labelledBy!);
+
+    expect(heading).not.toHaveAttribute('tabindex');
+  });
+
+  it('accessible name do diálogo continua vindo do título quando titleRef está presente', async () => {
+    const titleRef = createRef<HTMLHeadingElement>();
+    const user = userEvent.setup();
+    render(<Harness title="Ajustar estoque?" titleRef={titleRef} />);
+    await user.click(screen.getByRole('button', { name: 'abrir' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAccessibleName('Ajustar estoque?');
+  });
+
+  it('titleRef não quebra Escape/onClose, foco inicial dentro do diálogo nem o retorno de foco ao gatilho', async () => {
+    const titleRef = createRef<HTMLHeadingElement>();
+    const user = userEvent.setup();
+    render(<Harness titleRef={titleRef} />);
+    const trigger = screen.getByRole('button', { name: 'abrir' });
+    await user.click(trigger);
+
+    const dialog = await screen.findByRole('dialog');
+    // Trap/foco inicial já existente: continua pousando dentro do diálogo.
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    // Escape ainda dispara `onClose` (via `Harness`, que fecha desmontando o
+    // diálogo) e o foco ainda retorna ao gatilho — nenhum dos dois pode
+    // regredir com `titleRef` presente.
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });
 

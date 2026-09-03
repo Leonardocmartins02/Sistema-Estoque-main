@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useId, useEffect, useState } from 'react';
+import { useId, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -76,11 +76,22 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
   const targetId = useId();
   const reasonId = useId();
 
+  // A1 (Task 25, `implementation-plan.md` §9.3.3): heading real do passo
+  // ativo (`confirm`/`conflict`). Só um desses dois `Modal` está montado por
+  // vez — a mesma ref é reaproveitada entre eles.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // Sinaliza que o próximo commit do step `form` veio do retorno via
+  // "Revisar", para focar "Nova quantidade" só depois que o campo já existe
+  // no DOM — evita a corrida entre `setStep('form')` e o input ainda não
+  // montado.
+  const focusTargetOnReviewRef = useRef(false);
+
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    setFocus,
     formState: { errors },
   } = useForm<AdjustmentFormValues>({
     resolver: zodResolver(buildAdjustmentSchema(expectedPreviousQuantity)),
@@ -96,6 +107,23 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
       setServerError(null);
     }
   }, [open]);
+
+  // A1: um único efeito controlado pela mudança real de `step` — nunca
+  // refoca em renders causados por outros states (`mutation.isPending`,
+  // `watch`, etc.). `confirm`/`conflict` focam o heading do passo recém
+  // montado; o retorno ao `form` via "Revisar" consome a sinalização acima e
+  // foca "Nova quantidade" através do react-hook-form, já com o campo
+  // montado.
+  useEffect(() => {
+    if (step === 'confirm' || step === 'conflict') {
+      titleRef.current?.focus();
+      return;
+    }
+    if (step === 'form' && focusTargetOnReviewRef.current) {
+      focusTargetOnReviewRef.current = false;
+      setFocus('targetQuantity');
+    }
+  }, [step, setFocus]);
 
   const mutation = useMutation({
     mutationFn: (values: AdjustmentFormValues) =>
@@ -174,6 +202,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
   // decisão — nunca reenvia sozinho.
   function handleReview() {
     if (conflictActualBalance === null) return;
+    focusTargetOnReviewRef.current = true;
     setExpectedPreviousQuantity(conflictActualBalance);
     setValue('targetQuantity', '' as unknown as number);
     setConflictActualBalance(null);
@@ -187,6 +216,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
         open={open}
         onClose={handleClose}
         title="O estoque deste produto mudou"
+        titleRef={titleRef}
         size="md"
         footer={
           <div className="flex items-center justify-end gap-2">
@@ -226,6 +256,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
         open={open}
         onClose={handleClose}
         title="Ajustar estoque?"
+        titleRef={titleRef}
         size="md"
         footer={
           <div className="flex items-center justify-end gap-2">
@@ -258,8 +289,16 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-gray-600">Saldo atual → Novo saldo</dt>
+            {/* A5 (§14.2 regra 3, mesma estratégia da Task 19 /
+                MovementHistoryModal): a seta é decorativa para AT; o texto
+                `sr-only` ao lado diz a mesma transição em palavras. */}
             <dd className="font-medium text-gray-900">
-              {expectedPreviousQuantity} → {pending.targetQuantity}
+              <span aria-hidden="true">
+                {expectedPreviousQuantity} → {pending.targetQuantity}
+              </span>
+              <span className="sr-only">
+                de {expectedPreviousQuantity} para {pending.targetQuantity}
+              </span>
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -300,13 +339,29 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
           {...register('targetQuantity')}
         />
 
-        {hasValidPreview && (
-          <p className="text-sm text-gray-700" aria-live="polite">
-            {expectedPreviousQuantity} → {parsedTarget}
-            <br />
-            Diferença: {diffLabel}
-          </p>
-        )}
+        {/*
+          A4 (§9.3.3): o nó `aria-live` fica SEMPRE montado durante o step
+          `form`, independentemente de `hasValidPreview` — só o conteúdo
+          interno é condicional. Sem isso, o anúncio da nova quantidade após
+          "Revisar" nunca dispara: a live region não existiria no momento em
+          que o valor válido chega.
+          A5: mesma estratégia da Task 19 — seta decorativa (`aria-hidden`) +
+          equivalente textual `sr-only`.
+        */}
+        <p className="text-sm text-gray-700" aria-live="polite">
+          {hasValidPreview && (
+            <>
+              <span aria-hidden="true">
+                {expectedPreviousQuantity} → {parsedTarget}
+              </span>
+              <span className="sr-only">
+                de {expectedPreviousQuantity} para {parsedTarget}
+              </span>
+              <br />
+              Diferença: {diffLabel}
+            </>
+          )}
+        </p>
 
         <div>
           <label htmlFor={reasonId} className="block text-sm font-medium text-gray-700">
@@ -317,7 +372,7 @@ export function AdjustmentFormModal({ open, onOpenChange, product, onSuccess }: 
             rows={3}
             aria-invalid={!!errors.reason}
             aria-describedby={errors.reason ? `${reasonId}-error` : undefined}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
+            className={`mt-1 w-full resize-y rounded-control border ${errors.reason ? 'border-danger' : 'border-border-strong'} bg-surface p-2 text-sm outline-none transition hover:border-border-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface`}
             {...register('reason')}
           />
           {errors.reason && (
