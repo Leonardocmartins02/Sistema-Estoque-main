@@ -6,7 +6,9 @@ import { z } from 'zod';
 import { createProduct, updateProduct } from '../api/products';
 
 import Button from './ui/Button';
+import { Input } from './ui/Input';
 import Modal from './ui/Modal';
+import { Textarea } from './ui/Textarea';
 import { useToast } from './ui/ToastProvider';
 
 const schema = z.object({
@@ -68,6 +70,12 @@ export function ProductFormModal({ open, onOpenChange, mode, initialId, initialV
   // qual produto ele está editando.
   useEffect(() => {
     if (!open) return;
+    // F-10: o erro do servidor pertence à TENTATIVA de envio, não ao
+    // formulário. Como esta instância permanece montada entre fechar e
+    // reabrir, sem esta linha o erro da tentativa anterior acusava de falho um
+    // formulário que o usuário ainda nem submeteu. Limpar aqui — e não no
+    // submit — é o que cobre reabrir e trocar o produto em edição.
+    setServerError(null);
     reset({
       name: initialValues?.name ?? '',
       sku: initialValues?.sku ?? '',
@@ -120,94 +128,48 @@ export function ProductFormModal({ open, onOpenChange, mode, initialId, initialV
             })}
         className="space-y-3"
       >
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Nome*
-              </label>
-              <input
-                id="name"
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('name')}
-              />
-              {errors.name && (
-                <p className="mt-1 text-xs text-red-700" role="alert">
-                  {errors.name.message}
-                </p>
-              )}
-            </div>
+            <Input
+              label="Nome*"
+              error={errors.name?.message}
+              {...register('name')}
+            />
 
-            <div>
-              <label htmlFor="sku" className="block text-sm font-medium text-gray-700">
-                SKU*
-              </label>
-              <input
-                id="sku"
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 uppercase tracking-wide focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('sku')}
-              />
-              {errors.sku && (
-                <p className="mt-1 text-xs text-red-700" role="alert">
-                  {errors.sku.message}
-                </p>
-              )}
-            </div>
+            {/* `uppercase` é só exibição (F-05, §9/D-C): a política de
+                normalização do dado segue pendente e não é decidida aqui. */}
+            <Input
+              label="SKU*"
+              className="uppercase tracking-wide"
+              error={errors.sku?.message}
+              {...register('sku')}
+            />
 
             {mode === 'create' && (
-              <div>
-                <label htmlFor="initialStock" className="block text-sm font-medium text-gray-700">
-                  Estoque inicial (opcional)
-                </label>
-                <p className="mt-1 text-xs text-gray-500">
-                  Se informado, será lançado automaticamente como uma <strong>Entrada (IN)</strong> ao salvar o produto.
-                </p>
-                <input
-                  id="initialStock"
-                  type="number"
-                  min={0}
-                  placeholder="Ex.: 10"
-                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                  {...register('initialStock')}
-                />
-                {errors.initialStock && (
-                  <p className="mt-1 text-xs text-red-700" role="alert">
-                    {errors.initialStock.message}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="minStock" className="block text-sm font-medium text-gray-700">
-                Estoque mínimo*
-              </label>
-              <p className="mt-1 text-xs text-gray-500">
-                Usado apenas para <strong>alerta</strong> na lista quando o saldo ficar abaixo desse valor. Não altera o saldo.
-              </p>
-              <input
-                id="minStock"
+              <Input
+                label="Estoque inicial (opcional)"
                 type="number"
                 min={0}
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('minStock')}
+                placeholder="Ex.: 10"
+                hint="Se informado, será lançado automaticamente como uma Entrada (IN) ao salvar o produto."
+                error={errors.initialStock?.message}
+                {...register('initialStock')}
               />
-              {errors.minStock && (
-                <p className="mt-1 text-xs text-red-700" role="alert">
-                  {errors.minStock.message}
-                </p>
-              )}
-            </div>
+            )}
 
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                Descrição
-              </label>
-              <textarea
-                id="description"
-                rows={3}
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand"
-                {...register('description')}
-              />
-            </div>
+            <Input
+              label="Estoque mínimo*"
+              type="number"
+              min={0}
+              hint="Usado apenas para alerta na lista quando o saldo ficar abaixo desse valor. Não altera o saldo."
+              error={errors.minStock?.message}
+              {...register('minStock')}
+            />
+
+            <Textarea
+              label="Descrição"
+              rows={3}
+              error={errors.description?.message}
+              {...register('description')}
+            />
 
             {serverError && (
               <p className="text-sm text-red-700" role="alert">
