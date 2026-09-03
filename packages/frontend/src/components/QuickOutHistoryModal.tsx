@@ -239,6 +239,45 @@ export default function QuickOutHistoryModal({ open, onOpenChange }: QuickOutHis
         </div>
       </div>
 
+      {/*
+        Live regions SEMPRE montadas — mesmo padrão do `QuickOutListModal` e do
+        `MovementHistoryModal`: uma região criada no mesmo instante do conteúdo
+        costuma não ser anunciada. Sem elas, filtrar, ordenar e paginar são
+        operações inteiramente silenciosas para quem usa leitor de tela.
+
+        Ficam FORA da `<table>`: pendurar o `role` na célula de estado
+        substituiria o papel implícito `cell` e deixaria a `<tr>` com um filho
+        inválido para `row`. O texto visível da tabela não leva `role`: quem
+        anuncia é esta região, e não as duas ao mesmo tempo.
+      */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="sr-only"
+        data-testid="quick-out-history-status"
+      >
+        {isLoading
+          ? 'Carregando histórico.'
+          : isError
+            ? ''
+            : rows.length === 0
+              ? 'Nenhuma baixa encontrada para o filtro atual.'
+              : /* Número CRU, sem `formatQuantity`: "1.250" é lido como "um ponto
+                   duzentos e cinquenta" por alguns sintetizadores. O separador de
+                   milhar é decisão tipográfica da tabela, não da fala. */
+                `${total} ${total === 1 ? 'baixa encontrada' : 'baixas encontradas'}, exibindo a página ${page} de ${totalPages}.`}
+      </div>
+      {/* No erro o status cala: consulta que falhou não tem total conhecido, e
+          repetir a falha nos dois canais faria o leitor dizer tudo duas vezes. */}
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="sr-only"
+        data-testid="quick-out-history-alert"
+      >
+        {isError ? `Erro: ${errorMessage}` : ''}
+      </div>
+
       {/* N-7: a tabela rola na horizontal em vez de ser cortada. O
           `overflow-hidden` anterior escondia Data e Observação no mobile — é o
           mesmo clipping do UF-29, que estava registrado só para a lista. */}
