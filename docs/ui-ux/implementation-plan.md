@@ -1649,10 +1649,15 @@ A-9; `design-system.md` §11, §18; A6; regra de `useId()` do `CLAUDE.md`; F-10.
 Tasks 1, 5, 6, 9.
 
 #### Componentes e arquivos prováveis
-`src/components/ProductFormModal.tsx`
+`src/components/ProductFormModal.tsx` · **`src/components/ui/Textarea.tsx` (novo)** · **`test/Textarea.test.tsx` (novo)** · `test/ProductFormModal.test.tsx`
+
+> **Escopo de arquivos ampliado em 03/09/2026 por SD-3 (§9.3.2).** O rascunho listava só o
+> `ProductFormModal.tsx`. O campo Descrição é um `<textarea>` e **não existe primitivo `ui/Textarea`
+> no projeto** — o "textarea equivalente" das Mudanças previstas passa a ser um primitivo próprio,
+> criado nesta task e consumido **apenas aqui**. Nenhum outro arquivo de produção é tocado.
 
 #### Mudanças previstas
-- Substituir os campos manuais por `ui/Input` / textarea equivalente, com `useId()`.
+- Substituir os campos manuais por `ui/Input` / `ui/Textarea` (SD-3, §9.3.2), com `useId()`.
 - Foco único; tokens; fim de `ring-brand`/`border-brand` neste arquivo.
 - **F-10:** limpar `serverError` no efeito de abertura.
 - **F-05 não é decidida aqui:** a exibição em maiúsculas do SKU (`uppercase` por CSS) fica **exatamente como está**, e a política de dado segue pendente (§9, D-C). Nada nesta task depende dela.
@@ -2282,6 +2287,8 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 |---|---|---|---|
 | **SD-1** | Collation da ordenação alfabética | **3** | **RESOLVIDA em 31/08/2026** — ver §9.3.1 |
 | **SD-2** | `sortBy=balance` continua global no serviço ou migra para coluna computada no banco | **3** | Mantido no serviço, com o teto de volume medido no PR; a coluna computada fica como follow-up |
+| **SD-3** | Campo Descrição do `ProductFormModal`: o "textarea equivalente" é primitivo novo ou markup local? | **24** | **RESOLVIDA em 03/09/2026** — ver §9.3.2 |
+| **SD-4** | A Task 24 implementa o resumo de múltiplos erros do `design-system.md` §11.0? | **24** | **RESOLVIDA em 03/09/2026** — ver §9.3.2 |
 
 #### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
 
@@ -2301,11 +2308,38 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 
 **Consequência para os testes automatizados:** nenhuma asserção de ordenação pode depender de acento, caixa ou locale. Os testes de ordenação global usam valores ASCII inequívocos. A verificação com nomes acentuados é **QA manual não bloqueante**, que **documenta** a diferença entre ambientes em vez de afirmar uma garantia que não existe.
 
+#### 9.3.2 · SD-3 e SD-4 — sub-decisões da Task 24 (RESOLVIDAS em 03/09/2026)
+
+**SD-3 · campo Descrição — decisão aprovada:**
+
+- criar `packages/frontend/src/components/ui/Textarea.tsx`;
+- espelhar o contrato de `ui/Input`: `useId`, `label` **ou** `aria-label` obrigatório pelo tipo,
+  `hint`/`error`, `aria-describedby`, `aria-invalid` e `forwardRef`;
+- usar o primitivo **somente no `ProductFormModal`** nesta task;
+- **não** migrar os outros textareas existentes.
+
+**Follow-up registrado, sem owner atribuído:** `AdjustmentFormModal.tsx`, `MovementFormModal.tsx` e
+`QuickOutModal.tsx` continuam com `<textarea>` manual. A Task 25 é a dona do `AdjustmentFormModal`;
+migrar o primitivo para lá é decisão dela, não desta task.
+
+**SD-4 · resumo de múltiplos erros (§11.0) — decisão aprovada:**
+
+- a Task 24 **não** implementa o resumo global de múltiplos campos inválidos do `design-system.md` §11.0;
+- nesta task, cada campo usa `aria-invalid` + `aria-describedby` **através dos primitivos**;
+- o `serverError` global **continua com `role="alert"`** — §11.0 o exige para erro assíncrono do servidor;
+- o resumo de múltiplos erros fica registrado como **follow-up explícito**.
+
+**Follow-up registrado, sem owner atribuído.** A lista de follow-ups da Task 30 é **fechada em três
+itens** (ordenação por saldo no banco, UF-08, política de SKU/F-05) e este plano não tem seção
+genérica de follow-ups — cada um é registrado na task que o origina. Atribuir o resumo §11.0 a uma
+task existente, ou criar task própria para ele, é decisão de quem assumir essa etapa; **não é da
+Task 24** e nenhuma task atual o herda por omissão.
+
 ### 9.4 · Gate executável das decisões
 
 - **Nenhuma task inicia com uma decisão bloqueante sua ainda aberta.** A escolha aprovada é escrita **neste arquivo**, com data — como D-A, D-B, D-F, F-01, N-9 e Q-1 estão.
 - **Nenhuma decisão bloqueante permanece.** As três que travavam a execução foram fechadas em 31/08/2026; D-C e D-E não bloqueiam nenhuma task.
-- As sub-decisões de §9.3 são fechadas **dentro** da Task 3 e registradas no PR dela. **SD-1 foi fechada antecipadamente em 31/08/2026** (§9.3.1), por decisão explícita do usuário, para preservar a política de collation mesmo que a sessão de execução seja interrompida.
+- As sub-decisões de §9.3 são fechadas **dentro** da task dona de cada uma e registradas junto à execução correspondente. **SD-1 foi fechada antecipadamente em 31/08/2026** (§9.3.1), por decisão explícita do usuário, para preservar a política de collation mesmo que a sessão de execução seja interrompida.
 
 ---
 
