@@ -2318,6 +2318,17 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 - usar o primitivo **somente no `ProductFormModal`** nesta task;
 - **não** migrar os outros textareas existentes.
 
+**Contrato de `aria-describedby` do `ui/Textarea` — esclarecido durante o Passo B (03/09/2026):**
+
+- `aria-describedby` referencia **somente elementos realmente renderizados no DOM**;
+- quando `error` existe, ele **substitui/suprime** o `hint` — nesse estado, `aria-describedby`
+  referencia **somente o id do erro**;
+- não deve existir, em nenhum estado, referência a um id ausente no DOM;
+- isso **deliberadamente não copia** a dívida pré-existente do `ui/Input`, que hoje pode
+  referenciar o id do hint mesmo quando ele não é renderizado;
+- `ui/Input` fica **fora do escopo da Task 24** — essa dívida do `Input` fica registrada como
+  **follow-up, sem owner atribuído**.
+
 **Follow-up registrado, sem owner atribuído:** `AdjustmentFormModal.tsx`, `MovementFormModal.tsx` e
 `QuickOutModal.tsx` continuam com `<textarea>` manual. A Task 25 é a dona do `AdjustmentFormModal`;
 migrar o primitivo para lá é decisão dela, não desta task.
