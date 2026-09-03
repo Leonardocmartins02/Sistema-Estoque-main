@@ -427,3 +427,202 @@ describe('Empilhamento lista→histórico (Task 23)', () => {
     );
   });
 });
+
+/**
+ * Live regions do histórico (Task 23 — blocker do `accessibility-reviewer`,
+ * WCAG 2.1 AA 4.1.3 Status Messages).
+ *
+ * O que o diálogo faz hoje: carregar, buscar, filtrar por data, ordenar e
+ * paginar — **tudo** trocando texto dentro da tabela, sem nenhuma região viva.
+ * Para quem usa leitor de tela, apertar "Próxima" ou digitar na busca é uma
+ * operação inteiramente silenciosa: o foco não se move, nada é anunciado, e
+ * não há como saber se a consulta trouxe 3 linhas, zero linhas ou um erro.
+ *
+ * O contrato é o mesmo já implantado em `MovementHistoryModal` e
+ * `QuickOutListModal` — deliberadamente, para que os três diálogos de consulta
+ * falem a mesma língua:
+ *
+ *   · UMA região `role="status"`/`aria-live="polite"` SEMPRE montada, que
+ *     carrega carregando / vazio / resultado;
+ *   · UMA região `role="alert"`/`aria-live="assertive"` SEMPRE montada, que
+ *     carrega só o erro.
+ *
+ * **Por que "sempre montada" é o núcleo destes testes:** NVDA e JAWS não
+ * anunciam uma live region que nasce junto com o seu conteúdo — o nó precisa
+ * existir ANTES da mudança. Um `{isLoading && <div role="status">…</div>}`
+ * passaria em qualquer teste que só procure o papel depois do fetch, e ainda
+ * assim ficaria mudo na vida real. Por isso cada caso abaixo captura o nó
+ * ANTES da resolução da promessa e prova, por identidade de referência
+ * (`toBe`), que é o MESMO nó depois.
+ *
+ * As regiões são consultadas por PAPEL, escopadas ao diálogo: é o papel que o
+ * leitor de tela enxerga, e o escopo evita colidir com as regiões do
+ * `ToastProvider`, que ficam fora do diálogo.
+ */
+describe('QuickOutHistoryModal — live regions de estado assíncrono (WCAG 4.1.3)', () => {
+  type HistoryPage = Awaited<ReturnType<typeof fetchQuickOutHistory>>;
+
+  /**
+   * Consulta suspensa: devolve o controle da promessa ao teste, para observar
+   * o estado de carregamento antes de decidir como ele termina. Sem isso o
+   * mock resolveria no mesmo tick e "carregando → X" seria só "X" — e o nó
+   * capturado "antes" já seria o de depois.
+   */
+  function deferHistory() {
+    let resolveWith!: (value: HistoryPage) => void;
+    let rejectWith!: (error: Error) => void;
+    mockedFetchHistory.mockImplementation(
+      () =>
+        new Promise<HistoryPage>((resolve, reject) => {
+          resolveWith = resolve;
+          rejectWith = reject;
+        }),
+    );
+    return {
+      resolve: (value: HistoryPage) => resolveWith(value),
+      reject: (error: Error) => rejectWith(error),
+    };
+  }
+
+  const historyDialog = () => screen.getByRole('dialog', { name: 'Histórico de Baixas' });
+  const statusRegion = () => within(historyDialog()).getByRole('status');
+  const alertRegion = () => within(historyDialog()).getByRole('alert');
+  /** A frase é para ser OUVIDA: comparada inteira, não por pedaço. */
+  const spoken = (el: HTMLElement) => el.textContent?.trim();
+
+  it('A · a região de status já existe durante o carregamento e o anuncia', async () => {
+    deferHistory();
+    renderHistory();
+    await screen.findByRole('dialog');
+
+    // Ainda não houve resposta da API: as duas regiões já precisam estar na
+    // árvore, senão a primeira mudança de conteúdo nasce junto com a região e
+    // não chega a ser anunciada.
+    const status = statusRegion();
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(spoken(status)).toBe('Carregando histórico.');
+
+    const alert = alertRegion();
+    expect(alert).toHaveAttribute('aria-live', 'assertive');
+    // Assertivo interrompe a leitura em curso: fora do erro ele fica calado.
+    expect(spoken(alert)).toBe('');
+  });
+
+  it('B · carregando → sucesso: o MESMO nó anuncia contagem, plural e página', async () => {
+    const deferred = deferHistory();
+    renderHistory();
+    await screen.findByRole('dialog');
+
+    const status = statusRegion();
+    expect(spoken(status)).toBe('Carregando histórico.');
+
+    // 1250 registros em 125 páginas: contagem, plural e paginação numa frase só.
+    deferred.resolve(paged([makeQuickOutHistoryItem()], { total: 1250 }));
+
+    await waitFor(() =>
+      expect(spoken(statusRegion())).toBe('1250 baixas encontradas, exibindo a página 1 de 125.'),
+    );
+    // Identidade de referência: a região não foi recriada ao trocar de estado.
+    expect(statusRegion()).toBe(status);
+
+    // Número CRU, sem `formatQuantity`: "1.250" vira "um ponto duzentos e
+    // cinquenta" em alguns sintetizadores. O separador de milhar é decisão
+    // tipográfica da tabela (P-4), não da fala.
+    expect(statusRegion()).not.toHaveTextContent('1.250');
+    // Sucesso não dispara o canal assertivo.
+    expect(spoken(alertRegion())).toBe('');
+  });
+
+  it('B · uma única baixa é anunciada no singular', async () => {
+    mockedFetchHistory.mockResolvedValue(paged([makeQuickOutHistoryItem()], { total: 1 }));
+    renderHistory();
+    await screen.findByRole('dialog');
+
+    // "1 baixas encontradas" só incomoda quem depende da fala — o único
+    // público desta frase.
+    await waitFor(() =>
+      expect(spoken(statusRegion())).toBe('1 baixa encontrada, exibindo a página 1 de 1.'),
+    );
+  });
+
+  it('C · carregando → vazio: o MESMO nó anuncia que nada foi encontrado', async () => {
+    const deferred = deferHistory();
+    renderHistory();
+    await screen.findByRole('dialog');
+
+    const status = statusRegion();
+    expect(spoken(status)).toBe('Carregando histórico.');
+
+    deferred.resolve(paged([], { total: 0 }));
+
+    // "para o filtro atual" diz à pessoa o que fazer a seguir: o recorte é
+    // dela: não é o sistema inteiro que está vazio.
+    await waitFor(() =>
+      expect(spoken(statusRegion())).toBe('Nenhuma baixa encontrada para o filtro atual.'),
+    );
+    expect(statusRegion()).toBe(status);
+    expect(spoken(alertRegion())).toBe('');
+  });
+
+  it('D · carregando → erro: o alert anuncia a falha e o status silencia', async () => {
+    const deferred = deferHistory();
+    renderHistory();
+    await screen.findByRole('dialog');
+
+    // O alert é o canal primário deste estado, e vem primeiro de propósito: no
+    // vermelho, a falha aponta a ausência da região assertiva, não só a da
+    // polida — as duas faltam, e as duas precisam aparecer no diagnóstico.
+    const alert = alertRegion();
+    const status = statusRegion();
+
+    deferred.reject(new Error('Servidor indisponível'));
+
+    await waitFor(() => expect(spoken(alertRegion())).toBe('Erro: Servidor indisponível'));
+    // As duas regiões atravessam a falha sem serem recriadas.
+    expect(alertRegion()).toBe(alert);
+    expect(statusRegion()).toBe(status);
+
+    // O status cala para não dizer a mesma coisa em dois canais — e, sobretudo,
+    // para não afirmar "nada encontrado": é o N-6 outra vez, agora na fala.
+    // Consulta que falhou não tem total conhecido.
+    expect(spoken(statusRegion())).toBe('');
+    expect(statusRegion()).not.toHaveTextContent(/nenhuma baixa/i);
+  });
+
+  it('E · paginar muda o que a região de status anuncia, na mesma região', async () => {
+    mockedFetchHistory.mockResolvedValue(paged([makeQuickOutHistoryItem()], { total: 25 }));
+    const { user } = renderHistory();
+    await screen.findByRole('dialog');
+
+    await waitFor(() =>
+      expect(spoken(statusRegion())).toBe('25 baixas encontradas, exibindo a página 1 de 3.'),
+    );
+    const status = statusRegion();
+
+    // Interação real do componente: "Próxima" dispara uma consulta nova. Hoje
+    // o foco continua no botão e nada é dito — a pessoa não sabe se mudou de
+    // página nem quantos resultados existem.
+    await user.click(screen.getByRole('button', { name: 'Próxima' }));
+
+    await waitFor(() =>
+      expect(spoken(statusRegion())).toBe('25 baixas encontradas, exibindo a página 2 de 3.'),
+    );
+    expect(statusRegion()).toBe(status);
+  });
+
+  it('as regiões vivem fora da tabela, não sobre um <td>', async () => {
+    deferHistory();
+    renderHistory();
+    await screen.findByRole('dialog');
+
+    // Atalho tentador: pendurar `role="status"` na célula de estado que já
+    // existe. Isso substituiria o papel implícito `cell`, deixaria a `<tr>`
+    // com um filho inválido para `row` (o mesmo defeito já barrado em
+    // `MovementHistoryModal`) e amarraria o anúncio a um nó que só existe em
+    // alguns estados — exatamente o que "sempre montada" proíbe.
+    for (const region of [statusRegion(), alertRegion()]) {
+      expect(region.tagName).not.toBe('TD');
+      expect(region.closest('table')).toBeNull();
+    }
+  });
+});
