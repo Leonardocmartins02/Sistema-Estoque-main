@@ -136,3 +136,200 @@ describe('Modal (primitivo único do design system)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Empilhamento — a pilha de diálogos abertos do primitivo.
+ *
+ * O primitivo mantém uma pilha module-level e aplica `aria-hidden` na camada
+ * que não é o topo. Ela existe porque o `hideOthers()` que o Radix usa
+ * (pacote `aria-hidden`) **preserva de propósito** todo nó `[aria-live]` e
+ * seus ancestrais: um diálogo que contenha live region montada nunca é
+ * ocultado pelo que abre por cima, e sobram dois `aria-modal` expostos.
+ *
+ * **Por que alguns casos aqui usam live region e outros não.** Sem
+ * `[aria-live]` o Radix já oculta a camada de baixo sozinho — um teste de
+ * empilhamento com modais "pelados" passaria com ou sem a pilha, e não
+ * protegeria o código que a introduziu. Por isso o caso dos três modais liga
+ * `live`: ali o `hideOthers()` preserva os três e **só a pilha** governa a
+ * exposição. Os casos de lifecycle fazem o contrário — caçam `aria-hidden`
+ * indevido vindo de pilha suja, que é justamente o risco que a pilha traz.
+ */
+function StackHarness({
+  a = false,
+  b = false,
+  c = false,
+  mountA = true,
+  mountB = true,
+  live = false,
+}: {
+  a?: boolean;
+  b?: boolean;
+  c?: boolean;
+  mountA?: boolean;
+  mountB?: boolean;
+  live?: boolean;
+}) {
+  const corpo = (id: string) => (
+    <>
+      conteúdo {id}
+      {/* Réplica do que 5 dos 9 consumidores reais de `ui/Modal` têm dentro. */}
+      {live && <div role="status" aria-live="polite" data-testid={`live-${id}`} />}
+    </>
+  );
+  return (
+    <>
+      {mountA && (
+        <Modal open={a} onClose={() => {}} title="A">
+          {corpo('A')}
+        </Modal>
+      )}
+      {mountB && (
+        <Modal open={b} onClose={() => {}} title="B">
+          {corpo('B')}
+        </Modal>
+      )}
+      <Modal open={c} onClose={() => {}} title="C">
+        {corpo('C')}
+      </Modal>
+    </>
+  );
+}
+
+/**
+ * O diálogo coberto sai das queries por papel — que é exatamente o efeito sob
+ * teste. A busca aqui é no DOM cru, casando pelo nó de `aria-labelledby`.
+ */
+function dialogoPorTitulo(titulo: string): HTMLElement {
+  const encontrado = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="dialog"]'),
+  ).find((d) => {
+    const id = d.getAttribute('aria-labelledby');
+    return (id ? document.getElementById(id)?.textContent?.trim() : null) === titulo;
+  });
+  if (!encontrado) throw new Error(`Diálogo "${titulo}" não está montado no DOM`);
+  return encontrado;
+}
+
+function estaMontado(titulo: string): boolean {
+  try {
+    dialogoPorTitulo(titulo);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Nomes acessíveis dos diálogos que sobrevivem à árvore de acessibilidade. */
+function expostos(): string[] {
+  return screen.queryAllByRole('dialog').map((d) => {
+    const id = d.getAttribute('aria-labelledby');
+    return (id ? document.getElementById(id)?.textContent?.trim() : '') ?? '';
+  });
+}
+
+describe('Modal — pilha de diálogos empilhados', () => {
+  it('desmontar um Modal ainda aberto não deixa entrada fantasma na pilha', async () => {
+    // `ProductDashboard` monta quatro diálogos como `{produto && <Modal open …/>}`:
+    // eles somem com `open` ainda `true` e a prop nunca transiciona para `false`.
+    //
+    // Uma entrada vazada só é observável numa configuração — a de cima some sem
+    // fechar enquanto a de baixo continua aberta —, porque `push` sempre
+    // acrescenta no fim e um órfão fica ABAIXO dos modais seguintes. Por isso o
+    // caso principal aqui é esse, e não o modal solitário.
+    // Os diálogos são abertos em commits SEPARADOS, como no app. Montar dois
+    // modais já abertos no mesmo commit faz os dois `hideOthers()` rodarem
+    // juntos e cada um ocultar o outro — artefato pré-existente do Radix para
+    // diálogos sem live region, alheio à pilha (ela nunca oculta o topo).
+    const { rerender, unmount } = render(<StackHarness a />);
+    await waitFor(() => expect(expostos()).toEqual(['A']));
+    rerender(<StackHarness a b />);
+    await waitFor(() => expect(expostos()).toEqual(['B']));
+
+    rerender(<StackHarness a mountB={false} />);
+
+    // Se o cleanup não drenasse a pilha, A continuaria `aria-hidden` — visível
+    // na tela e invisível para tecnologia assistiva, sem nenhum sintoma.
+    await waitFor(() => expect(expostos()).toEqual(['A']));
+    expect(dialogoPorTitulo('A')).not.toHaveAttribute('aria-hidden');
+
+    // E o caso do modal solitário: desmontar tudo e abrir outro do zero.
+    unmount();
+    render(<StackHarness c />);
+
+    await waitFor(() => expect(expostos()).toEqual(['C']));
+    expect(dialogoPorTitulo('C')).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('fechar e reabrir o mesmo Modal não corrompe seu registro na pilha', async () => {
+    const { rerender } = render(<StackHarness a />);
+    await waitFor(() => expect(expostos()).toEqual(['A']));
+
+    rerender(<StackHarness a={false} />);
+    await waitFor(() => expect(estaMontado('A')).toBe(false));
+    rerender(<StackHarness a />);
+    await waitFor(() => expect(expostos()).toEqual(['A']));
+
+    rerender(<StackHarness a b />);
+    await waitFor(() => expect(expostos()).toEqual(['B']));
+
+    rerender(<StackHarness a />);
+
+    // O contrato observável: A volta a ser o único exposto depois do ciclo
+    // fechar → reabrir → empilhar → desempilhar.
+    await waitFor(() => expect(expostos()).toEqual(['A']));
+    expect(dialogoPorTitulo('A')).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('fechar a camada de baixo fora de ordem não afeta a de cima', async () => {
+    // Abertura sequencial, pelo mesmo motivo do caso anterior.
+    const { rerender } = render(<StackHarness a />);
+    await waitFor(() => expect(expostos()).toEqual(['A']));
+    rerender(<StackHarness a b />);
+    await waitFor(() => expect(expostos()).toEqual(['B']));
+
+    // Desmonta A — o de BAIXO — com B ainda aberto. A remoção é por identidade
+    // (`indexOf`/`splice`), não por posição, então B continua sendo o topo.
+    rerender(<StackHarness mountA={false} b />);
+
+    await waitFor(() => expect(estaMontado('A')).toBe(false));
+    expect(expostos()).toEqual(['B']);
+    expect(dialogoPorTitulo('B')).not.toHaveAttribute('aria-hidden');
+
+    // Fecha B e abre um terceiro isolado: sem vazamento da pilha anterior.
+    rerender(<StackHarness mountA={false} b={false} c />);
+
+    await waitFor(() => expect(expostos()).toEqual(['C']));
+    expect(dialogoPorTitulo('C')).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('um Modal isolado nunca recebe aria-hidden (não-regressão da pilha)', async () => {
+    render(<StackHarness a />);
+
+    await waitFor(() => expect(estaMontado('A')).toBe(true));
+    const dialogo = dialogoPorTitulo('A');
+    expect(dialogo).toHaveAttribute('aria-modal', 'true');
+    expect(dialogo).not.toHaveAttribute('aria-hidden');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('A');
+  });
+
+  it('com três Modals empilhados, só o topo fica exposto — e a pilha desempilha na ordem', async () => {
+    // `live` ligado: com `[aria-live]` nos três, o `hideOthers()` do Radix
+    // preserva todos e não oculta nada. O que este caso mede é a pilha, não a
+    // biblioteca — sem isso ele passaria mesmo se a pilha fosse removida.
+    const { rerender } = render(<StackHarness live a b c />);
+
+    await waitFor(() => expect(expostos()).toEqual(['C']));
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(3);
+    expect(dialogoPorTitulo('A')).toHaveAttribute('aria-hidden', 'true');
+    expect(dialogoPorTitulo('B')).toHaveAttribute('aria-hidden', 'true');
+
+    rerender(<StackHarness live a b />);
+    await waitFor(() => expect(expostos()).toEqual(['B']));
+    expect(dialogoPorTitulo('A')).toHaveAttribute('aria-hidden', 'true');
+    expect(dialogoPorTitulo('B')).not.toHaveAttribute('aria-hidden');
+
+    rerender(<StackHarness live a />);
+    await waitFor(() => expect(expostos()).toEqual(['A']));
+    expect(dialogoPorTitulo('A')).not.toHaveAttribute('aria-hidden');
+  });
+});
