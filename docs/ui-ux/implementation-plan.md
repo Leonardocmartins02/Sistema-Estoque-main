@@ -1839,6 +1839,7 @@ Remover o que sobrou do vocabulário antigo e transformar o sistema em algo que 
 - Remover `colors.brand` do `tailwind.config.js`; remover `animate-fade-in` (usada 1×, **nunca definida**).
 - Remover o peso 700 da Inter no `index.html` — **só se** os 3 usos de `font-bold` já tiverem saído (Tasks 10 e 20). Verificar antes.
 - Adicionar ao `eslint.config.js` uma regra `no-restricted-syntax` sobre literais de `className` em JSX, com lista fechada: `rounded-full`, `rounded-2xl`, `rounded-xl`, `rounded-lg`, `shadow-2xl`, `shadow-xl`, `shadow-md`, `shadow-sm`, `text-3xl`, `text-4xl`, `text-xl`, `text-\[\d+px\]`, `ring-indigo-*`, `ring-brand`, `ring-blue-*`, `text-gray-400`, `border-gray-300`, `bg-gradient-*`, `animate-fade-in` — cada uma com mensagem apontando o token correto. **Regra nativa do ESLint: nenhuma dependência nova.**
+- **A lista fechada continua com os mesmos 19 utilitários** (D-27.1). O que muda por D-27.3″ (§9.3.5) é apenas a **forma** da entrada de `rounded-full`, que passa a carregar a exceção estrutural do dot decorativo — nenhum termo entra, nenhum sai.
 - Varredura final: **zero** variantes de anel de foco além de `focus`.
 
 #### Comportamentos PRESERVAR
@@ -1853,6 +1854,7 @@ Não aplicável.
 #### Testes automatizados relevantes
 A suíte completa.
 **Teste novo, versionado (achado REV-22):** validar a regra com uma violação temporária prova que ela funcionava **naquele minuto**; depois, uma regressão no seletor deixaria o lint verde sem ninguém notar. Entra um teste de configuração usando a **API do ESLint já instalada** (`RuleTester`/`Linter`), com um literal proibido (deve acusar) e um permitido (não deve). **Nenhuma dependência nova.**
+**Ampliado por D-27.6 (§9.3.5):** além dos seis casos originais, o teste passa a cobrir a **semântica da exceção** de D-27.3″ — nove casos discriminativos, sempre contra a **configuração real**. Nos casos fail-closed, o contrato é que o utilitário proibido esteja **entre** as mensagens; **não** asserir "exatamente uma".
 
 #### QA manual
 Varredura visual completa (desktop e mobile) depois de remover `brand` — última chance de um resíduo passar despercebido.
@@ -1861,7 +1863,8 @@ Varredura visual completa (desktop e mobile) depois de remover `brand` — últi
 - Introduzir `class="rounded-full"` em qualquer arquivo **falha o `pnpm -r run lint`**, e existe teste versionado provando isso.
 - `grep -r "brand\|animate-fade-in" packages/frontend/src` retorna zero.
 - Uma única semântica de foco em todo o `src/`.
-- **A varredura não encontra resíduo.** Se encontrar, ele volta à task dona; se isso for inviável, a regra entra como `warn` com lista nominal e um commit seguinte a promove a `error` (§4.3).
+- **A varredura não encontra resíduo.** Se encontrar, ele volta à task dona. **A alternativa progressiva do §4.3 (`warn` com promoção posterior) está REJEITADA/SUPERADA** — D-27.2 fixou `severity = error`, e D-27.7 (§9.3.5) removeu esta escotilha para não deixar dois contratos ativos contraditórios.
+- **Falso positivo do gate não é resíduo** (D-27.3″, §9.3.5): quando a varredura acusa um uso semanticamente legítimo, a correção é no **seletor**, não no arquivo — e continua sem tocar `src/`.
 
 #### Definição de pronto
 Checklist completo verde, com o lint reprovando o vocabulário banido.
@@ -2307,9 +2310,13 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 | **SD-6** | Task 25: migrar o campo Motivo para `ui/Textarea` ou manter `<textarea>` manual? | **25** | **RESOLVIDA em 03/09/2026** — ver §9.3.3 |
 | **D-27.1** | Escopo do enforcement: só literais de `className` em JSX, ou também mapas de classe em nível de módulo? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
 | **D-27.2** | Severidade da regra: `error` agora ou `warn` promovido depois (§4.3)? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
-| **D-27.3** | `rounded-full` admite exceção semântica para círculos legítimos? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
+| **D-27.3** | `rounded-full` admite exceção semântica para círculos legítimos? | **27** | ~~RESOLVIDA em 03/09/2026~~ — **SUBSTITUÍDA em 04/09/2026 por D-27.3″** (§9.3.5). O *mecanismo* aprovado (directive local) foi refutado empiricamente; a *substância* (os dois dots são exceção legítima) foi mantida |
 | **D-27.4** | Reconciliar as imprecisões textuais I-1 (`brand` por substring), I-2 (`focus` × `focus-visible`) e I-3 (`index.html`) | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
 | **D-27.5** | Onde vive o teste versionado exigido por REV-22, dado "e nada mais, por desenho"? | **27** | **RESOLVIDA em 03/09/2026** — ver §9.3.4 |
+| **D-27.3″** | Como declarar a exceção do dot decorativo sem abrir buraco de 19 tokens na linha? | **27** | **RESOLVIDA em 04/09/2026** — ver §9.3.5 |
+| **D-27.6** | REV-22 precisa cobrir a semântica da exceção, não só a existência da regra? | **27** | **RESOLVIDA em 04/09/2026** — ver §9.3.5 |
+| **D-27.7** | O critério de aceite da Task 27 ainda oferece `warn` + promoção, contradizendo D-27.2 | **27** | **RESOLVIDA em 04/09/2026** — ver §9.3.5 |
+| **D-7.1** | Substituto semântico dos anéis do `Badge`, descoberto pelo enforcement da Task 27 | **7** | **RESOLVIDA em 04/09/2026** — ver §9.3.5 |
 
 #### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
 
@@ -2528,6 +2535,27 @@ ela detecta, nomeia e devolve. Enquanto os resíduos existirem, a "Definição d
 
 **D-27.3 · `rounded-full` — decisão aprovada:**
 
+> ## ⚠ SUBSTITUÍDA em 04/09/2026 — ver **D-27.3″** (§9.3.5)
+>
+> **O que caiu:** o *mecanismo* — a directive local
+> `{/* eslint-disable-next-line no-restricted-syntax -- … */}` descrita abaixo em "Forma da
+> exceção". **Não usar.**
+>
+> **O que ficou de pé:** a *substância* — `rounded-full` continua proibido globalmente, os dois usos
+> atuais continuam sendo exceção legítima, e as três alternativas proibidas
+> (`rounded-[9999px]`, `style={{borderRadius:'50%'}}`, remover `rounded-full` da lista) continuam
+> proibidas.
+>
+> **Causa da substituição, provada empiricamente.** `no-restricted-syntax` carrega os 19 seletores
+> sob um **único `ruleId`**. Uma directive local silencia **todos** eles naquela linha — não apenas o
+> `rounded-full`. Medido: com a directive aplicada, um `className` contendo
+> `rounded-full shadow-md text-3xl` produz **0 erros**; sem ela, produz **3**. E
+> `reportUnusedDisableDirectives` **não** protege contra esse alargamento, porque a directive
+> permanece "utilizada" enquanto o `rounded-full` estiver presente — o buraco nunca é reportado como
+> obsoleto. A exceção seria auditável para **remoção**, jamais para **crescimento**.
+>
+> O texto original é preservado abaixo, sem edição, como registro histórico.
+
 - `rounded-full` **permanece na lista proibida**, globalmente;
 - círculos **semanticamente legítimos** podem receber **exceção explícita, local e auditável**;
 - os dois usos atuais **são** exceção legítima.
@@ -2554,6 +2582,9 @@ faz uma exceção **obsoleta falhar o lint** — é o que a torna auditável em 
 burla o gate em vez de declarar a exceção.
 
 **Quem aplica a exceção:** a **task dona** do arquivo (14 e 16), não a Task 27.
+
+*(Fim do registro histórico de D-27.3. A cláusula acima sobre quem aplica a exceção foi revertida
+por D-27.3″ em 04/09/2026: a exceção passou a viver no enforcement, e as Tasks 14 e 16 não reabrem.)*
 
 ---
 
@@ -2602,15 +2633,18 @@ lista fechada de arquivos permitidos está no bloco da Task 27, reconciliada jun
 
 ---
 
-**Resíduos e ownership — a Task 27 NÃO os corrige (REV-21 soberano):**
+**Resíduos e ownership — registro de 03/09/2026 (SUPERADO por §9.3.5):**
+
+> ⚠ Esta tabela refletia o enforcement de primeira versão. Dois dos três "resíduos" eram
+> **falso positivo do gate**, não violação de código. Tabela vigente: §9.3.5.
 
 | Resíduo | Classificação | Destino |
 |---|---|---|
-| `rounded-full` — `ProductFiltersSheet.tsx:66` | **exceção legítima** (D-27.3) | **Task 16** aplica a diretiva de exceção documentada |
-| `rounded-full` — `StatusFilterMenu.tsx:62` | **exceção legítima** (D-27.3) | **Task 14** aplica a diretiva de exceção documentada |
-| `ring-blue-200` — `Badge.tsx:18` | **violação real** | **Task 7** — e decide o substituto semântico, junto do falso negativo dos irmãos `ring-{emerald,amber,rose}-200`. **Este plano não inventa o token substituto** |
+| `rounded-full` — `ProductFiltersSheet.tsx:66` | **exceção legítima** (D-27.3) | ~~**Task 16** aplica a diretiva de exceção documentada~~ → **falso positivo do gate**, corrigido no gate (D-27.3″) |
+| `rounded-full` — `StatusFilterMenu.tsx:62` | **exceção legítima** (D-27.3) | ~~**Task 14** aplica a diretiva de exceção documentada~~ → **falso positivo do gate**, corrigido no gate (D-27.3″) |
+| `ring-blue-200` — `Badge.tsx:18` | **violação real** | **Task 7** — mantido. Substituto decidido em **D-7.1** (§9.3.5) |
 
-**Ordem TDD registrada:**
+**Ordem TDD registrada em 03/09/2026 (SUPERADA por §9.3.5):**
 
 1. decisão documental (este registro);
 2. RED de `designSystemLintRule.test.ts`;
@@ -2622,6 +2656,185 @@ lista fechada de arquivos permitidos está no bloco da Task 27, reconciliada jun
 8. commit funcional previsto (`chore(ui): proibir utilitarios fora do design system no lint`).
 
 A Task 28 continua fora do escopo.
+
+---
+
+#### 9.3.5 · Correção do contrato de enforcement (RESOLVIDAS em 04/09/2026)
+
+**Como estas decisões foram produzidas.** O enforcement de primeira versão entrou como `error` e
+acusou três resíduos. A investigação subsequente mostrou que **dois deles eram falso positivo do
+próprio gate**, e que o mecanismo de exceção aprovado em D-27.3 era inseguro. Todas as afirmações
+empíricas abaixo foram medidas com a `Linter` API do ESLint 9.35.0 já instalado, fora do repositório,
+carregando a configuração real.
+
+---
+
+**D-7.1 · substituto dos anéis do `Badge` — decisão aprovada:** **remover o anel.**
+
+*Classificação histórica, para não culpar quem executou:* a Task 7 **possuía** `Badge.tsx`, mas seus
+critérios de aceite (§Task 7, "Critérios de aceite") tratam de `rounded-full`, `shadow-sm`, escala
+tipográfica e largura do shell — **nenhum menciona anel**. Pela própria régua, a Task 7 passou. O que
+existiu foi **lacuna de escopo do plano**, não falha de execução.
+
+*Adicionalmente*, o commit `588760d` introduziu uma incoerência específica na variante `danger`: ao
+migrar o par fundo/texto de `rose-50`/`rose-700` para `danger-subtle`/`danger` — que são **red**-50 e
+**red**-700 — deixou o anel em `ring-rose-200`. As outras três variantes seguiram em família. Essa é
+regressão real, e é deste commit.
+
+**Estado-alvo aprovado:**
+
+```ts
+success: 'bg-success-subtle text-success'
+warning: 'bg-warning-subtle text-warning'
+danger:  'bg-danger-subtle  text-danger'
+info:    'bg-accent-subtle  text-accent-subtle-text'
+```
+
+Saem das **quatro** variantes: `ring-1`, `ring-inset`, `ring-emerald-200`, `ring-amber-200`,
+`ring-rose-200`, `ring-blue-200`. **Nenhum token novo** — não existe nível intermediário por família
+no sistema (§3.1 fixa "cada papel de estado é um **par**"), e criar um ampliaria a spec.
+
+**Fundamentação (cinco artefatos convergentes):** o protótipo validado da Fase 6
+(`prototype/dashboard.html`) desenha o badge com fundo + cor e **sem** borda/ring, e `prototype.md`
+marca esse badge como VALIDADA · `design-system.md` §8 é lista **positiva fechada** de onde usar
+borda, e o badge não está nela · §3.3 define o estado como fundo sutil + texto, **sem borda de
+controle** · §9 nomeia `ring-blue-200` entre o vocabulário substituído · §18 descreve o Badge-alvo
+sem anel.
+
+**Escopo dos irmãos.** `ring-emerald-200`, `ring-amber-200` e `ring-rose-200` **não entram na lista
+fechada dos 19** (isso reabriria D-27.1 e faria a Task 27 crescer). Eles saem **no patch da Task 7**,
+por coerência interna do próprio `Badge` — corrigir só a variante acusada deixaria o componente mais
+incoerente do que está.
+
+---
+
+**D-27.3″ · exceção do dot decorativo — decisão aprovada:** **exceção estrutural no seletor.**
+
+`rounded-full` **permanece proibido globalmente**. A exceção deixa de ser declarada por ocorrência e
+passa a viver **dentro do enforcement**, expressa no próprio seletor esquery.
+
+**Ownership:** a **Task 27** é dona da semântica da exceção. **As Tasks 14 e 16 não reabrem**, e
+`StatusFilterMenu.tsx` e `ProductFiltersSheet.tsx` **permanecem intocados**.
+
+**Compatibilidade com REV-21:** preservada, e por isso mesmo. REV-21 manda que **resíduo real** volte
+para a task dona — e isso continua valendo para o Badge. O que estes dois arquivos tinham não era
+resíduo: era **falso positivo de um seletor grosso demais**. Falso positivo do gate corrige-se **no
+gate**; e a Task 27 continua sem editar um único arquivo de `src/`, que é o que REV-21 protege.
+
+**A exceção só reconhece um dot que satisfaça, cumulativamente:**
+
+- elemento JSX `<span>`;
+- `aria-hidden="true"` **literal** (nem `aria-hidden` isolado, nem `{true}`, nem `"false"`);
+- `className` **diretamente** no `span` — o caminho AST usa relação **filho**, não descendente
+  genérico, para que `className={cn("h-2 w-2 rounded-full")}` **não** receba a exceção;
+- parte estática do `className` composta **exatamente** pelos tokens `h-2`, `w-2` e `rounded-full`,
+  em qualquer ordem, e por **nada mais**;
+- tokens delimitados por **whitespace/início/fim** — `h-2.5` **não** equivale a `h-2`, e `w-2.5`
+  **não** equivale a `w-2`.
+
+A estratégia validada está registrada no plano de execução; este contrato define **o que** a regra
+deve reconhecer, não transcreve a implementação.
+
+**Alternativas comparadas e rejeitadas:** *directive local* (D-27.3, refutada por over-silencing);
+*override por arquivo com 18 dos 19 seletores* (libera o arquivo inteiro, e cresce a cada arquivo
+novo); *token `rounded-dot`* — **rejeitada por conflito com a própria spec**: §7 fixa **dois níveis
+de raio**, e um terceiro contradiria a regra que a Task 27 existe para fazer valer; além disso
+transformaria em token aquilo que D-27.3 decidiu manter como exceção semântica declarada.
+
+---
+
+**Semântica fail-closed — INTENCIONAL, registrada para não ser lida como bug:**
+
+| `className` estático do `<span aria-hidden="true">` | Resultado |
+|---|---|
+| `h-2 w-2 rounded-full` | `rounded-full` **permitido** |
+| `h-2 w-2 rounded-full shadow-md` | `shadow-md` **acusa** — e `rounded-full` **também**, porque o conjunto deixou de satisfazer a exceção |
+| `h-2 w-2 rounded-full text-3xl` | `text-3xl` **acusa** — e `rounded-full` **também**, pelo mesmo motivo |
+| `h-2 w-2 rounded-full px-8 py-4` · `p-6` · `scale-150` · `min-w-40` | `rounded-full` **acusa** |
+| `h-2.5 w-2.5 rounded-full` · `h-2 w-2.5 …` · `h-2.5 w-2 …` | `rounded-full` **acusa** |
+
+A exceção é **allowlist estrita**, não autorização parcial do elemento: **qualquer** utilitário
+estático adicional revoga a exceção do `rounded-full`. É assim que o caso do padding se fecha **sem
+denylist geométrica** — não há lista de modificadores a manter, porque o que se enumera são os três
+tokens da própria exceção.
+
+Consequência aceita: um dot legítimo futuro que precise de um quarto token será acusado até que esse
+token entre na allowlist — **uma mudança visível e auditável na configuração**, que é exatamente o
+comportamento desejado.
+
+---
+
+**Limitação conhecida da análise estática — registrada honestamente:**
+
+A regra prova **estrutura JSX**, **`aria-hidden` literal**, **presença dos tokens estáticos exatos** e
+**que o conjunto estático é o permitido**. Ela **não** calcula layout CSS computado nem resolve
+valores determinados em runtime. **Não é um layout engine, e não se propõe a ser.**
+
+Na prática isso não abre brecha, porque a allowlist impede que exista qualquer outro utilitário no
+mesmo `className`. A limitação é estreita, não reabre nenhuma decisão, e **não exige plugin nem
+dependência nova**.
+
+---
+
+**D-27.6 · cobertura do REV-22 — decisão aprovada:** o teste versionado continua carregando a
+**configuração real** (D-27.5, inalterada) e passa a cobrir também a **semântica da exceção**. Além
+dos seis casos A–F já existentes, exige cobertura discriminativa para:
+
+1. dot legítimo exato **passa**;
+2. dot + `shadow-md` continua sendo reprovado pelo enforcement;
+3. dot + `text-3xl` continua sendo reprovado;
+4. `aria-hidden="false"` **não** recebe exceção;
+5. `className` através de helper `cn()`/`clsx` **não** recebe exceção;
+6. `h-2.5` / `w-2.5` **não** recebem exceção;
+7. `rounded-full` fora do padrão continua proibido;
+8. elemento diferente de `span` **não** recebe exceção;
+9. padding ou qualquer utilitário estático adicional **revoga** a exceção.
+
+**Forma da asserção — importante.** Nos casos fail-closed (2, 3, 9) o contrato é que o utilitário
+proibido esteja **entre** as mensagens. **Não** asserir "exatamente uma mensagem": `rounded-full`
+também pode ser acusado ali, porque a exceção deixou de valer, e isso é o comportamento correto.
+
+---
+
+**D-27.7 · `warn` × `error` — reconciliação:** o quarto critério de aceite da Task 27 ainda oferecia
+`warn` com promoção posterior. **D-27.2 governa: `severity = error`.** A alternativa `warn` fica
+**REJEITADA/SUPERADA** e foi removida do critério, para não deixar dois contratos ativos
+contraditórios.
+
+---
+
+**Resíduos e ownership — tabela vigente (04/09/2026):**
+
+| Item | Classificação | Destino |
+|---|---|---|
+| `rounded-full` — `StatusFilterMenu.tsx` | **falso positivo do gate** | **Task 27** (D-27.3″). Arquivo intocado; **Task 14 não reabre** |
+| `rounded-full` — `ProductFiltersSheet.tsx` | **falso positivo do gate** | **Task 27** (D-27.3″). Arquivo intocado; **Task 16 não reabre** |
+| `ring-blue-200` (+ irmãos emerald/amber/rose) — `Badge.tsx` | **violação real** | **Task 7** — **único owner remediation real**. Corrigido **antes** de o enforcement final entrar como `error` |
+
+**Follow-up registrado, sem owner atribuído.** A investigação encontrou `text-indigo-700` em
+`StatusFilterMenu.tsx`. O termo **não** faz parte da lista fechada dos 19 (a lista bane o *prefixo*
+`ring-indigo-`, não `text-indigo-`), e **não é adicionado**: isso reabriria D-27.1 e faria a Task 27
+crescer. **Não é critério de aceite desta task**, e **não é atribuído à Task 14**, que não reabre.
+Fica registrado aqui apenas para não ser redescoberto como surpresa — mesma classe do falso negativo
+já registrado em §9.3.4.
+
+**Ordem de execução vigente (substitui a de 03/09/2026):**
+
+1. **corrective docs checkpoint** (este registro);
+2. remediação da **Task 7** — `Badge.tsx`, D-7.1;
+3. **RED** do REV-22 ampliado, contra a config ainda sem a exceção final;
+4. enforcement final da Task 27 com **D-27.3″**;
+5. **GREEN** do REV-22;
+6. `colors.brand` fora do `tailwind.config.js` (e `animate-fade-in`);
+7. peso 700 da Inter fora do `index.html`;
+8. varredura `focus` / `brand` / vocabulário (critérios reconciliados em D-27.4);
+9. `lint` · `typecheck` · testes · `build`;
+10. `accessibility-reviewer`;
+11. **QA visual próprio da Task 27** — varredura desktop/mobile depois de remover `brand`;
+12. fechamento e publicação.
+
+**As Tasks 14 e 16 saem completamente da sequência.** A **Task 28** continua não iniciada e fora
+deste checkpoint; o QA visual do item 11 é **da Task 27** e **não** se confunde com ela.
 
 ### 9.4 · Gate executável das decisões
 
