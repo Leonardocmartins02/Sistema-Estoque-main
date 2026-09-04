@@ -12,10 +12,10 @@ type BadgeProps = React.HTMLAttributes<HTMLSpanElement> & {
 };
 
 const styles: Record<Variant, string> = {
-  success: 'bg-success-subtle text-success ring-1 ring-inset ring-emerald-200',
-  warning: 'bg-warning-subtle text-warning ring-1 ring-inset ring-amber-200',
-  danger: 'bg-danger-subtle text-danger ring-1 ring-inset ring-rose-200',
-  info: 'bg-accent-subtle text-accent-subtle-text ring-1 ring-inset ring-blue-200',
+  success: 'bg-success-subtle text-success',
+  warning: 'bg-warning-subtle text-warning',
+  danger: 'bg-danger-subtle text-danger',
+  info: 'bg-accent-subtle text-accent-subtle-text',
 };
 
 // M-6: badge não é clicável, não é arrastável — nada muda quando o mouse
