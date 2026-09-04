@@ -2322,6 +2322,7 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 | **D-28.3** | Qual a lista canônica de viewports, dada a divergência entre "QA manual" e "Critérios de aceite"? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
 | **D-28.4** | `resize_window` inoperante: qual método de medição é aceito como evidência da versão assinada? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
 | **D-28.5** | Quem assina a versão definitiva da tabela de paridade? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
+| **D-28.6** | Como isolar o banco do QA da Task 28 sem `CREATEDB` e sem tocar o banco de desenvolvimento? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.7 |
 
 #### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
 
@@ -2971,6 +2972,200 @@ Nenhum dos três é corrigido nesta task, e **nenhum owner novo é criado** para
   pelo contrato (D-A/§15.1) — não são achados novos;
 - a **Task 29** (review final de segurança e acessibilidade, incl. teclado e leitor de tela)
   continua **separada** e não é antecipada aqui.
+
+#### 9.3.7 · D-28.6 — isolamento do banco do QA da Task 28 (RESOLVIDA em 04/09/2026)
+
+Fechada **antes** de qualquer criação de schema ou execução de QA, sobre a análise de viabilidade
+read-only feita na branch `task/task-28-parity-qa` (`f67c150`). Decisão humana explícita.
+
+---
+
+**D-28.6 · mecanismo de isolamento — decisão aprovada:** **schema PostgreSQL descartável
+`task28_qa`, dentro do database `simplestock_test`.**
+
+**Por que schema e não database.** O role usado pela aplicação **não possui `CREATEDB`**. Portanto
+**nenhum database PostgreSQL separado é criado**, e **`CREATE DATABASE` não é usado**. Também **não**
+se solicita nem se depende de acesso ao superuser `postgres`.
+
+| Item | Valor |
+|---|---|
+| Database | `simplestock_test` (já existente) |
+| Schema descartável | `task28_qa` |
+| Mecanismo proibido | `CREATE DATABASE`, superuser `postgres` |
+
+O schema é **funcionalmente suficiente** para o objetivo da Task 28: provar a **linha 31** da
+`parity-matrix` (estado vazio "nada cadastrado" no mobile) e o contrato **D-A** do
+`QuickOutHistory`, **sem tocar o banco de desenvolvimento**.
+
+**Isto é uma substituição explícita de mecanismo — não uma alegação de que existe um database
+separado.** Todo relatório da Task 28 deve dizer "schema isolado", nunca "database isolado".
+
+---
+
+**Banco de desenvolvimento — invariante de proteção.**
+
+O database **`simplestock` é PROTEGIDO**. Baseline conhecido, obtido **read-only**:
+
+| Entidade | Baseline |
+|---|---|
+| Produtos | **51** |
+| Movimentos | **47** |
+| `OUT` | **3** |
+| Usuários | **1** |
+
+A Task 28 **não pode**, em `simplestock`: seedar · truncar · apagar produtos · criar quick-outs
+artificiais · alterar saldo para fabricar estados · migrar manualmente · usá-lo como ambiente QA
+descartável.
+
+---
+
+**`DATABASE_URL` process-scoped.**
+
+O Prisma lê `DATABASE_URL`, e **`dotenv` não sobrescreve variável já presente no processo**. Logo o
+ambiente QA define `DATABASE_URL` **apenas no processo**, apontando para o database
+`simplestock_test` e o schema `task28_qa`.
+
+**Nenhuma credencial ou connection string completa é registrada neste documento.** E **não** são
+editados: `.env`, `.env.*`, `schema.prisma`, `package.json`.
+
+---
+
+**Guardrail de identidade — OBRIGATÓRIO antes de qualquer write.**
+
+Toda operação mutável da fase QA prova **primeiro**, no próprio banco:
+
+```
+current_database() = 'simplestock_test'
+current_schema()   = 'task28_qa'
+```
+
+**Se qualquer um divergir: ABORTAR IMEDIATAMENTE.** Isso inclui rejeitar o write quando
+`database = simplestock`, quando `schema = public`, ou quando for qualquer outro database/schema.
+
+**Não se confia apenas no nome de uma variável de ambiente** — a identidade é provada pela conexão.
+
+---
+
+**Colisão / schema preexistente.**
+
+Antes de criar `task28_qa`, verificar se ele já existe.
+
+| Situação | Ação |
+|---|---|
+| **Não existe** | Pode prosseguir, quando a execução for autorizada |
+| **Já existe** | **Não dropar automaticamente. Não reutilizar cegamente.** PARAR, inspecionar e escalar para decisão humana |
+
+---
+
+**Processos QA isolados.**
+
+| Processo | Porta |
+|---|---|
+| Backend **QA** | **4100** |
+| Frontend **QA** | **5174** |
+| Backend dev atual | 4000 — permanece separado |
+| Frontend dev usual | 5173 — permanece separado |
+
+Configuração **somente por env de processo**: `PORT`, `CORS_ALLOWED_ORIGINS`, `DATABASE_URL`,
+`VITE_API_BASE`. **Nenhuma alteração persistente no repo.** O frontend QA aponta **explicitamente**
+para o backend QA.
+
+---
+
+**Suíte backend durante a janela QA.**
+
+Enquanto `task28_qa` existir e o ciclo manual de QA estiver ativo, **não rodar a suíte backend** —
+para evitar qualquer interferência do ambiente de testes na janela descartável. O baseline
+automatizado já está **verde** e foi executado **antes** deste ciclo. Depois do cleanup, os gates
+voltam ao fluxo normal.
+
+---
+
+**Ciclo da linha 31 — ordem obrigatória.**
+
+1. criar o schema `task28_qa`;
+2. executar as migrations contra esse schema;
+3. criar **somente** o usuário QA necessário para autenticação;
+4. manter **ZERO `Product`**;
+5. autenticar no app QA;
+6. provar no navegador, no mobile, a **linha 31**: vazio **"nada cadastrado"**;
+7. coletar evidência;
+8. **somente depois** popular dados.
+
+**O seed normal do repo não pode ser usado nesta etapa**, porque cria produtos. **Nenhum dado de
+domínio pode existir antes da prova da linha 31.**
+
+---
+
+**Usuário QA.**
+
+Como **não há endpoint de registro**, é permitido criar **somente** o usuário QA via Prisma, usando
+o **mecanismo de hash da própria aplicação**. Essa criação: ocorre **somente** em
+`simplestock_test/task28_qa` · **não** usa o seed completo · **não** cria produtos · **não** registra
+senha ou hash em relatório · é **fixture de autenticação**, não fixture de domínio. A implementação
+concreta é revisada **antes** da execução.
+
+---
+
+**Dataset D-A.**
+
+Depois da linha 31 provada, popular o ambiente QA **pelos caminhos suportados da aplicação**.
+
+**Objetivo:** `QuickOutHistory` total **≥ 11**.
+
+Estratégia aprovada conceitualmente: criar produto QA **pelo contrato/API real** · fornecer estoque
+inicial suficiente · gerar **≥ 11 quick-outs pelo endpoint/regra real** · **não inserir
+`StockMovement` diretamente por SQL** · preservar as regras de `previousQuantity`/`newQuantity`/
+`userId` e do saldo · então executar **D-A página 1 → página 2**. A quantidade exata é confirmada
+antes da execução.
+
+---
+
+**Side effects — resultado da análise read-only.**
+
+O `QuickOut` **não possui webhook, e-mail, tracking ou analytics externo conhecido** nesta
+implementação; o efeito observado é **persistência local no banco**. Se durante a execução surgir
+**qualquer side effect externo não previsto**: **BLOCK**.
+
+---
+
+**Cleanup — depois de todas as evidências que dependem do schema.**
+
+1. parar frontend e backend QA;
+2. verificar novamente `current_database() = 'simplestock_test'`;
+3. confirmar o alvo exato: `task28_qa`;
+4. dropar **somente** o schema `task28_qa`;
+5. **nunca** `DROP DATABASE`;
+6. **nunca** tocar o schema `public`;
+7. confirmar que `task28_qa` não existe mais;
+8. reconfirmar o banco dev **read-only**, contra o baseline: **51 produtos · 47 movimentos · 3 `OUT`
+   · 1 usuário**.
+
+**Qualquer divergência: BLOCK e investigar.**
+
+---
+
+**Reversibilidade.** O schema QA é **totalmente descartável**; **nenhuma** alteração persistente em
+repo ou `.env`; **nenhuma** dependência nova; **nenhum** recurso externo conhecido; o banco dev
+**termina exatamente como começou**.
+
+---
+
+**Relação com DR-3 e DR-9.**
+
+| Achado | Efeito de D-28.6 |
+|---|---|
+| **DR-9 / linha 31** | Deixa de ser candidato automático a `ENVIRONMENT BLOCK` — **será provado no schema QA** |
+| **DR-3 / `QuickOutHistory`** | Deixa de depender dos **3** registros do banco dev — **dataset controlado ≥ 11 no schema QA** |
+
+`ENVIRONMENT BLOCK` permanece **apenas como fallback**, se a execução real do ambiente isolado
+falhar **apesar** deste plano.
+
+---
+
+**Findings não relacionados — não entram na Task 28, não recebem owner novo:**
+`docker-compose`/`.env.example` divergindo do ambiente local real · placeholder em `netlify.toml` ·
+`LowStockBanner` · `text-indigo-700` · `ring-offset-white`.
 
 ### 9.4 · Gate executável das decisões
 
