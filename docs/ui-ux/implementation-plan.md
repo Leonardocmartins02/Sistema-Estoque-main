@@ -2317,6 +2317,11 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 | **D-27.6** | REV-22 precisa cobrir a semântica da exceção, não só a existência da regra? | **27** | **RESOLVIDA em 04/09/2026** — ver §9.3.5 |
 | **D-27.7** | O critério de aceite da Task 27 ainda oferece `warn` + promoção, contradizendo D-27.2 | **27** | **RESOLVIDA em 04/09/2026** — ver §9.3.5 |
 | **D-7.1** | Substituto semântico dos anéis do `Badge`, descoberto pelo enforcement da Task 27 | **7** | **RESOLVIDA em 04/09/2026** — ver §9.3.5 |
+| **D-28.1** | O "Fechar" de 24px registrado na `parity-matrix` é violação do piso de 44×44 no mobile? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
+| **D-28.2** | As lacunas 31–33 (`NÃO PROVADO`) fecham por QA manual, por teste novo, ou permanecem abertas na assinatura? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
+| **D-28.3** | Qual a lista canônica de viewports, dada a divergência entre "QA manual" e "Critérios de aceite"? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
+| **D-28.4** | `resize_window` inoperante: qual método de medição é aceito como evidência da versão assinada? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
+| **D-28.5** | Quem assina a versão definitiva da tabela de paridade? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
 
 #### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
 
@@ -2835,6 +2840,137 @@ já registrado em §9.3.4.
 
 **As Tasks 14 e 16 saem completamente da sequência.** A **Task 28** continua não iniciada e fora
 deste checkpoint; o QA visual do item 11 é **da Task 27** e **não** se confunde com ela.
+
+#### 9.3.6 · D-28.1 a D-28.5 — sub-decisões da Task 28 (RESOLVIDAS em 04/09/2026)
+
+Fechadas **antes** de qualquer QA, sobre a revisão de contrato read-only feita no commit `2c38fbd`
+(Task 27 publicada). Nenhuma delas altera os critérios de aceite da Task 28: elas dizem **como
+verificar** e **o que conta como prova**, não **o que é aceitável**.
+
+---
+
+**D-28.1 · alvo de toque do "Fechar" do `Modal` — decisão aprovada:** **medir antes de julgar.**
+
+O critério literal da Task 28 **permanece intacto**: **nenhum alvo de toque abaixo de 44×44 no
+mobile, e nenhum abaixo de 24×24 em qualquer largura**. Ele **não** é enfraquecido, e **não** ganha
+exceção.
+
+A nota da `parity-matrix.md` ("Botão *Fechar* do `Modal` a 24px") é **referência histórica da Task
+16**, e por si só **não** constitui violação: ela não distingue **tamanho visual do ícone** de **hit
+target real do botão** — que inclui padding e área clicável. São duas medidas diferentes, e só a
+segunda é o critério.
+
+**A Task 28 mede o target renderizado**, e o resultado governa:
+
+| Medição | Consequência |
+|---|---|
+| hit target real **≥ 44×44** no mobile | **PASS.** Nenhuma correção. A nota histórica é reconciliada na matriz como medição atualizada |
+| hit target real **< 44×44** no mobile | **BLOCKER real da Task 28.** A correção volta ao primitivo `ui/Modal.tsx`, cuja owner histórica é a **Task 9**, em **commit próprio e separado** — nunca dentro do commit da matriz |
+
+**Explicitamente proibido:** criar **ausência assinada** para este caso (ausência assinada é para
+capacidade deliberadamente ausente por decisão, não para alvo de toque reprovado); enfraquecer o
+piso de 44×44; e **corrigir antecipadamente, sem medição** — o que produziria mudança de código sem
+evidência que a justifique.
+
+---
+
+**D-28.2 · lacunas 31–33 da `parity-matrix` — decisão aprovada:** **fecham pela própria verificação
+manual da Task 28.**
+
+As três linhas (`estado vazio — nada cadastrado`, `estado vazio — filtro sem resultado`, `estado
+vazio anunciado`, no ramo **mobile**) estão hoje `NÃO PROVADO`: a implementação existe em
+`ProductCardList.tsx`, a evidência automatizada não.
+
+- **Nenhum teste automatizado novo** é criado — isso contradiria "Testes automatizados relevantes:
+  nenhum novo" e é o que a Q-1 mantém fora desta task.
+- Para cada um dos três estados: **provocar no navegador**, **coletar evidência manual** e marcar
+  **`PASS`** ou **`FAIL`**.
+- **`NÃO PROVADO` não é estado final aceitável para a assinatura definitiva.** A v1 pôde carregá-lo;
+  a versão assinada, não.
+- Se um estado **não puder ser provocado por limitação de ambiente**, a Task 28 entra em
+  **`ENVIRONMENT BLOCK`** até existir evidência. **Ausência de prova não vira `PASS`.**
+
+---
+
+**D-28.3 · viewports — decisão aprovada:** **duas camadas, ambas obrigatórias no que lhes cabe.**
+
+A divergência entre o bloco "QA manual" e o bloco "Critérios de aceite" da Task 28 é reconciliada
+assim, sem remover nada de nenhum dos dois:
+
+**A · Viewports de aceite obrigatórios** (a lista contra a qual "zero capacidades ausentes" é
+medido):
+
+`375` · `600` · `767` · `768` · `900` · `1024` · `1440` · `1920`
+
+**B · Cenários suplementares de QA exigidos pelo plano** (obrigatórios como cenário, não como
+largura da matriz de aceite):
+
+- **375×568** — viewport baixo (`max-height` dos diálogos, A-13);
+- **769** — o lado de cima da transição;
+- **janela de desktop com barra de rolagem clássica** — a falha segura de P-5;
+- **320 quando relevante** — **não** é largura universal obrigatória; entra onde o achado histórico
+  a exigir (cards, grade de atalhos do `QuickOutModal`).
+
+**A verificação 767/768/769 observa explicitamente a transição de layout** — tabela ↔ cards —, não
+apenas a ausência de scroll.
+
+---
+
+**D-28.4 · método de medição — decisão aprovada:** **navegador real + iframe same-origin com
+dimensões controladas**, medindo por `getBoundingClientRect()` e `getComputedStyle()`, quando
+`resize_window`/automação não conseguir controlar o viewport diretamente.
+
+É o método já usado nas Tasks 10, 11, 15 e 16, e fica **aceito como evidência geométrica**:
+
+largura · `scrollWidth`/`clientWidth` · clipping · dimensões de hit target · gutters · `max-height` ·
+dimensões de controles.
+
+**O que ele não faz:** **não substitui a validação humana de capacidade/fluxo.** A Task 28 continua
+sendo **QA manual no navegador** — geometria é medida, capacidade é exercida.
+
+**Nenhuma dependência nova.** Continuam proibidos, por Q-1: **Playwright, Cypress, Selenium** ou
+qualquer runner E2E novo.
+
+---
+
+**D-28.5 · assinatura — decisão aprovada:** **a assinatura é humana. O agente não assina.**
+
+Fluxo fechado:
+
+1. o agente executa o QA e **preenche as evidências**;
+2. o agente **apresenta** a `parity-matrix.md` final **proposta**;
+3. o **usuário humano revisa**;
+4. o usuário **declara aprovação explicitamente**;
+5. **só então** a matriz registra a aprovação/assinatura humana;
+6. **depois disso** ocorre o commit documental final.
+
+**A Task 28 não é DONE antes da aprovação humana** — nem com todos os gates verdes.
+
+---
+
+**Findings conhecidos, preservados sem owner novo (registro, não escopo):**
+
+| Finding | Situação na Task 28 |
+|---|---|
+| `LowStockBanner` | **Fora do ownership da Task 28**, salvo regressão de capacidade que o próprio QA descobrir |
+| `text-indigo-700` (`StatusFilterMenu.tsx`) | Follow-up real **sem owner**; fora da Task 28 (§9.3.5) |
+| `ring-offset-white` (`DataTable.tsx`) | Fora da Task 28; **sem regressão de capacidade** atual |
+
+Nenhum dos três é corrigido nesta task, e **nenhum owner novo é criado** para eles.
+
+---
+
+**Contrato resultante da Task 28 (após D-28.1..D-28.5):**
+
+- **QA/Gate manual**, sem runner E2E novo;
+- **zero `src/` por desenho**;
+- **`docs/ui-ux/parity-matrix.md` é o entregável**;
+- correções que o QA revelar entram em **commits próprios**, **fora** do commit da matriz;
+- **toda ausência que não seja deliberadamente assinada é blocker**;
+- **Shift+clique** e **ações em lote no mobile** permanecem **ausências declaradas**, já previstas
+  pelo contrato (D-A/§15.1) — não são achados novos;
+- a **Task 29** (review final de segurança e acessibilidade, incl. teclado e leitor de tela)
+  continua **separada** e não é antecipada aqui.
 
 ### 9.4 · Gate executável das decisões
 
