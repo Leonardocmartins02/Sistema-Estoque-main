@@ -7,13 +7,6 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Legado — ver Task 27 do docs/ui-ux/implementation-plan.md.
-        // `brand.DEFAULT` é literalmente indigo-600: dois nomes para o mesmo
-        // valor. Ainda consumido por 4 arquivos; sai quando eles migrarem.
-        brand: {
-          DEFAULT: '#4F46E5',
-          dark: '#3730A3',
-        },
         // Tokens semânticos (Fase 5, design-system.md §2–§4). Primitivo →
         // semântico: componente consome só estes nomes, nunca a paleta
         // default do Tailwind diretamente para cor de acento/estado/borda.
