@@ -2323,6 +2323,7 @@ Não são bloqueadores do plano — são escolhas técnicas que só fazem sentid
 | **D-28.4** | `resize_window` inoperante: qual método de medição é aceito como evidência da versão assinada? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
 | **D-28.5** | Quem assina a versão definitiva da tabela de paridade? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.6 |
 | **D-28.6** | Como isolar o banco do QA da Task 28 sem `CREATEDB` e sem tocar o banco de desenvolvimento? | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.7 |
+| **D-28.7** | O guardrail de D-28.6 exige `current_schema() = 'task28_qa'` antes de todo write, mas o primeiro write é justamente o `CREATE SCHEMA` que o cria | **28** | **RESOLVIDA em 04/09/2026** — ver §9.3.8 |
 
 #### 9.3.1 · SD-1 — política de collation da ordenação (RESOLVIDA em 31/08/2026)
 
@@ -3166,6 +3167,124 @@ falhar **apesar** deste plano.
 **Findings não relacionados — não entram na Task 28, não recebem owner novo:**
 `docker-compose`/`.env.example` divergindo do ambiente local real · placeholder em `netlify.toml` ·
 `LowStockBanner` · `text-indigo-700` · `ring-offset-white`.
+
+#### 9.3.8 · D-28.7 — bootstrap seguro do schema QA (RESOLVIDA em 04/09/2026)
+
+**A contradição encontrada.** D-28.6 (§9.3.7) exige, **antes de qualquer write**, provar
+cumulativamente `current_database() = 'simplestock_test'` **e** `current_schema() = 'task28_qa'`.
+Mas o **primeiro write necessário é exatamente `CREATE SCHEMA task28_qa`** — e, antes dele, o schema
+não existe, de modo que a segunda condição **não pode ser satisfeita**. O guardrail, tomado ao pé da
+letra, torna sua própria pré-condição inalcançável.
+
+A operação **não é executada com essa contradição implícita**. Ela é resolvida por escrito, aqui,
+como **exceção única, nomeada e expirável**.
+
+---
+
+**D-28.7 · exceção de bootstrap — decisão aprovada:** **uma única exceção à dupla verificação de
+D-28.6, válida exclusivamente para a criação inicial do schema.**
+
+Para **essa operação única**, exigir **cumulativamente**:
+
+| | Condição |
+|---|---|
+| **A** | `current_database() = 'simplestock_test'` |
+| **B** | a conexão **não** aponta para o database `simplestock` |
+| **C** | o schema `task28_qa` **não** existe |
+| **D** | o usuário/role é o esperado para `simplestock_test` |
+| **E** | **nenhum outro comando mutável** está agrupado na mesma execução |
+| **F** | o SQL permitido é **exatamente** `CREATE SCHEMA task28_qa` — ou forma equivalente segura com ownership explícito já existente — **sem `IF EXISTS`** e **sem `CASCADE`** |
+
+**`IF NOT EXISTS` é proibido:** colisão deve **parar**, não ser silenciosamente aceita.
+
+---
+
+**Guarda de colisão.** Antes do `CREATE`, consultar `pg_namespace`.
+
+Se `task28_qa` **já existir**: **PARAR**. Não reutilizar · não dropar · não limpar · não migrar ·
+**não assumir que é desta execução**. Escalar para decisão humana.
+
+---
+
+**Portão de identidade pós-`CREATE`.** Depois do `CREATE` e **antes de qualquer outro write**:
+
+1. reconectar/configurar a conexão QA com `database = simplestock_test` e `schema = task28_qa`;
+2. provar `current_database() = 'simplestock_test'` **e** `current_schema() = 'task28_qa'`.
+
+**Somente depois dessa prova** a execução prossegue para as migrations. **A partir desse ponto a
+exceção de bootstrap EXPIRA.**
+
+---
+
+**Regra absoluta após o bootstrap.** Com `task28_qa` existindo, **todo** write futuro exige, antes,
+a **dupla verificação** de D-28.6. Isso inclui, sem exceção: **migrations · criação do usuário QA ·
+criação de produto QA · quick-outs · qualquer fixture · cleanup mutável.** Qualquer condição
+divergente → **ABORT**.
+
+**A exceção de D-28.7 não vale** para migration, nem para fixture de usuário, nem para dado de
+domínio, nem genericamente para cleanup. Ela cobre **um único comando**, **uma única vez**.
+
+---
+
+**Migrations.** O `migrate deploy`:
+
+- recebe `DATABASE_URL` **process-scoped**, apontando explicitamente para
+  `simplestock_test` com `schema=task28_qa`;
+- **não** pode usar a `DATABASE_URL` do dev;
+- **não** pode usar o schema `public`;
+- **não** roda seed.
+
+**Antes** do migrate: provar identidade dupla. **Depois** do migrate: provar identidade novamente e
+listar as migrations/o schema esperado.
+
+---
+
+**Cleanup — a exceção de bootstrap não se aplica ao `DROP`.**
+
+`DROP SCHEMA task28_qa CASCADE` só pode ocorrer depois de `current_database() = 'simplestock_test'`
+e da confirmação explícita de que o alvo é `task28_qa`. Como `current_schema()` pode mudar ou ficar
+inválido no instante do `DROP`, o contrato **diferencia três momentos**:
+
+| Momento | Exigência |
+|---|---|
+| **ANTES** do `DROP` | identidade dupla válida (`database` **e** `schema`) |
+| **ALVO** do `DROP` | o **nome literal** `task28_qa` — nunca derivado dinamicamente |
+| **DEPOIS** do `DROP` | confirmar **ausência** em `pg_namespace` |
+
+**Nunca:** `DROP DATABASE` · `DROP SCHEMA public` · `DROP SCHEMA` com nome derivado dinamicamente.
+
+---
+
+**Banco de desenvolvimento — baseline reconciliado.**
+
+`simplestock` **permanece protegido**, e **nenhuma operação da Phase E2 pode tocá-lo**.
+
+O baseline registrado em §9.3.7 (**51 produtos · 47 movimentos · 3 `OUT` · 1 usuário**) é **anterior
+ao incidente** e **não** serve mais como referência de comparação do cleanup. O baseline vigente,
+**medido pós-incidente**, é:
+
+| Entidade | Baseline vigente |
+|---|---|
+| Produtos | **51** |
+| Histórico de baixa rápida / `OUT` | **4** |
+| Saldo de *Caneta Amarela* | **7** |
+
+**Consequência operacional, registrada para não virar falso BLOCK:** a comparação final do cleanup
+usa **estes** números, não os de §9.3.7. As contagens **não re-medidas** neste checkpoint (total de
+movimentos e de usuários) devem ser **re-medidas read-only** antes do cleanup, e **não** assumidas a
+partir do valor obsoleto.
+
+---
+
+**Divisão obrigatória da Phase E2.** Após D-28.7, a Phase E2 **não é executada como bloco único**:
+
+| Fase | Conteúdo |
+|---|---|
+| **E2-A** | bootstrap do schema · migrations · usuário QA · **ZERO `Product`** · **prova da linha 31** |
+| **GATE HUMANO** | revisão e autorização explícita antes de prosseguir |
+| **E2-B** | popular dataset controlado e gerar **≥ 11** quick-outs |
+
+**E2-A e E2-B não são misturadas numa única execução.**
 
 ### 9.4 · Gate executável das decisões
 
