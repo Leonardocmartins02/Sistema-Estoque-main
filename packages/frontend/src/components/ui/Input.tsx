@@ -40,12 +40,26 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               {leftIcon}
             </span>
           )}
+          {/*
+            ALVO DE TOQUE — mesma política já aplicada ao `Button` (`sm` e `md`).
+            Sem piso de altura o campo se dimensionava só pelo conteúdo:
+            `text-sm` (line-height 20px) + `py-2` (8+8) + `border` (1+1) = 38px,
+            abaixo do mínimo de 44 exigido no mobile. `min-h-11` eleva SÓ a caixa;
+            tipografia, padding e ícones continuam idênticos, e o texto de um input
+            de linha única é centrado verticalmente pelo próprio browser.
+
+            Sem `min-w-11`: o primitivo já é `w-full`, então a largura nunca é o
+            eixo em falta — o piso horizontal seria inerte.
+
+            A partir do breakpoint `md:` (768px), desktop-first: `min-h-0` devolve
+            a densidade compacta atual, acima do piso global de 24×24.
+          */}
           <input
             id={inputId}
             ref={ref}
             aria-invalid={!!error}
             aria-describedby={describedByIds.join(' ') || undefined}
-            className={`w-full rounded-control border ${borderColor} bg-surface py-2 text-sm outline-none transition hover:border-border-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-subtle disabled:text-text-muted ${leftIcon ? 'pl-9 pr-3' : rightIcon ? 'pl-3 pr-9' : 'px-3'} ${className}`}
+            className={`w-full min-h-11 rounded-control border ${borderColor} bg-surface py-2 text-sm outline-none transition hover:border-border-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-subtle disabled:text-text-muted ${leftIcon ? 'pl-9 pr-3' : rightIcon ? 'pl-3 pr-9' : 'px-3'} md:min-h-0 ${className}`}
             {...props}
           />
           {rightIcon && (
