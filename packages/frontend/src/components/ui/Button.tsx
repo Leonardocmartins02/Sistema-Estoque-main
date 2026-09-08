@@ -32,9 +32,24 @@ const variants: Record<CanonicalVariant, string> = {
 
 // Dois tamanhos, não três — `lg` eliminado (design-system.md §10.3; zero usos
 // verificados no código antes da remoção).
+//
+// Alvo de toque de `sm`: o padding sozinho rendia 43.84×29.6px em viewport de
+// 375px — abaixo do mínimo de 44×44 exigido no mobile. `min-h-11`/`min-w-11`
+// elevam SÓ a hit area: tipografia (`text-xs`), ícone e padding continuam
+// idênticos, e o `justify-center` do `base` mantém o rótulo centralizado na
+// caixa maior. A correção vive no primitive, não em um chamador: 9 usos de
+// `size="sm"` são controles interativos visíveis em mobile (dois deles
+// mobile-only, em `ProductCardList`) e compartilham exatamente esta geometria.
+//
+// A partir de `md` o produto é desktop-first: `min-h-0`/`min-w-0` devolvem a
+// densidade compacta atual, que segue acima do piso global de 24×24. Mesma
+// forma responsiva já adotada no botão de fechar do `Modal.tsx` — padrão
+// existente do projeto, não mecanismo novo.
+//
+// `md` fica INALTERADO aqui: o blocker medido é `sm`.
 const sizes: Record<Size, string> = {
   md: 'text-sm px-3.5 py-2',
-  sm: 'text-xs px-2.5 py-1.5',
+  sm: 'min-h-11 min-w-11 text-xs px-2.5 py-1.5 md:min-h-0 md:min-w-0',
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
