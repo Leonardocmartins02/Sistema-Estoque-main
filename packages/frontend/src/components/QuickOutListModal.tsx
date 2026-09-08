@@ -187,12 +187,27 @@ export default function QuickOutListModal({
           <label htmlFor={searchId} className="block text-xs font-medium text-gray-700">
             Buscar por Nome ou SKU
           </label>
+          {/*
+            ALVO DE TOQUE — mesmo piso responsivo já canônico em `Button`,
+            `Input` e `MenuPopover`: 44px de altura no mobile, densidade
+            compacta de volta a partir de `md:`. Sem ele o campo media 37.6px,
+            exatamente o mesmo valor do primitivo `Input` no desktop — a
+            geometria aqui é idêntica à dele, então a remediação é a mesma.
+
+            Sem `min-w-11`: o campo é `w-full` e já mede muito mais que 44.
+
+            DÍVIDA REGISTRADA (não endereçada aqui, por escopo): este `<input>`
+            é cru e duplica o primitivo `ui/Input.tsx`. Migrá-lo mudaria o
+            rótulo de `text-xs` para `text-sm` e traria hover/background/estados
+            de `disabled` que este modal não usa hoje — alterações além do alvo
+            de toque. A unificação continua no backlog dos raw inputs.
+          */}
           <input
             id={searchId}
             ref={searchRef}
             type="search"
             placeholder="Ex.: caneta, CAN-001"
-            className="mt-1 w-full rounded-control border border-border-strong px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            className="mt-1 min-h-11 w-full rounded-control border border-border-strong px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:min-h-0"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
