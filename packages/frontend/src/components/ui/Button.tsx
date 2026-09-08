@@ -33,22 +33,27 @@ const variants: Record<CanonicalVariant, string> = {
 // Dois tamanhos, não três — `lg` eliminado (design-system.md §10.3; zero usos
 // verificados no código antes da remoção).
 //
-// Alvo de toque de `sm`: o padding sozinho rendia 43.84×29.6px em viewport de
-// 375px — abaixo do mínimo de 44×44 exigido no mobile. `min-h-11`/`min-w-11`
-// elevam SÓ a hit area: tipografia (`text-xs`), ícone e padding continuam
-// idênticos, e o `justify-center` do `base` mantém o rótulo centralizado na
-// caixa maior. A correção vive no primitive, não em um chamador: 9 usos de
-// `size="sm"` são controles interativos visíveis em mobile (dois deles
-// mobile-only, em `ProductCardList`) e compartilham exatamente esta geometria.
+// ALVO DE TOQUE — política única dos DOIS tamanhos. O padding sozinho não
+// garantia o mínimo de 44×44 em mobile: medido em 375px, `sm` dava 43.84×29.6
+// e `md` dava 328×36 / 328×38. `min-h-11`/`min-w-11` elevam SÓ a hit area —
+// tipografia (`text-xs`/`text-sm`), ícone e padding continuam idênticos, e o
+// `justify-center` do `base` mantém o rótulo centralizado na caixa maior.
+// Como é PISO e não largura, chamador `w-full`/`flex-1` não encolhe.
 //
-// A partir de `md` o produto é desktop-first: `min-h-0`/`min-w-0` devolvem a
-// densidade compacta atual, que segue acima do piso global de 24×24. Mesma
-// forma responsiva já adotada no botão de fechar do `Modal.tsx` — padrão
-// existente do projeto, não mecanismo novo.
+// A correção vive no primitive, não no chamador. Para `sm`: 9 dos usos são
+// controles visíveis em mobile (dois mobile-only, em `ProductCardList`). Para
+// `md`: é o DEFAULT do componente — 27 usos, a maioria em modal/formulário que
+// abre no mobile (`ConfirmDialog`, `LoginPage`, footers de formulário) — e três
+// chamadores já carregavam `h-11` local justamente para suprir a ausência do
+// piso aqui. Esses `h-11` continuam válidos (44px fixo == o piso) e ficam
+// redundantes, não conflitantes.
 //
-// `md` fica INALTERADO aqui: o blocker medido é `sm`.
+// A partir do breakpoint `md:` (768px) o produto é desktop-first:
+// `min-h-0`/`min-w-0` devolvem a densidade compacta atual, que segue acima do
+// piso global de 24×24. Mesma forma responsiva já adotada no botão de fechar
+// do `Modal.tsx` — padrão existente do projeto, não mecanismo novo.
 const sizes: Record<Size, string> = {
-  md: 'text-sm px-3.5 py-2',
+  md: 'min-h-11 min-w-11 text-sm px-3.5 py-2 md:min-h-0 md:min-w-0',
   sm: 'min-h-11 min-w-11 text-xs px-2.5 py-1.5 md:min-h-0 md:min-w-0',
 };
 
