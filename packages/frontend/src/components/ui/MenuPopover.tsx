@@ -11,8 +11,23 @@ type MenuItemBaseProps = {
   className?: string;
 };
 
+// ALVO DE TOQUE — mesma política já aplicada a `Button` e `Input`. Sem piso de
+// altura o item se dimensionava só pelo conteúdo: `text-sm` (line-height 20px)
+// + `py-2.5` (10+10) = 40px, abaixo do mínimo de 44 exigido no mobile.
+// `min-h-11` eleva SÓ a caixa — tipografia, padding, `text-left`, tom
+// destrutivo, estado `disabled` e o anel de foco continuam idênticos. O
+// `display` segue `block`: o próprio browser centra verticalmente o conteúdo de
+// um `<button>` mais alto que sua linha, e trocar para `flex` mudaria o arranjo
+// dos filhos do `MenuItemCheckbox` sem necessidade.
+//
+// Sem `min-w-11`: o item já é `w-full` dentro de um menu de 192/224px.
+//
+// A partir do breakpoint `md:` (768px), desktop-first: `min-h-0` devolve a
+// densidade compacta atual, acima do piso global de 24×24. Na prática o reset
+// cobre o `StatusFilterMenu`, que só existe no header da tabela (desktop), e a
+// versão desktop do `ProductActionsMenu` — os dois seguem com 40px.
 const itemClass = (tone: 'default' | 'destructive', className: string) =>
-  `block w-full rounded-md px-3 py-2.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+  `block min-h-11 w-full rounded-md px-3 py-2.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:min-h-0 ${
     tone === 'destructive' ? 'text-red-700 hover:bg-red-50' : 'text-gray-800 hover:bg-gray-50'
   } ${className}`;
 
