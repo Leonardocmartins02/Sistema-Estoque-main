@@ -185,9 +185,23 @@ export const Modal: React.FC<ModalProps> = ({
             <div className="flex shrink-0 items-center gap-2">
               {headerActions}
               <Dialog.Close asChild>
+                {/*
+                  Alvo de toque: 44×44 em mobile, 24×24 a partir de `md`. Só a
+                  HIT AREA muda — o glifo continua 16×16 nos dois casos, e o
+                  `inline-flex` o mantém centralizado na caixa maior.
+
+                  Sem as dimensões explícitas o botão se dimensionava pelo
+                  conteúdo (16px do ícone + 4px de `p-1` por lado = 24×24), o
+                  que reprovava o alvo mínimo de toque em viewport pequena.
+                  `p-1` passa a valer só em `md` para não disputar o sizing com
+                  `h-11`/`w-11` no mobile.
+
+                  Mesma forma já usada por `ProductActionsMenu` — o padrão de
+                  botão-ícone responsivo do projeto, não um mecanismo novo.
+                */}
                 <button
                   type="button"
-                  className="rounded-md p-1 text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:h-auto md:w-auto md:p-1"
                   aria-label="Fechar"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
