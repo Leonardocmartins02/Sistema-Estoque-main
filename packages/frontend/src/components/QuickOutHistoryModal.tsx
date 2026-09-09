@@ -51,7 +51,25 @@ function SortHeader({
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+      /*
+        ALVO MÍNIMO — reprovava nos DOIS pisos, não só no mobile: o `text-xs`
+        herdado do `<th>` (line-height 16px) mais `py-0.5` (2+2) rendia 20px de
+        altura, abaixo até do mínimo global de 24×24.
+
+        NÃO usa `md:min-h-0` (o padrão de `Button`/`Input`/`MenuPopover`): lá o
+        tamanho natural já satisfaz o piso global, então zerar no desktop é
+        seguro. Aqui zerar devolveria os 20px e restauraria a reprovação
+        global. O desktop recebe piso EXPLÍCITO de 24px.
+
+        Só a hit area muda: tipografia, `px-1`/`py-0.5`, `gap-1`, a seta e o
+        `inline-flex` (que centra o conteúdo na caixa maior) seguem idênticos.
+        Sem piso de largura: os quatro rótulos já medem 49–72px.
+
+        Mesma geometria do `SortHeader` do `QuickOutListModal`, corrigida em
+        0c9b14b — a duplicação entre os dois modais continua como dívida
+        separada, não endereçada aqui.
+      */
+      className="inline-flex min-h-11 items-center gap-1 rounded px-1 py-0.5 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface md:min-h-6"
       onClick={onSort}
       title={title}
     >
