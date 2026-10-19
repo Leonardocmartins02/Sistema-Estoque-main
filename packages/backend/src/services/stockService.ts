@@ -3,6 +3,7 @@ import { Prisma, StockMovement } from '@prisma/client';
 import { HttpError } from '../shared/httpError';
 import { logger } from '../shared/logger';
 import { prisma } from '../shared/prisma';
+import { emitStockEventsInTx, type LockedProduct } from '../webhooks/events';
 
 /**
  * Tipo de movimentação que `recordMovement`/`recordMovementInTx` sabe
@@ -102,6 +103,21 @@ async function currentBalance(tx: Prisma.TransactionClient, productId: string): 
 }
 
 /**
+ * Lock pessimista na linha do produto — serializa toda escrita de saldo
+ * daquele produto. Traz junto `sku`/`name`/`minStock`, que os eventos de
+ * webhook precisam, para não custar uma consulta a mais dentro da transação.
+ */
+async function lockProduct(tx: Prisma.TransactionClient, productId: string): Promise<LockedProduct> {
+  const locked = await tx.$queryRaw<LockedProduct[]>`
+    SELECT "id", "sku", "name", "minStock" FROM "Product" WHERE "id" = ${productId} FOR UPDATE
+  `;
+  if (locked.length === 0) {
+    throw new HttpError(404, 'Produto não encontrado.');
+  }
+  return locked[0];
+}
+
+/**
  * Núcleo do StockService: lock de linha no produto + saldo atual + validação
  * + criação da movimentação com previousQuantity/newQuantity preenchidos.
  * Sempre roda com `FOR UPDATE`, mesmo quando o produto acabou de ser criado
@@ -112,12 +128,7 @@ export async function recordMovementInTx(
   tx: Prisma.TransactionClient,
   input: RecordMovementInput,
 ): Promise<StockMovement> {
-  const locked = await tx.$queryRaw<{ id: string }[]>`
-    SELECT "id" FROM "Product" WHERE "id" = ${input.productId} FOR UPDATE
-  `;
-  if (locked.length === 0) {
-    throw new HttpError(404, 'Produto não encontrado.');
-  }
+  const product = await lockProduct(tx, input.productId);
 
   const previousQuantity = await currentBalance(tx, input.productId);
   const newQuantity = previousQuantity + SIGNED_DIRECTION[input.type] * input.quantity;
@@ -126,7 +137,7 @@ export async function recordMovementInTx(
     throw new HttpError(422, input.insufficientStockMessage ?? 'Saldo insuficiente para esta movimentação.');
   }
 
-  return tx.stockMovement.create({
+  const movement = await tx.stockMovement.create({
     data: {
       productId: input.productId,
       type: input.type,
@@ -140,6 +151,9 @@ export async function recordMovementInTx(
       referenceId: input.referenceId ?? undefined,
     },
   });
+
+  await emitStockEventsInTx(tx, { movement, product, previousQuantity, newQuantity });
+  return movement;
 }
 
 /** Variante que abre sua própria transação — uso padrão para rotas que só gravam uma movimentação. */
@@ -177,12 +191,7 @@ export async function recordAdjustmentInTx(
   tx: Prisma.TransactionClient,
   input: RecordAdjustmentInput,
 ): Promise<StockMovement> {
-  const locked = await tx.$queryRaw<{ id: string }[]>`
-    SELECT "id" FROM "Product" WHERE "id" = ${input.productId} FOR UPDATE
-  `;
-  if (locked.length === 0) {
-    throw new HttpError(404, 'Produto não encontrado.');
-  }
+  const product = await lockProduct(tx, input.productId);
 
   const previousQuantity = await currentBalance(tx, input.productId);
 
@@ -200,7 +209,7 @@ export async function recordAdjustmentInTx(
   const newQuantity = input.targetQuantity;
   const quantity = Math.abs(newQuantity - previousQuantity);
 
-  return tx.stockMovement.create({
+  const movement = await tx.stockMovement.create({
     data: {
       productId: input.productId,
       type: 'ADJUSTMENT',
@@ -211,6 +220,9 @@ export async function recordAdjustmentInTx(
       userId: input.userId,
     },
   });
+
+  await emitStockEventsInTx(tx, { movement, product, previousQuantity, newQuantity });
+  return movement;
 }
 
 /** Variante que abre sua própria transação — uso padrão para a rota HTTP de ajuste. */
