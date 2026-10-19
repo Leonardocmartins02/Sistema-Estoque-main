@@ -148,6 +148,10 @@ cliente e as declarações de tipos são necessários em um clone limpo.
   imutável de auditoria.
 - Existem melhorias de acessibilidade e rastreabilidade registradas na
   [revisão do ajuste de estoque](docs/features/ajuste-estoque/review.md).
+- Uma refatoração visual está em andamento: navegação lateral, dashboard, página por
+  produto, histórico geral de movimentações e uma tabela única com WCAG 2.2 AA.
+  Pesquisa, protótipo navegável, PRD e plano estão em
+  [docs/features/refatoracao-visual](docs/features/refatoracao-visual/idea.md).
 
 A branch de apresentação é `master`. Trabalho em branches de desenvolvimento só
 entra nela após revisão e verificações; a existência de um protótipo não indica que
