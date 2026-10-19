@@ -87,8 +87,8 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
 
 #### Task 2 — Botão `tonal`, badge em pílula e rótulos de domínio
 - **Requisitos**: RF 22 (D4), P5 do research.
-- **Arquivos**: `ui/Button.tsx`, `ui/Badge.tsx`, novos `ui/StatusBadge.tsx` (ponto + palavra do vocabulário fechado), `ui/MovementTypeLabel.tsx` (ícone + palavra), `ui/Delta.tsx` (diferença assinada com `formatDelta`, seta e texto para leitor de tela).
-- **Testes**: `Button.test.tsx` (variante `tonal` com classes de token e foco); testes novos para `StatusBadge` (palavra sempre presente, ponto `aria-hidden`), `MovementTypeLabel` (os quatro tipos com palavra) e `Delta` (`+12`, `−5`, `0`, seta com texto acessível "para").
+- **Arquivos**: `ui/Button.tsx`, `ui/Badge.tsx`, novos `ui/StatusBadge.tsx` (ponto + palavra do vocabulário fechado), `ui/MovementTypeLabel.tsx` (ícone + palavra), `ui/Delta.tsx` (diferença assinada com `formatDelta`, seta de tendência decorativa), `ui/BalanceFlow.tsx` (`antes → depois` com texto "de X para Y" para leitor de tela — separado do `Delta` na execução: são duas leituras diferentes e aparecem lado a lado); blocos de documentação em `components.md` (P-15).
+- **Testes**: `Button.test.tsx` (variante `tonal` com classes de token e foco); testes novos para `StatusBadge` (palavra sempre presente, ponto `aria-hidden`), `MovementTypeLabel` (os quatro tipos com palavra) e `Delta.test.tsx` (`+12`, `−5`, `0`, `—` sem dado; `BalanceFlow` com texto acessível "para", sem anterior e legado).
 - **Commit**: `feat(ui): botão tonal e rótulos de status, tipo e variação`
 
 #### Task 3 — Variante `drawer` do `Modal`
