@@ -1,5 +1,7 @@
 # Fase 5 — Design System
 
+> **Valores substituídos pela v2 (19/10/2026).** A arquitetura deste documento (dois níveis de token, canais RGB, enforcement do lint da Task 27) continua valendo. Os **valores** e os **papéis novos** estão em `docs/features/refatoracao-visual/research.md`, Questões 5 e 8: raio 6/10/14 px + pílula, canvas `#F2F4F7`, `surface-subtle` deixa de ser alias, `surface-selected`, `track`, `text-disabled`, `info`, preenchimentos de status, sidebar escura, superfície invertida, `shadow-card`, papéis `kpi` e `display-number`. Densidade de tabela 40/48 px (§13.1 abaixo é anterior). O contraste de cada par está em `packages/frontend/test/designTokens.contrast.test.ts`.
+
 **Data:** 28/08/2026
 **Direção oficial:** B — Operação, com empréstimos declarados de C (números de primeira classe, `antes → depois`, histórico como extrato) e de A (tabela como região de dados, mais densa, com filetes).
 **Escopo:** especificação. Nenhum código, CSS, componente ou token implementado.

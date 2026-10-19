@@ -25,7 +25,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-background text-text-primary">
       {/* Skip link: sem ele o usuário de teclado precisa tabular por todo o
           header sticky antes de chegar na lista de produtos. Fica visível
           apenas quando focado. */}

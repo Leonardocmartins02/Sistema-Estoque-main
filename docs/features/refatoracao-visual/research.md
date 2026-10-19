@@ -280,13 +280,13 @@ O PRD pedia 2.1 AA. A 2.2 acrescenta poucos critérios de nível A/AA, e só tr�
 
 ### Tokens
 
-Os nomes atuais ficam (mesmo raciocínio da Questão 5): `accent` cumpre o papel de `primary`, `surface-subtle` o de `surface-hover`, `border`/`border-strong` os de `border-default`/`border-strong`. Entram só os papéis que faltam:
+Os nomes atuais ficam (mesmo raciocínio da Questão 5): `accent` cumpre o papel de `primary`, `surface-subtle` o de `surface-hover`, `border`/`border-strong` os de `border-default`/`border-strong`. Entram só os papéis que faltam (a lista completa dos tokens v2, com as cores cruas do protótipo que viraram token — `track`, `accent-subtle-hover`/`-border`, bordas de aviso e erro, sidebar e superfície invertida —, está no `index.css` da Task 1):
 
 | Token | Valor | Uso |
 |---|---|---|
 | `rounded-sm` (`--radius-sm`) | 6 px | item de menu, botão de paginação, tooltip, ícone do tipo de movimentação |
 | `text-disabled` | gray-400 | só controle desabilitado (isento de contraste, 1.4.3); nunca texto informativo |
-| `surface-selected` | = `accent-subtle` | fundo de linha selecionada, sempre com a barra de 2 px |
+| `surface-selected` | `#F4F8FF` | fundo de linha selecionada, sempre com a barra de 2 px. *Não* é `accent-subtle`: sobre ele o SKU (`text-muted`) cai para 4,44:1 e reprova AA; com `#F4F8FF` fica em 4,54:1 (achado da Task 1) |
 
 Espaçamentos fora da escala no protótipo (18, 14, 10, 9 px) viram valores da escala 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48 · 64 ao virar código.
 
