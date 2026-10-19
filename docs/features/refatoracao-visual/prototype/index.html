@@ -1,0 +1,1267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protótipo v2 — SimpleStock</title>
+<!-- Mesma fonte e mesma origem do index.html de produção. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   PROTÓTIPO — NÃO É CÓDIGO DE PRODUÇÃO
+   docs/features/refatoracao-visual/prototype.md explica o que é
+   e quais decisões ele existe para validar.
+   Tokens = proposta da v2 (research.md, Questão 5). Os nomes são
+   os mesmos do tailwind.config.js; mudam valores e entram papéis novos.
+   HTML + CSS + JS puro, sem framework, sem CDN de script.
+   ============================================================ */
+:root{
+  /* neutros */
+  --background:#F2F4F7;          /* canvas — um degrau abaixo do gray-50 (P1) */
+  --surface:#FFFFFF;
+  --surface-subtle:#F8F9FB;      /* deixa de ser alias de background */
+  --border:#E4E7EC;
+  --border-strong:#6B7280;       /* contorno de controle, 4.83:1 (1.4.11) */
+  --border-hover:#4B5563;
+  --text-primary:#111827;
+  --text-secondary:#4B5563;      /* único tom de texto secundário permitido sobre o canvas */
+  --text-muted:#6B7280;          /* só sobre superfície branca (4.83:1); sobre o canvas cai p/ 4.3:1 */
+  /* acento (inalterado) */
+  --accent:#2563EB; --accent-strong:#1D4ED8; --accent-subtle:#EFF6FF; --accent-subtle-text:#1E40AF;
+  --focus:#2563EB;
+  /* estados — texto (inalterados) */
+  --success:#047857; --success-subtle:#ECFDF5;
+  --warning:#B45309; --warning-subtle:#FFFBEB;
+  --danger:#B91C1C;  --danger-subtle:#FEF2F2;
+  --info:#1E40AF;    --info-subtle:#EFF6FF;
+  /* estados — preenchimento (novos; validados lado a lado, ver research.md Q5) */
+  --success-fill:#059669; --warning-fill:#F59E0B; --danger-fill:#EF4444;
+  /* sidebar (novos) */
+  --sidebar-bg:#0F1115; --sidebar-text:#A1A1AA; --sidebar-text-active:#FFFFFF;
+  --sidebar-label:#8B8B94; --sidebar-item-active:rgb(255 255 255 / .08); --sidebar-item-hover:rgb(255 255 255 / .05);
+  --sidebar-border:rgb(255 255 255 / .08); --sidebar-indicator:#3B82F6; --sidebar-badge:rgb(255 255 255 / .10); --sidebar-badge-text:#E4E4E7;
+  /* forma */
+  --r-control:10px; --r-surface:14px; --r-pill:999px;
+  --shadow-card:0 1px 2px rgb(16 24 40 / .05);
+  --shadow-overlay:0 10px 24px -6px rgb(0 0 0 / .18), 0 4px 8px -4px rgb(0 0 0 / .10);
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s10:40px; --s12:48px;
+  --sidebar-w:252px; --rail-w:76px;
+}
+/* variante de validação D2 — sidebar clara */
+body.sidebar-light{
+  --sidebar-bg:#FFFFFF; --sidebar-text:#4B5563; --sidebar-text-active:#1E40AF; --sidebar-label:#6B7280;
+  --sidebar-item-active:#EFF6FF; --sidebar-item-hover:#F3F4F6; --sidebar-border:#E4E7EC;
+  --sidebar-indicator:#2563EB; --sidebar-badge:#F2F4F7; --sidebar-badge-text:#374151;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:400 14px/1.55 Inter,ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;color:var(--text-primary);background:var(--background);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+/* título recebe foco programático na troca de rota — anunciado, sem anel */
+[tabindex="-1"]:focus{outline:none}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.tnum{font-variant-numeric:tabular-nums}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.i.sm{width:16px;height:16px}
+svg.i.xs{width:14px;height:14px}
+.skip{position:absolute;left:8px;top:-60px;z-index:100;background:var(--surface);padding:8px 12px;border-radius:var(--r-control);box-shadow:var(--shadow-overlay)}
+.skip:focus{top:8px}
+
+/* ---------------- shell ---------------- */
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100%}
+.sidebar{position:sticky;top:0;height:100vh;background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;border-right:1px solid var(--sidebar-border);z-index:20}
+.brand{display:flex;align-items:center;gap:10px;padding:20px 20px 16px;color:var(--sidebar-text-active);text-decoration:none}
+.brand-mark{width:34px;height:34px;border-radius:var(--r-control);background:var(--accent);display:grid;place-items:center;color:#fff;flex:none}
+.brand-name{font-weight:600;font-size:16px;line-height:1.2;letter-spacing:-.01em}
+.brand-sub{font-size:12px;color:var(--sidebar-label);line-height:1.3}
+body.sidebar-light .brand{color:var(--text-primary)}
+.compose{margin:4px 16px 12px;display:flex;align-items:center;justify-content:center;gap:8px;height:40px;border:0;border-radius:var(--r-control);background:var(--accent);color:#fff;font-weight:500;cursor:pointer}
+.compose:hover{background:var(--accent-strong)}
+.nav{flex:1;overflow-y:auto;padding:4px 12px 12px}
+.nav-group{margin-top:16px}
+.nav-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sidebar-label);padding:0 12px 6px}
+.nav a{position:relative;display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:var(--r-control);text-decoration:none;color:var(--sidebar-text);font-weight:500}
+.nav a:hover{background:var(--sidebar-item-hover);color:var(--sidebar-text-active)}
+.nav a[aria-current="page"]{background:var(--sidebar-item-active);color:var(--sidebar-text-active)}
+.nav a[aria-current="page"]::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--sidebar-indicator)}
+.nav .count{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-width:24px;height:22px;padding:0 8px;border-radius:var(--r-pill);background:var(--sidebar-badge);color:var(--sidebar-badge-text);font-size:12px;font-weight:600}
+.nav .count .dot{width:6px;height:6px;border-radius:50%}
+.side-foot{border-top:1px solid var(--sidebar-border);padding:12px 12px 16px;display:flex;align-items:center;gap:10px}
+.avatar{width:34px;height:34px;border-radius:50%;background:#2B2F38;color:#E4E4E7;display:grid;place-items:center;font-size:12px;font-weight:600;flex:none}
+body.sidebar-light .avatar{background:#E4E7EC;color:#374151}
+.who{min-width:0;flex:1}
+.who-mail{font-size:13px;color:var(--sidebar-text-active);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.sidebar-light .who-mail{color:var(--text-primary)}
+.who-role{font-size:12px;color:var(--sidebar-label)}
+.icon-btn{width:36px;height:36px;display:grid;place-items:center;border-radius:var(--r-control);border:0;background:transparent;color:inherit;cursor:pointer;flex:none}
+.side-foot .icon-btn:hover{background:var(--sidebar-item-hover);color:var(--sidebar-text-active)}
+.collapse-btn{display:grid}
+
+/* rail (tablet / recolhida) */
+body.rail .app{grid-template-columns:var(--rail-w) 1fr}
+body.rail .brand-text,body.rail .nav-label,body.rail .nav a .lbl,body.rail .nav .count,body.rail .who,body.rail .compose .lbl{display:none}
+body.rail .brand{justify-content:center;padding:20px 0 16px}
+body.rail .compose{margin:4px 14px 12px;padding:0}
+body.rail .nav{padding:4px 14px}
+body.rail .nav a{justify-content:center;padding:0}
+body.rail .nav a[aria-current="page"]::before{left:-14px}
+body.rail .nav-group{margin-top:12px;padding-top:12px;border-top:1px solid var(--sidebar-border)}
+body.rail .nav-group:first-child{border-top:0;padding-top:0}
+body.rail .side-foot{flex-direction:column;padding:12px 0 16px}
+.rail-badge{display:none}
+body.rail .nav a .rail-badge{display:block;position:absolute;top:7px;right:9px;width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 2px var(--sidebar-bg)}
+
+/* topbar (só celular) */
+.topbar{display:none}
+.main{min-width:0;display:flex;flex-direction:column}
+.page{width:100%;max-width:1360px;margin:0 auto;padding:28px 32px 48px}
+
+/* ---------------- tipografia e cabeçalho ---------------- */
+.crumbs{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);margin-bottom:10px}
+.crumbs a{text-decoration:none}.crumbs a:hover{text-decoration:underline}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.page-title{font-size:24px;line-height:1.25;font-weight:600;letter-spacing:-.015em;margin:0}
+.page-sub{margin:4px 0 0;color:var(--text-secondary)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.section-title{font-size:16px;font-weight:600;margin:0;line-height:1.4}
+.caption{font-size:12px;color:var(--text-muted)}
+
+/* ---------------- botões ---------------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:var(--r-control);border:1px solid transparent;font-weight:500;cursor:pointer;white-space:nowrap;text-decoration:none;transition:background-color 120ms,border-color 120ms,color 120ms}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-strong)}
+.btn.secondary{background:var(--surface);border-color:var(--border-strong);color:var(--text-primary)}
+.btn.secondary:hover{border-color:var(--border-hover);background:var(--surface-subtle)}
+.btn.tonal{background:var(--accent-subtle);color:var(--accent-subtle-text)}
+.btn.tonal:hover{background:#DBEAFE}
+.btn.tertiary{background:transparent;color:var(--accent-strong);padding:0 8px}
+.btn.tertiary:hover{background:var(--accent-subtle)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.icon-only{width:32px;padding:0}
+.btn.icon-only.md{width:40px}
+
+/* ---------------- superfícies ---------------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);box-shadow:var(--shadow-card)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 0}
+.card-body{padding:16px 20px 20px}
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px}
+.row-2{grid-template-columns:minmax(0,2fr) minmax(0,1fr);margin-bottom:16px}
+.row-even{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+
+/* KPI */
+.kpi{padding:18px 20px;display:flex;flex-direction:column;gap:10px;min-height:148px}
+.kpi-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kpi-label{font-weight:500;color:var(--text-secondary)}
+.chip-ic{width:36px;height:36px;border-radius:var(--r-control);display:grid;place-items:center;flex:none}
+.chip-ic.neutral{background:var(--surface-subtle);color:var(--text-secondary);border:1px solid var(--border)}
+.chip-ic.accent{background:var(--accent-subtle);color:var(--accent)}
+.chip-ic.warn{background:var(--warning-subtle);color:var(--warning)}
+.kpi-value{font-size:28px;line-height:1.15;font-weight:600;letter-spacing:-.02em}
+.kpi-value small{font-size:14px;font-weight:500;color:var(--text-muted);letter-spacing:0;margin-left:4px}
+.kpi-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary);margin-top:auto}
+.kpi.hero{background:#111318;border-color:#111318;color:#fff}
+.kpi.hero .kpi-label{color:#C9CBD1}
+.kpi.hero .kpi-value small{color:#A1A1AA}
+.kpi.hero .kpi-foot{color:#D4D4D8}
+.kpi.hero .chip-ic{background:rgb(245 158 11 / .16);color:#FBBF24}
+.kpi.hero a.inline{color:#fff}
+.kpi.hero .split a{color:#fff}
+.split{display:flex;gap:6px 14px;flex-wrap:wrap}
+.split a{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-weight:500}
+.split a:hover{text-decoration:underline}
+.pill{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:var(--r-pill);font-size:12px;font-weight:600;white-space:nowrap}
+.pill.neutral{background:var(--surface-subtle);color:var(--text-secondary);border:1px solid var(--border)}
+.pill.up{background:var(--success-subtle);color:var(--success)}
+.pill.down{background:var(--danger-subtle);color:var(--danger)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.dot.ok{background:var(--success-fill)} .dot.attn{background:var(--warning-fill)} .dot.out{background:var(--danger-fill)}
+
+/* badges de status — cor + palavra + ponto */
+.badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:var(--r-pill);font-size:12px;font-weight:600;white-space:nowrap}
+.badge.ok{background:var(--success-subtle);color:var(--success)}
+.badge.attn{background:var(--warning-subtle);color:var(--warning)}
+.badge.out{background:var(--danger-subtle);color:var(--danger)}
+.badge .dot{width:6px;height:6px}
+/* tipo de movimentação — seta + palavra, forma única */
+.mtype{display:inline-flex;align-items:center;gap:6px;font-weight:500;white-space:nowrap}
+.mtype .ic{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;flex:none}
+.mtype.in .ic{background:var(--success-subtle);color:var(--success)}
+.mtype.out .ic{background:var(--danger-subtle);color:var(--danger)}
+.mtype.adj .ic{background:var(--info-subtle);color:var(--info)}
+.mtype.init .ic{background:var(--surface-subtle);color:var(--text-secondary);border:1px solid var(--border)}
+.delta{font-weight:600;white-space:nowrap}
+.delta.pos{color:var(--success)} .delta.neg{color:var(--danger)} .delta.zero{color:var(--text-secondary)}
+.flow{white-space:nowrap;color:var(--text-secondary)}
+.flow b{color:var(--text-primary);font-weight:600}
+
+/* ---------------- gráficos ---------------- */
+.chart{position:relative}
+.chart svg{display:block;width:100%;overflow:visible}
+.chart .grid-line{stroke:#EEF0F3;stroke-width:1}
+.chart .axis-text{fill:var(--text-muted);font-size:12px}
+.chart .series-line{stroke:var(--accent);stroke-width:2;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.chart .series-area{fill:var(--accent);opacity:.10}
+.chart .end-dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.chart .end-label{fill:var(--text-primary);font-size:12px;font-weight:600}
+.chart .cross{stroke:var(--text-muted);stroke-width:1}
+.chart svg:focus-visible{outline:2px solid var(--focus);outline-offset:4px;border-radius:6px}
+.tip{position:absolute;pointer-events:none;background:#111318;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.35;white-space:nowrap;box-shadow:var(--shadow-overlay);transform:translate(-50%,-100%);opacity:0;transition:opacity 120ms}
+.tip.show{opacity:1}
+.tip b{display:block;font-size:14px}
+.tip span{color:#C9CBD1}
+.chart-tools{display:flex;align-items:center;gap:8px}
+.data-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.data-table th,.data-table td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)}
+.data-table td.num,.data-table th.num{text-align:right}
+.status-bar{display:flex;gap:2px;height:14px;margin:4px 0 18px}
+.status-bar span{display:block;height:100%;cursor:default}
+.status-bar span:first-child{border-radius:4px 0 0 4px}
+.status-bar span:last-child{border-radius:0 4px 4px 0}
+.status-bar span:hover,.status-bar span:focus-visible{filter:brightness(1.08)}
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.legend a{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:9px 10px;margin:0 -10px;border-radius:var(--r-control);text-decoration:none}
+.legend a:hover{background:var(--surface-subtle)}
+.legend .lg-n{font-weight:600}
+.legend .lg-p{color:var(--text-muted);width:44px;text-align:right}
+.bullet{position:relative;height:10px;border-radius:5px;background:#EEF0F3;margin:14px 0 26px}
+.bullet .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+.bullet .min{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--text-primary);border-radius:1px}
+.bullet .min-label{position:absolute;top:18px;transform:translateX(-50%);font-size:12px;color:var(--text-secondary);white-space:nowrap}
+
+/* ---------------- região de dados ---------------- */
+.region{overflow:hidden}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;max-width:100%}
+.tabs a{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:var(--r-control);text-decoration:none;color:var(--text-secondary);font-weight:500;white-space:nowrap}
+.tabs a:hover{background:var(--surface-subtle);color:var(--text-primary)}
+.tabs a[aria-current="true"]{background:var(--accent-subtle);color:var(--accent-subtle-text)}
+.tabs .n{font-size:12px;font-weight:600;padding:0 7px;height:20px;line-height:20px;border-radius:var(--r-pill);background:var(--surface-subtle);color:var(--text-secondary);border:1px solid var(--border)}
+.tabs a[aria-current="true"] .n{background:#fff;border-color:#BFDBFE;color:var(--accent-subtle-text)}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search{position:relative;width:280px;max-width:100%}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
+.input,.select{height:40px;border:1px solid var(--border-strong);border-radius:var(--r-control);background:var(--surface);padding:0 12px;width:100%}
+.search .input{padding-left:38px}
+.input:hover,.select:hover{border-color:var(--border-hover)}
+.input:focus-visible,.select:focus-visible{outline:2px solid var(--focus);outline-offset:0;border-color:var(--focus)}
+.select{appearance:none;padding-right:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234B5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.field .lbl{font-weight:500}
+.hint{font-size:12px;color:var(--text-muted)}
+table.dt{width:100%;border-collapse:collapse}
+.dt th{font-size:12px;font-weight:500;color:var(--text-muted);text-align:left;padding:10px 16px;background:var(--surface-subtle);border-bottom:1px solid var(--border);white-space:nowrap}
+.dt td{padding:10px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+.dt tbody tr:last-child td{border-bottom:0}
+.dt tbody tr.clickable{cursor:pointer}
+.dt tbody tr.clickable:hover td{background:var(--surface-subtle)}
+.dt .num{text-align:right}
+.dt th.num{text-align:right}
+.dt .w-check{width:44px;padding-right:0}
+.sort{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer}
+.sort:hover{color:var(--text-primary)}
+.sort[aria-sort] svg{color:var(--accent)}
+.prod{display:flex;align-items:center;gap:12px;min-width:0}
+.tile{width:36px;height:36px;border-radius:var(--r-control);background:var(--surface-subtle);border:1px solid var(--border);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--text-secondary);flex:none}
+.prod-name{font-weight:500;color:var(--text-primary);text-decoration:none}
+.dt .col-prod{width:100%;max-width:0}
+.dt .col-prod .prod-name,.dt .col-prod .prod-sku{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a.prod-name:hover{text-decoration:underline}
+.prod-sku{font-size:12px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.bal{font-weight:600}
+.bal small{font-weight:400;color:var(--text-muted);font-size:12px}
+.row-actions{display:flex;justify-content:flex-end;gap:6px}
+.checkbox{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin:0}
+.region-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap;font-size:13px;color:var(--text-secondary)}
+.pager{display:flex;align-items:center;gap:4px}
+.pager button{min-width:32px;height:32px;border-radius:8px;border:1px solid transparent;background:none;cursor:pointer;color:var(--text-secondary);font-weight:500}
+.pager button:hover{background:var(--surface-subtle)}
+.pager button[aria-current="page"]{border-color:var(--border-strong);color:var(--text-primary);background:var(--surface)}
+.pager button:disabled{opacity:.4;cursor:not-allowed}
+.selbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--accent-subtle);border-bottom:1px solid #BFDBFE;flex-wrap:wrap}
+.selbar strong{color:var(--accent-subtle-text)}
+.selbar .spacer{flex:1}
+.selbar .scope{font-size:12px;color:var(--accent-subtle-text)}
+.state{padding:56px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+.state .big-ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:var(--surface-subtle);border:1px solid var(--border);color:var(--text-secondary);margin-bottom:6px}
+.state.err .big-ic{background:var(--danger-subtle);border-color:#FECACA;color:var(--danger)}
+.state h3{margin:0;font-size:16px;font-weight:600}
+.state p{margin:0 0 8px;color:var(--text-secondary);max-width:420px}
+.skel{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,#EEF0F3 0,#F6F7F9 50%,#EEF0F3 100%);background-size:200% 100%;animation:sh 1.2s infinite linear}
+@keyframes sh{to{background-position:-200% 0}}
+.cards{display:none}
+
+/* lista de atividade */
+.activity{list-style:none;margin:0;padding:0}
+.activity li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.activity li:last-child{border-bottom:0}
+.activity .t{font-weight:500}
+.activity .m{font-size:12px;color:var(--text-muted)}
+
+/* histórico */
+.filters{display:grid;grid-template-columns:minmax(200px,1.4fr) repeat(3,minmax(150px,1fr));gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface-subtle)}
+.fchip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 10px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--border);font-size:12px;font-weight:500}
+.fchip button{width:20px;height:20px;border-radius:50%;border:0;background:none;display:grid;place-items:center;cursor:pointer;color:var(--text-secondary)}
+.fchip button:hover{background:var(--surface-subtle)}
+.summary{display:flex;gap:8px 24px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-secondary)}
+.summary b{color:var(--text-primary)}
+.day{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text-secondary);background:var(--surface-subtle);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between}
+.mv{display:grid;grid-template-columns:60px 128px minmax(0,1.6fr) 96px 120px minmax(0,1fr) 32px;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer}
+.mv:hover{background:var(--surface-subtle)}
+.mv .time{color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.mv .mv-who{font-size:13px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mv .note{font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mv .chev{color:var(--text-muted);transition:transform 120ms}
+.mv[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.mv-detail{display:none;padding:4px 16px 16px 88px;border-bottom:1px solid var(--border);background:var(--surface-subtle)}
+.mv-detail.open{display:block}
+.kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 24px;margin:0}
+.kv dt{font-size:12px;color:var(--text-muted)}
+.kv dd{margin:2px 0 0;font-weight:500}
+
+/* produto */
+.p-head{display:flex;gap:20px;align-items:flex-start;padding:20px}
+.p-head .tile{width:64px;height:64px;font-size:20px;border-radius:var(--r-surface)}
+.p-meta{flex:1;min-width:0}
+.p-title{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.p-meta .sub{display:flex;gap:16px;flex-wrap:wrap;color:var(--text-secondary);margin-top:6px;font-size:13px}
+.p-meta .sub b{font-weight:500;color:var(--text-primary)}
+.metrics{display:grid;grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr));border-top:1px solid var(--border)}
+.metric{padding:18px 20px;border-left:1px solid var(--border)}
+.metric:first-child{border-left:0}
+.metric .ml{color:var(--text-secondary);font-weight:500;font-size:13px}
+.metric .mv-n{font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.2;margin-top:4px}
+.metric .mv-n small{font-size:14px;color:var(--text-muted);font-weight:500;margin-left:4px;letter-spacing:0}
+.metric .big{font-size:40px}
+.metric .ms{font-size:13px;color:var(--text-secondary);margin-top:2px}
+
+/* ---------------- menu ---------------- */
+.menu{position:fixed;z-index:60;min-width:208px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-control);box-shadow:var(--shadow-overlay);padding:6px;display:none}
+.menu.open{display:block}
+.menu button{display:flex;width:100%;align-items:center;gap:10px;height:36px;padding:0 10px;border:0;background:none;border-radius:8px;cursor:pointer;text-align:left}
+.menu button:hover,.menu button:focus-visible{background:var(--surface-subtle);outline:none}
+.menu hr{border:0;border-top:1px solid var(--border);margin:6px 0}
+.menu .destr{color:var(--danger)}
+
+/* ---------------- drawer (variante do Modal) ---------------- */
+.veil{position:fixed;inset:0;background:rgb(17 24 39 / .40);z-index:70;opacity:0;pointer-events:none;transition:opacity 180ms}
+.veil.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:480px;max-width:100%;background:var(--surface);z-index:71;display:flex;flex-direction:column;box-shadow:var(--shadow-overlay);transform:translateX(100%);transition:transform 180ms ease-out;border-radius:var(--r-surface) 0 0 var(--r-surface)}
+.drawer.open{transform:none}
+.drawer[hidden]{display:none}
+.dr-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 24px 16px;border-bottom:1px solid var(--border)}
+.dr-head h2{margin:0;font-size:18px;font-weight:600;line-height:1.35}
+.dr-head p{margin:2px 0 0;color:var(--text-secondary);font-size:13px}
+.dr-body{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:20px}
+.dr-foot{display:flex;justify-content:flex-end;gap:8px;padding:16px 24px;border-top:1px solid var(--border)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.seg button{display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:var(--r-control);border:1px solid var(--border-strong);background:var(--surface);cursor:pointer;font-weight:500}
+.seg button:hover{border-color:var(--border-hover);background:var(--surface-subtle)}
+.seg button[aria-checked="true"].in{border-color:var(--success);background:var(--success-subtle);color:var(--success);box-shadow:inset 0 0 0 1px var(--success)}
+.seg button[aria-checked="true"].out{border-color:var(--danger);background:var(--danger-subtle);color:var(--danger);box-shadow:inset 0 0 0 1px var(--danger)}
+.combo{position:relative}
+.combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-control);box-shadow:var(--shadow-overlay);list-style:none;margin:0;padding:6px;z-index:5;max-height:280px;overflow:auto}
+.combo-list li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:8px;cursor:pointer}
+.combo-list li[aria-selected="true"],.combo-list li:hover{background:var(--surface-subtle)}
+.ctx{border:1px solid var(--border);border-radius:var(--r-control);padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;background:var(--surface-subtle)}
+.ctx .nm{font-weight:600}
+.ctx .ln{font-size:13px;color:var(--text-secondary)}
+.ctx .change{font-size:13px;font-weight:500;color:var(--accent-strong);background:none;border:0;cursor:pointer;padding:0}
+.stepper{display:grid;grid-template-columns:44px 1fr 44px;border:1px solid var(--border-strong);border-radius:var(--r-control);overflow:hidden;height:48px}
+.stepper button{border:0;background:var(--surface-subtle);cursor:pointer;display:grid;place-items:center}
+.stepper button:hover{background:#EEF0F3}
+.stepper input{border:0;border-left:1px solid var(--border);border-right:1px solid var(--border);text-align:center;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;min-width:0}
+.stepper input:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.quick button{height:28px;padding:0 10px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);font-size:12px;font-weight:500;cursor:pointer}
+.quick button:hover{border-color:var(--border-strong)}
+.quick button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-subtle);color:var(--accent-subtle-text)}
+.preview{border-radius:var(--r-control);padding:14px 16px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.preview .lbl{font-size:13px;color:var(--text-secondary)}
+.preview .nums{font-size:22px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.preview .nums .arrow{color:var(--text-muted);margin:0 6px;font-weight:400}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--r-control);font-size:13px}
+.alert.warn{background:var(--warning-subtle);color:var(--warning);border:1px solid #FDE68A}
+.alert.err{background:var(--danger-subtle);color:var(--danger);border:1px solid #FECACA}
+.alert.info{background:var(--surface-subtle);color:var(--text-secondary);border:1px solid var(--border)}
+textarea.input{height:auto;padding:10px 12px;resize:vertical;min-height:72px}
+
+/* toast */
+.toasts{position:fixed;right:24px;bottom:24px;z-index:90;display:flex;flex-direction:column;gap:8px}
+.toast{display:flex;gap:12px;align-items:flex-start;background:#111318;color:#fff;padding:12px 14px;border-radius:var(--r-control);box-shadow:var(--shadow-overlay);max-width:380px;font-size:13px}
+.toast .ok{color:#34D399;margin-top:1px}
+.toast a{color:#93C5FD;font-weight:500}
+
+/* andaimes de validação — NÃO fazem parte do design */
+.scaffold{position:fixed;left:calc(var(--sidebar-w) + 16px);bottom:16px;z-index:80;background:#FAF5FF;border:2px dashed #7C3AED;border-radius:12px;padding:10px 12px;font-size:12px;color:#4C1D95;max-width:420px;box-shadow:var(--shadow-overlay)}
+body.rail .scaffold{left:calc(var(--rail-w) + 16px)}
+.scaffold summary{cursor:pointer;font-weight:700}
+.scaffold .sc-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.scaffold .sc-row > span{width:64px;font-weight:600}
+.scaffold button{border:1px solid #C4B5FD;background:#fff;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;color:#4C1D95}
+.scaffold button[aria-pressed="true"]{background:#7C3AED;border-color:#7C3AED;color:#fff}
+
+/* ---------------- responsivo ---------------- */
+@media (max-width:1023px){ .page{padding:24px 24px 48px} }
+@media (max-width:1180px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row-2,.row-even{grid-template-columns:1fr}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .metric:nth-child(3){border-left:0}
+  .metric:nth-child(n+3){border-top:1px solid var(--border)}
+  .filters{grid-template-columns:1fr 1fr}
+  .mv{grid-template-columns:52px 116px minmax(0,1.4fr) 84px 110px 32px}
+  .mv .mv-who{display:none}
+}
+@media (max-width:767px){
+  .app{display:block}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-100%);transition:transform 180ms ease-out;z-index:75}
+  body.nav-open .sidebar{transform:none;box-shadow:var(--shadow-overlay)}
+  body.rail .brand-text,body.rail .nav-label,body.rail .nav a .lbl,body.rail .nav .count,body.rail .who,body.rail .compose .lbl{display:revert}
+  .topbar{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:30;height:56px;padding:0 12px;background:var(--sidebar-bg);color:var(--sidebar-text-active);border-bottom:1px solid var(--sidebar-border)}
+  .topbar .brand-name{flex:1}
+  .topbar .btn.primary{height:36px;padding:0 12px}
+  .page{padding:20px 16px 96px}
+  .page-title{font-size:22px}
+  .page-head{align-items:flex-start}
+  .page-head .actions{width:100%}
+  .page-head .actions .btn{flex:1}
+  .kpis{grid-template-columns:1fr 1fr;gap:12px}
+  .kpi{padding:14px;min-height:0}
+  .kpi .chip-ic{display:none}
+  .kpi-value{font-size:24px}
+  .toolbar{padding:12px}
+  .tools,.search{width:100%}
+  .table-wrap{display:none}
+  .cards{display:block}
+  .pcard{padding:14px 16px;border-bottom:1px solid var(--border)}
+  .pcard:last-child{border-bottom:0}
+  .pcard-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .pcard-mid{display:flex;justify-content:space-between;align-items:center;margin:10px 0 12px}
+  .pcard-actions{display:grid;grid-template-columns:1fr auto auto;gap:8px}
+  .filters{grid-template-columns:1fr;padding:12px}
+  .mv{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"type delta" "prod flow" "time time";gap:4px 12px}
+  .mv .time{grid-area:time;font-size:12px}
+  .mv .mtype{grid-area:type}
+  .mv .mprod{grid-area:prod}
+  .mv .delta{grid-area:delta;text-align:right}
+  .mv .flow{grid-area:flow;text-align:right}
+  .mv .chev,.mv .mv-who{display:none}
+  .mv-detail{padding:4px 16px 16px}
+  .day span:last-child{display:none}
+  .kv{grid-template-columns:1fr 1fr}
+  .p-head{flex-direction:column;gap:12px;padding:16px}
+  .p-head .actions{width:100%}
+  .p-head .actions .btn:not(.icon-only){flex:1}
+  .metrics{grid-template-columns:1fr 1fr}
+  .metric{padding:14px 16px}
+  .metric .big{font-size:32px}
+  .drawer{border-radius:0}
+  .collapse-btn{display:none}
+  .scaffold{left:12px;right:12px;bottom:12px;max-width:none}
+  .toasts{left:12px;right:12px;bottom:80px}
+  .region-foot{justify-content:center}
+  .region-foot .pg-size{display:none}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#conteudo">Pular para o conteúdo</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Ícones redesenhados no traço do lucide-react, a biblioteca única do projeto. -->
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.7a2 2 0 0 0 2 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-empty" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+  <symbol id="i-in" viewBox="0 0 24 24"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+  <symbol id="i-adj" viewBox="0 0 24 24"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></symbol>
+  <symbol id="i-init" viewBox="0 0 24 24"><path d="M12 22V12"/><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/></symbol>
+  <symbol id="i-trend-up" viewBox="0 0 24 24"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></symbol>
+  <symbol id="i-trend-down" viewBox="0 0 24 24"><path d="M22 17 13.5 8.5 8.5 13.5 2 7"/><path d="M16 17h6v-6"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-quick" viewBox="0 0 24 24"><path d="M12 3v14"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Navegação principal">
+    <a class="brand" href="#/">
+      <span class="brand-mark"><svg class="i"><use href="#i-package"/></svg></span>
+      <span class="brand-text"><span class="brand-name">SimpleStock</span><br><span class="brand-sub">Controle de estoque</span></span>
+    </a>
+    <button class="compose" type="button" data-open-move aria-label="Nova movimentação"><svg class="i"><use href="#i-plus"/></svg><span class="lbl">Nova movimentação</span></button>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <span class="avatar" aria-hidden="true">AD</span>
+      <div class="who"><div class="who-mail">admin@simplestock.local</div><div class="who-role">Sessão ativa</div></div>
+      <button class="icon-btn collapse-btn" type="button" id="railToggle" aria-label="Recolher menu" title="Recolher menu"><svg class="i"><use href="#i-panel"/></svg></button>
+      <button class="icon-btn" type="button" aria-label="Sair" title="Sair" data-toast="Sair encerra a sessão (fluxo existente, inalterado)."><svg class="i"><use href="#i-logout"/></svg></button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn" type="button" id="navOpen" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false"><svg class="i"><use href="#i-menu"/></svg></button>
+      <span class="brand-mark" style="width:28px;height:28px"><svg class="i sm"><use href="#i-package"/></svg></span>
+      <span class="brand-name">SimpleStock</span>
+      <button class="btn primary" type="button" data-open-move><svg class="i sm"><use href="#i-plus"/></svg>Movimentar</button>
+    </header>
+    <main id="conteudo" tabindex="-1"></main>
+  </div>
+</div>
+
+<div class="veil" id="veil"></div>
+<div class="menu" id="menu" role="menu"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drTitle" aria-describedby="drSub" hidden></aside>
+
+<details class="scaffold" open>
+  <summary>Andaimes de validação (não fazem parte do design)</summary>
+  <div class="sc-row"><span>D2 sidebar</span><button type="button" data-sb="dark" aria-pressed="true">Escura</button><button type="button" data-sb="light" aria-pressed="false">Clara</button></div>
+  <div class="sc-row"><span>Estado</span>
+    <button type="button" data-st="content" aria-pressed="true">Conteúdo</button>
+    <button type="button" data-st="loading" aria-pressed="false">Carregando</button>
+    <button type="button" data-st="empty" aria-pressed="false">Vazio</button>
+    <button type="button" data-st="noresult" aria-pressed="false">Sem resultado</button>
+    <button type="button" data-st="error" aria-pressed="false">Erro</button>
+  </div>
+</details>
+
+<script>
+/* ============================================================
+   Dados fictícios no formato do domínio (espelha seed.ts:
+   50 itens de papelaria, minStock 3–20, 20 OK · 15 ATTN · 15 OUT).
+   Gerador com semente fixa: os números são os mesmos a cada abertura.
+   ============================================================ */
+const NOW = new Date();
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rnd = mulberry32(20261019);
+const ri = (a,b) => Math.floor(rnd()*(b-a+1))+a;
+const pick = arr => arr[Math.floor(rnd()*arr.length)];
+const NAMES = ['Caneta Azul','Caneta Preta','Caneta Vermelha','Caneta Verde','Caneta Amarela','Caneta Marrom','Lápis HB','Lápis 2B','Lápis Preto','Lapiseira 0.5mm','Lapiseira 0.7mm','Borracha Branca','Borracha Escolar','Caderno Universitário','Caderno de Desenho','Caderno Pequeno','Caderno Pautado','Caderno Quadriculado','Marcador de Texto Amarelo','Marcador de Texto Rosa','Marcador de Texto Verde','Marcador de Texto Azul','Post-it Amarelo','Post-it Colorido','Régua 30cm','Régua 15cm','Clips Metálico','Clips Colorido','Grampeador Pequeno','Grampeador Médio','Grampo 26/6','Grampo 24/6','Fita Adesiva Transparente','Fita Adesiva Marrom','Fita Dupla Face','Tesoura Escolar','Tesoura de Escritório','Cola Branca 90g','Cola Bastão','Pasta Catálogo','Pasta Sanfonada','Pasta L','Envelope A4','Envelope Ofício','Apontador Simples','Apontador com Depósito','Canetão Quadro Branco Preto','Canetão Quadro Branco Azul','Pincel Atômico Preto','Pincel Atômico Vermelho'];
+const USERS = ['admin@simplestock.local','admin@simplestock.local','estoque@simplestock.local','estoque@simplestock.local','compras@simplestock.local'];
+const slug = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/(^_|_$)/g,'');
+const statuses = [...Array(20).fill('ok'),...Array(15).fill('attn'),...Array(15).fill('out')];
+for (let i=statuses.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[statuses[i],statuses[j]]=[statuses[j],statuses[i]]}
+const DAY = 864e5;
+const startOfDay = d => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const products = NAMES.map((name,i) => {
+  const minStock = ri(3,20); const st = statuses[i];
+  const balance = st==='ok' ? ri(minStock, minStock+28) : st==='attn' ? ri(1, minStock-1) : 0;
+  return { id:'p'+(i+1), name, sku:`${slug(name)}_${String(i+1).padStart(3,'0')}`, minStock, balance, description:`${name} de papelaria.` };
+});
+const movements = [];
+let mid = 0;
+products.forEach(p => {
+  const n = ri(2,7); const times = [];
+  for (let k=0;k<n;k++){
+    const daysAgo = rnd() < .09 ? 0 : ri(1,29);
+    const dayStart = startOfDay(NOW.getTime() - daysAgo*DAY).getTime();
+    // hoje: espalha entre 8h e agora (ou nas últimas horas, se ainda for cedo)
+    let ts = daysAgo===0 ? Math.min(NOW.getTime() - 3*6e4, dayStart + 8*36e5 + rnd()*Math.max(36e5, NOW.getTime() - dayStart - 8*36e5))
+                         : dayStart + ri(8,18)*36e5 + ri(0,59)*6e4;
+    times.push(ts);
+  }
+  times.sort((a,b)=>b-a);                 // do mais novo para o mais antigo: anda para trás a partir do saldo atual
+  let after = p.balance;
+  times.forEach(ts => {
+    let type, q, before;
+    const r = rnd();
+    if (r < .07) { type='ADJUSTMENT'; before = Math.max(0, after + ri(-4,4)); if (before===after) before = after+2; q = Math.abs(after-before); }
+    else if (after >= 5 && r < .55) { type='IN'; q = ri(5, Math.min(24, after)); before = after - q; }
+    else { type='OUT'; q = ri(1,6); before = after + q; }
+    const note = type==='IN' ? pick(['Compra NF 4821','Reposição do fornecedor','','Devolução de cliente','']) :
+                 type==='OUT' ? pick(['Venda balcão','Consumo interno','','Pedido 5521','Baixa rápida','']) : 'Contagem de inventário';
+    movements.push({ id:'m'+(++mid), productId:p.id, type, quantity:q, date:ts, prev:before, next:after, user:pick(USERS), note });
+    after = before;
+  });
+});
+movements.sort((a,b)=>b.date-a.date);
+const byId = Object.fromEntries(products.map(p=>[p.id,p]));
+const statusOf = p => p.balance===0 ? 'out' : p.balance < p.minStock ? 'attn' : 'ok';
+const delta = m => m.next - m.prev;
+function series(days, productId){
+  // saldo(fim do dia D) = saldo atual − Σ deltas com data > fim do dia D (research.md, Questão 7)
+  const list = productId ? movements.filter(m=>m.productId===productId) : movements;
+  const current = productId ? byId[productId].balance : products.reduce((s,p)=>s+p.balance,0);
+  const out = [];
+  for (let d=days-1; d>=0; d--){
+    const end = startOfDay(NOW.getTime() - d*DAY).getTime() + DAY - 1;
+    const after = list.filter(m=>m.date > end).reduce((s,m)=>s+delta(m),0);
+    out.push({ date:new Date(end), value: current - after });
+  }
+  return out;
+}
+
+/* ---------------- formatação ---------------- */
+const nf = new Intl.NumberFormat('pt-BR');
+const fmt = n => nf.format(n);
+const signed = n => n>0 ? '+'+fmt(n) : n<0 ? '−'+fmt(-n) : '0';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dShort = d => new Date(d).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}).replace('.','');
+const hm = d => new Date(d).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+function rel(d){ const m = Math.round((NOW - d)/6e4); if (m<1) return 'agora'; if (m<60) return `há ${m} min`; const h=Math.round(m/60); if (h<24 && startOfDay(d).getTime()===startOfDay(NOW).getTime()) return `há ${h} h`; return dShort(d)+' · '+hm(d); }
+function dayLabel(d){ const t = startOfDay(NOW).getTime(), x = startOfDay(d).getTime();
+  const long = new Date(d).toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+  return x===t ? 'Hoje · '+long : x===t-DAY ? 'Ontem · '+long : long; }
+const initials = n => n.split(/\s+/).filter(w=>/^[A-Za-zÀ-ú0-9]/.test(w)).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+const ic = (id, cls='') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const STATUS = { ok:['Em estoque','ok'], attn:['Estoque baixo','attn'], out:['Sem estoque','out'] };
+const badge = st => `<span class="badge ${STATUS[st][1]}"><span class="dot ${st}" aria-hidden="true"></span>${STATUS[st][0]}</span>`;
+const TYPES = { IN:['Entrada','in','in'], OUT:['Saída','out','out'], ADJUSTMENT:['Ajuste','adj','adj'], INITIAL_STOCK:['Estoque inicial','init','init'] };
+const mtype = t => `<span class="mtype ${TYPES[t][1]}"><span class="ic">${ic(TYPES[t][2],'xs')}</span>${TYPES[t][0]}</span>`;
+const deltaHtml = n => `<span class="delta ${n>0?'pos':n<0?'neg':'zero'} tnum">${signed(n)} un.</span>`;
+const flowHtml = m => `<span class="flow tnum">${fmt(m.prev)} <span aria-hidden="true">→</span><span class="sr-only">para</span> <b>${fmt(m.next)}</b></span>`;
+
+/* ---------------- estado de validação ---------------- */
+let viewState = 'content';
+const counts = () => ({ all:products.length, ok:products.filter(p=>statusOf(p)==='ok').length, attn:products.filter(p=>statusOf(p)==='attn').length, out:products.filter(p=>statusOf(p)==='out').length });
+
+/* ---------------- navegação ---------------- */
+function renderNav(route){
+  const c = counts();
+  const q = new URLSearchParams(route.query);
+  const st = route.path==='/produtos' ? (q.get('status')||'') : '';
+  const cur = (cond) => cond ? ' aria-current="page"' : '';
+  const item = (href, icon, label, active, extra='') => `<a href="#${href}"${cur(active)} title="${label}"><svg class="i" aria-hidden="true"><use href="#i-${icon}"/></svg><span class="lbl">${label}</span>${extra}</a>`;
+  document.getElementById('nav').innerHTML = `
+    <div class="nav-group"><div class="nav-label">Visão geral</div>
+      ${item('/','dash','Dashboard', route.path==='/')}</div>
+    <div class="nav-group"><div class="nav-label">Operação</div>
+      ${item('/produtos','package','Produtos', (route.path==='/produtos' && !['baixo','sem-estoque'].includes(st)) || route.path.startsWith('/produtos/'))}
+      ${item('/movimentacoes','swap','Movimentações', route.path==='/movimentacoes')}</div>
+    <div class="nav-group"><div class="nav-label">Estoque</div>
+      ${item('/produtos?status=baixo','alert','Estoque baixo', st==='baixo', `<span class="count" aria-label="${c.attn} produtos"><span class="dot attn" aria-hidden="true"></span>${c.attn}</span><span class="rail-badge" style="background:var(--warning-fill)" aria-hidden="true"></span>`)}
+      ${item('/produtos?status=sem-estoque','empty','Sem estoque', st==='sem-estoque', `<span class="count" aria-label="${c.out} produtos"><span class="dot out" aria-hidden="true"></span>${c.out}</span><span class="rail-badge" style="background:var(--danger-fill)" aria-hidden="true"></span>`)}</div>`;
+}
+function parseRoute(){
+  const h = location.hash.slice(1) || '/';
+  const [path, query=''] = h.split('?');
+  return { path, query };
+}
+// Chave estável do elemento focado, para devolver o foco depois de re-renderizar
+// (filtro, seleção, ordenação) sem jogar a pessoa de volta para o topo.
+function focusKey(el){
+  if (!el || el===document.body || !document.querySelector('.app').contains(el)) return null;
+  if (el.id) return '#'+CSS.escape(el.id);
+  const attrs = [...el.attributes].filter(a=>a.name.startsWith('data-') || a.name==='href');
+  return attrs.length ? el.tagName.toLowerCase() + attrs.map(a=>`[${a.name}="${CSS.escape(a.value)}"]`).join('') : null;
+}
+function go(nav){
+  closeMenu();
+  if (nav) PAGE.sel.clear();            // seleção vale para "esta página, agora" (decisão 8 da Fase 4)
+  const keep = nav ? null : focusKey(document.activeElement);
+  const route = parseRoute();
+  renderNav(route);
+  const main = document.getElementById('conteudo');
+  let title = 'Dashboard';
+  if (route.path==='/') { main.innerHTML = pageDashboard(); title='Dashboard'; }
+  else if (route.path==='/produtos') { main.innerHTML = pageProducts(route); title='Produtos'; }
+  else if (route.path.startsWith('/produtos/')) { const p = byId[route.path.split('/')[2]]; main.innerHTML = pageProduct(p); title = p ? p.name : 'Produto não encontrado'; }
+  else if (route.path==='/movimentacoes') { main.innerHTML = pageHistory(route); title='Movimentações'; }
+  else { main.innerHTML = `<div class="page"><div class="card state"><h1 class="section-title">Página não encontrada</h1><a class="btn secondary" href="#/">Ir para o dashboard</a></div></div>`; }
+  document.title = title + ' — SimpleStock (protótipo v2)';
+  mountCharts();
+  bindPage(route);
+  main.querySelectorAll('.tabs').forEach(t => { const a = t.querySelector('[aria-current="true"]'); if (a) t.scrollLeft = Math.max(0, a.offsetLeft - t.offsetLeft - 12); });
+  // troca de rota leva o foco para o título da página (requisito do PRD);
+  // re-render na mesma rota devolve o foco para onde ele estava.
+  if (nav){ const h1 = main.querySelector('h1'); if (h1){ h1.setAttribute('tabindex','-1'); h1.focus({preventScroll:true}); } window.scrollTo(0,0); }
+  else if (keep){ const el = document.querySelector(keep); if (el) el.focus({preventScroll:true}); }
+  document.body.classList.remove('nav-open');
+  document.getElementById('navOpen').setAttribute('aria-expanded','false');
+}
+
+/* ---------------- Dashboard ---------------- */
+function greeting(){ const h = NOW.getHours(); return h<12 ? 'Bom dia' : h<18 ? 'Boa tarde' : 'Boa noite'; }
+function pageDashboard(){
+  const c = counts();
+  const units = products.reduce((s,p)=>s+p.balance,0);
+  const s30 = series(30);
+  const diff30 = units - s30[0].value;
+  const today = movements.filter(m=>m.date >= startOfDay(NOW).getTime());
+  const tIn = today.filter(m=>m.type==='IN'), tOut = today.filter(m=>m.type==='OUT');
+  const sum = arr => arr.reduce((s,m)=>s+m.quantity,0);
+  const reorder = products.filter(p=>statusOf(p)!=='ok').sort((a,b)=> (a.balance/a.minStock)-(b.balance/b.minStock) || a.name.localeCompare(b.name));
+  const longDate = NOW.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+  return `<div class="page">
+  <div class="page-head">
+    <div><h1 class="page-title">${greeting()}</h1><p class="page-sub">${longDate[0].toUpperCase()+longDate.slice(1)} · visão geral do estoque</p></div>
+  </div>
+  <section class="grid kpis" aria-label="Indicadores">
+    <div class="card kpi">
+      <div class="kpi-top"><span class="kpi-label">Produtos</span><span class="chip-ic neutral">${ic('package')}</span></div>
+      <div class="kpi-value">${fmt(c.all)}</div>
+      <div class="kpi-foot"><span>${fmt(c.ok)} em estoque, no mínimo ou acima</span></div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-top"><span class="kpi-label">Unidades em estoque</span><span class="chip-ic accent">${ic('dash')}</span></div>
+      <div class="kpi-value">${fmt(units)}<small>un.</small></div>
+      <div class="kpi-foot"><span class="pill neutral">${ic(diff30>=0?'trend-up':'trend-down','xs')}${signed(diff30)}</span><span>em 30 dias</span></div>
+    </div>
+    <div class="card kpi hero">
+      <div class="kpi-top"><span class="kpi-label">Precisam de reposição</span><span class="chip-ic">${ic('alert')}</span></div>
+      <div class="kpi-value">${fmt(c.attn+c.out)}<small>produtos</small></div>
+      <div class="kpi-foot split">
+        <a href="#/produtos?status=sem-estoque"><span class="dot out" aria-hidden="true"></span>${c.out} sem estoque</a>
+        <a href="#/produtos?status=baixo"><span class="dot attn" aria-hidden="true"></span>${c.attn} estoque baixo</a>
+      </div>
+    </div>
+    <div class="card kpi">
+      <div class="kpi-top"><span class="kpi-label">Movimentações hoje</span><span class="chip-ic neutral">${ic('swap')}</span></div>
+      <div class="kpi-value">${fmt(today.length)}</div>
+      <div class="kpi-foot split">
+        <span class="mtype in"><span class="ic">${ic('in','xs')}</span>${tIn.length} entradas · ${signed(sum(tIn))}</span>
+        <span class="mtype out"><span class="ic">${ic('out','xs')}</span>${tOut.length} saídas · ${signed(-sum(tOut))}</span>
+      </div>
+    </div>
+  </section>
+  <section class="grid row-2">
+    <div class="card">
+      <div class="card-head"><div><h2 class="section-title">Evolução do estoque</h2><div class="caption">Total de unidades no fim de cada dia · últimos 30 dias</div></div>
+        <button class="btn tertiary sm" type="button" data-table-toggle="trend-all">${ic('table','sm')}Ver como tabela</button></div>
+      <div class="card-body"><div class="chart" data-chart="area" data-series="all" id="trend-all"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2 class="section-title">Status do estoque</h2><div class="caption">${c.all} produtos cadastrados</div></div></div>
+      <div class="card-body">
+        <div class="status-bar" role="img" aria-label="${c.ok} em estoque, ${c.attn} com estoque baixo, ${c.out} sem estoque">
+          ${['ok','attn','out'].map(s=>`<span style="width:${c[s]/c.all*100}%;background:var(--${s==='ok'?'success':s==='attn'?'warning':'danger'}-fill)" title="${STATUS[s][0]}: ${c[s]} (${Math.round(c[s]/c.all*100)}%)"></span>`).join('')}
+        </div>
+        <ul class="legend">
+          ${[['ok','em-estoque'],['attn','baixo'],['out','sem-estoque']].map(([s,q])=>`<li><a href="#/produtos?status=${q}"><span class="dot ${s}" aria-hidden="true"></span><span>${STATUS[s][0]}</span><span class="lg-n tnum">${c[s]}</span><span class="lg-p tnum">${Math.round(c[s]/c.all*100)}%</span></a></li>`).join('')}
+        </ul>
+        <p class="caption" style="margin:16px 0 0;padding-top:14px;border-top:1px solid var(--border)"><b style="color:var(--text-secondary);font-weight:600">Como o status é calculado:</b> sem estoque = saldo zero; estoque baixo = saldo abaixo do mínimo do produto; em estoque = no mínimo ou acima.</p>
+      </div>
+    </div>
+  </section>
+  <section class="grid row-even">
+    <div class="card region">
+      <div class="card-head" style="padding-bottom:14px"><div><h2 class="section-title">Produtos para repor</h2><div class="caption">Mais distantes do mínimo primeiro</div></div>
+        <div class="actions"><a class="btn tertiary sm" href="#/produtos?status=sem-estoque">${c.out} sem estoque</a><a class="btn tertiary sm" href="#/produtos?status=baixo">${c.attn} estoque baixo</a></div></div>
+      <div class="table-wrap"><table class="dt">
+        <thead><tr><th>Produto</th><th class="num">Saldo</th><th>Status</th><th class="num"><span class="sr-only">Ação</span></th></tr></thead>
+        <tbody>${reorder.slice(0,6).map(p=>`<tr>
+          <td class="col-prod"><div class="prod"><span class="tile" aria-hidden="true">${initials(p.name)}</span><div style="min-width:0"><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a><div class="prod-sku">${p.sku}</div></div></div></td>
+          <td class="num tnum" style="white-space:nowrap"><span class="bal">${fmt(p.balance)}</span> <small class="caption">/ mín. ${p.minStock}</small></td>
+          <td>${badge(statusOf(p))}</td>
+          <td class="num"><button class="btn tonal sm" type="button" data-open-move data-type="IN" data-product="${p.id}">${ic('in','sm')}Repor</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="cards">${reorder.slice(0,4).map(p=>`<div class="pcard"><div class="pcard-top"><div class="prod"><span class="tile" aria-hidden="true">${initials(p.name)}</span><div><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a><div class="prod-sku">${fmt(p.balance)} / mín. ${p.minStock}</div></div></div>${badge(statusOf(p))}</div><div style="margin-top:10px"><button class="btn tonal sm" style="width:100%" type="button" data-open-move data-type="IN" data-product="${p.id}">${ic('in','sm')}Repor</button></div></div>`).join('')}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2 class="section-title">Atividade recente</h2><div class="caption">Últimas movimentações de todos os produtos</div></div>
+        <a class="btn tertiary sm" href="#/movimentacoes">Ver histórico</a></div>
+      <div class="card-body" style="padding-top:6px"><ul class="activity">
+        ${movements.slice(0,6).map(m=>`<li>${mtype(m.type).replace(/<\/span>[^<]*<\/span>$/,'</span></span>')}
+          <div style="min-width:0"><div class="t">${TYPES[m.type][0]} · <a class="prod-name" href="#/produtos/${m.productId}">${esc(byId[m.productId].name)}</a></div><div class="m">${rel(m.date)} · ${m.user}</div></div>
+          ${deltaHtml(delta(m))}</li>`).join('')}
+      </ul></div>
+    </div>
+  </section>
+  </div>`;
+}
+
+/* ---------------- Produtos ---------------- */
+const PAGE = { page:1, size:10, q:'', sort:'name', dir:'asc', sel:new Set() };
+const TAB = { '':'all', 'em-estoque':'ok', 'baixo':'attn', 'sem-estoque':'out' };
+function filteredProducts(status){
+  let list = products.filter(p => status==='all' || statusOf(p)===status);
+  if (PAGE.q){ const t = PAGE.q.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); list = list.filter(p => (p.name+' '+p.sku).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(t)); }
+  const k = PAGE.sort, d = PAGE.dir==='asc'?1:-1;
+  list.sort((a,b)=> (k==='balance' ? a.balance-b.balance : a[k].localeCompare(b[k])) * d);
+  return list;
+}
+function pageProducts(route){
+  const q = new URLSearchParams(route.query);
+  const tabKey = q.get('status')||'';
+  const status = TAB[tabKey] || 'all';
+  const c = counts();
+  const list = filteredProducts(status);
+  const pages = Math.max(1, Math.ceil(list.length/PAGE.size));
+  if (PAGE.page>pages) PAGE.page = pages;
+  const rows = list.slice((PAGE.page-1)*PAGE.size, PAGE.page*PAGE.size);
+  const z = viewState==='empty' ? 0 : 1;
+  const tabs = [['','Todos',c.all*z],['em-estoque','Em estoque',c.ok*z],['baixo','Estoque baixo',c.attn*z],['sem-estoque','Sem estoque',c.out*z]];
+  const sortBtn = (key,label,num) => `<button class="sort" type="button" data-sort="${key}"${PAGE.sort===key?` aria-sort="${PAGE.dir==='asc'?'ascending':'descending'}"`:''}>${label}${ic('sort','xs')}</button>`;
+  const sel = PAGE.sel.size;
+  let body;
+  if (viewState==='loading') body = `<div class="table-wrap"><table class="dt"><tbody>${Array.from({length:8}).map(()=>`<tr><td class="w-check"><span class="skel" style="width:18px;height:18px"></span></td><td><div class="prod"><span class="skel" style="width:36px;height:36px;border-radius:10px"></span><div style="flex:1"><span class="skel" style="width:46%"></span><span class="skel" style="width:30%;margin-top:6px;height:10px"></span></div></div></td><td><span class="skel" style="width:60px;margin-left:auto"></span></td><td><span class="skel" style="width:96px;height:22px;border-radius:999px"></span></td><td><span class="skel" style="width:180px;height:32px;margin-left:auto"></span></td></tr>`).join('')}</tbody></table></div><span class="sr-only" role="status">Carregando produtos…</span>`;
+  else if (viewState==='empty') body = `<div class="state"><span class="big-ic">${ic('package')}</span><h3>Nenhum produto cadastrado ainda</h3><p>Cadastre o primeiro produto para começar a registrar entradas e saídas.</p><button class="btn primary" type="button" data-toast="Abre o cadastro de produto (fluxo existente).">${ic('plus','sm')}Adicionar produto</button></div>`;
+  else if (viewState==='error') body = `<div class="state err" role="alert"><span class="big-ic">${ic('alert')}</span><h3>Não foi possível carregar os produtos</h3><p>O servidor não respondeu em 8 segundos. Seus dados não foram alterados.</p><button class="btn secondary" type="button" data-st-reset>${ic('retry','sm')}Tentar de novo</button></div>`;
+  else if (viewState==='noresult' || (PAGE.q && !list.length)) body = `<div class="state"><span class="big-ic">${ic('search')}</span><h3>Nenhum produto encontrado para “${esc(PAGE.q||'lapis azul turquesa')}”</h3><p>Confira a grafia ou busque pelo SKU. A busca ignora acentos.</p><button class="btn secondary" type="button" data-clear-search>Limpar busca</button></div>`;
+  else if (!list.length) body = `<div class="state"><span class="big-ic">${ic('check')}</span><h3>Nenhum produto nesta situação</h3><p>Ótimo sinal — nada para repor aqui agora.</p><a class="btn secondary" href="#/produtos">Ver todos os produtos</a></div>`;
+  else body = `
+    <div class="table-wrap"><table class="dt">
+      <caption class="sr-only">Produtos — ${(tabs.find(t=>t[0]===tabKey)||tabs[0])[1]}, página ${PAGE.page} de ${pages}</caption>
+      <thead><tr>
+        <th class="w-check"><input class="checkbox" type="checkbox" aria-label="Selecionar todos desta página" data-sel-all ${rows.every(p=>PAGE.sel.has(p.id))?'checked':''}></th>
+        <th>${sortBtn('name','Produto')}</th>
+        <th class="num">${sortBtn('balance','Saldo / mínimo')}</th>
+        <th>Status</th>
+        <th class="num"><span class="sr-only">Ações</span></th></tr></thead>
+      <tbody>${rows.map(p=>`<tr class="clickable" data-row="${p.id}">
+        <td class="w-check"><input class="checkbox" type="checkbox" aria-label="Selecionar ${esc(p.name)}" data-sel="${p.id}" ${PAGE.sel.has(p.id)?'checked':''}></td>
+        <td class="col-prod"><div class="prod"><span class="tile" aria-hidden="true">${initials(p.name)}</span><div style="min-width:0"><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a><div class="prod-sku">${p.sku}</div></div></div></td>
+        <td class="num tnum" style="white-space:nowrap"><span class="bal">${fmt(p.balance)}</span> <small class="caption">un.</small><div class="caption">mín. ${p.minStock}</div></td>
+        <td>${badge(statusOf(p))}</td>
+        <td><div class="row-actions">
+          <button class="btn tonal sm" type="button" data-open-move data-product="${p.id}">Movimentar</button>
+          <button class="btn secondary sm icon-only" type="button" aria-label="Baixa rápida de ${esc(p.name)}" title="Baixa rápida" data-toast="Baixa rápida abre no painel lateral, com o mesmo fluxo de hoje (valores frequentes + preview).">${ic('quick','sm')}</button>
+          <button class="btn secondary sm icon-only" type="button" aria-label="Mais ações para ${esc(p.name)}" aria-haspopup="menu" data-menu="${p.id}">${ic('more','sm')}</button>
+        </div></td></tr>`).join('')}</tbody></table></div>
+    <div class="cards">${rows.map(p=>`<div class="pcard">
+      <div class="pcard-top"><div class="prod"><span class="tile" aria-hidden="true">${initials(p.name)}</span><div style="min-width:0"><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a><div class="prod-sku">${p.sku}</div></div></div>${badge(statusOf(p))}</div>
+      <div class="pcard-mid"><span><span class="bal tnum" style="font-size:18px">${fmt(p.balance)}</span> <small class="caption">un.</small></span><span class="caption tnum">mínimo ${p.minStock}</span></div>
+      <div class="pcard-actions"><button class="btn tonal sm" type="button" data-open-move data-product="${p.id}">Movimentar</button><button class="btn secondary sm icon-only" type="button" aria-label="Baixa rápida de ${esc(p.name)}" data-toast="Baixa rápida (fluxo existente).">${ic('quick','sm')}</button><button class="btn secondary sm icon-only" type="button" aria-label="Mais ações para ${esc(p.name)}" aria-haspopup="menu" data-menu="${p.id}">${ic('more','sm')}</button></div></div>`).join('')}</div>
+    <div class="region-foot">
+      <span class="tnum">${fmt((PAGE.page-1)*PAGE.size+1)}–${fmt(Math.min(PAGE.page*PAGE.size,list.length))} de ${fmt(list.length)} produtos</span>
+      <div class="pager" role="navigation" aria-label="Paginação">
+        <button type="button" data-page="${PAGE.page-1}" ${PAGE.page===1?'disabled':''} aria-label="Página anterior">${ic('left','sm')}</button>
+        ${Array.from({length:pages},(_,i)=>`<button type="button" data-page="${i+1}" ${i+1===PAGE.page?'aria-current="page"':''} aria-label="Página ${i+1}">${i+1}</button>`).join('')}
+        <button type="button" data-page="${PAGE.page+1}" ${PAGE.page===pages?'disabled':''} aria-label="Próxima página">${ic('right','sm')}</button>
+      </div>
+      <label class="pg-size caption" style="display:flex;align-items:center;gap:8px">Por página <select class="select" style="height:32px;width:76px" data-size>${[10,20,50].map(n=>`<option ${n===PAGE.size?'selected':''}>${n}</option>`).join('')}</select></label>
+    </div>`;
+  const toolbar = sel ? `
+    <div class="selbar" role="region" aria-label="Ações para os selecionados">
+      <strong>${sel} selecionado${sel>1?'s':''}</strong><span class="scope">desta página</span>
+      <span class="spacer"></span>
+      <button class="btn secondary sm" type="button" data-toast="Zerar saldo dos selecionados: diálogo N3 com escopo no botão (fluxo existente).">Zerar saldo</button>
+      <button class="btn secondary sm" type="button" style="color:var(--danger)" data-toast="Excluir selecionados: diálogo N3 com escopo no botão (fluxo existente).">${ic('trash','sm')}Excluir</button>
+      <button class="btn tertiary sm" type="button" data-sel-clear>Limpar seleção</button>
+    </div>` : `
+    <div class="toolbar">
+      <nav class="tabs" aria-label="Filtrar por situação">${tabs.map(([k,l,n])=>`<a href="#/produtos${k?'?status='+k:''}"${k===tabKey?' aria-current="true"':''}>${l}<span class="n tnum">${n}</span></a>`).join('')}</nav>
+      <div class="tools"><div class="search">${ic('search','sm')}<label class="sr-only" for="q">Buscar por nome ou SKU</label><input class="input" id="q" type="search" placeholder="Buscar por nome ou SKU" value="${esc(PAGE.q)}" autocomplete="off"></div></div>
+    </div>`;
+  return `<div class="page">
+    <div class="page-head">
+      <div><h1 class="page-title">Produtos</h1><p class="page-sub">Cadastro e saldo dos ${c.all} itens do estoque</p></div>
+      <div class="actions">
+        <button class="btn secondary" type="button" data-toast="Baixa de produtos: a lista de baixa (QuickOutListModal) abre no painel lateral, mesmo fluxo de hoje.">${ic('quick','sm')}Baixa de produtos</button>
+        <button class="btn primary" type="button" data-toast="Adicionar produto: o formulário de cadastro abre no painel lateral (mesmos campos de hoje).">${ic('plus','sm')}Adicionar produto</button>
+      </div>
+    </div>
+    <section class="card region" aria-label="Lista de produtos">${toolbar}${body}</section>
+  </div>`;
+}
+
+/* ---------------- Produto ---------------- */
+function pageProduct(p){
+  if (!p) return `<div class="page"><nav class="crumbs" aria-label="Trilha"><a href="#/produtos">Produtos</a></nav><div class="card state"><span class="big-ic">${ic('search')}</span><h1 class="section-title">Produto não encontrado</h1><p>Ele pode ter sido excluído, ou o link está incompleto.</p><a class="btn secondary" href="#/produtos">${ic('back','sm')}Voltar para Produtos</a></div></div>`;
+  const st = statusOf(p);
+  const mine = movements.filter(m=>m.productId===p.id);
+  const last30 = mine.filter(m=>m.date >= NOW - 30*DAY);
+  const ins = last30.filter(m=>m.type==='IN'||m.type==='INITIAL_STOCK'), outs = last30.filter(m=>m.type==='OUT');
+  const sumIn = ins.reduce((s,m)=>s+m.quantity,0), sumOut = outs.reduce((s,m)=>s+m.quantity,0);
+  const scale = Math.max(p.balance, p.minStock, 1) * 1.4;
+  const gap = p.balance - p.minStock;
+  const verdict = p.balance===0 ? `Sem saldo · faltam <b>${p.minStock}</b> para o mínimo` : gap<0 ? `Faltam <b>${-gap}</b> un. para o mínimo` : `<b>${gap}</b> un. acima do mínimo`;
+  return `<div class="page">
+    <nav class="crumbs" aria-label="Trilha"><a href="#/produtos">Produtos</a>${ic('right','xs')}<span aria-current="page">${esc(p.name)}</span></nav>
+    <section class="card" style="margin-bottom:16px">
+      <div class="p-head">
+        <span class="tile" aria-hidden="true">${initials(p.name)}</span>
+        <div class="p-meta">
+          <div class="p-title"><h1 class="page-title">${esc(p.name)}</h1>${badge(st)}</div>
+          <div class="sub"><span>SKU <b class="tnum">${p.sku}</b></span><span>${esc(p.description)}</span></div>
+        </div>
+        <div class="actions">
+          <button class="btn secondary" type="button" data-toast="Editar abre o formulário preenchido com o estado atual (F-06 corrigido na Fase 9).">${ic('edit','sm')}Editar</button>
+          <button class="btn primary" type="button" data-open-move data-product="${p.id}">${ic('swap','sm')}Movimentar</button>
+          <button class="btn secondary icon-only md" type="button" aria-label="Mais ações" aria-haspopup="menu" data-menu="${p.id}" data-menu-page>${ic('more','sm')}</button>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="ml">Saldo atual</div>
+          <div class="mv-n big">${fmt(p.balance)}<small>un.</small></div>
+          <div class="bullet" role="img" aria-label="Saldo ${p.balance} unidades; mínimo ${p.minStock}">
+            <span class="fill" style="width:${p.balance/scale*100}%;background:var(--${st==='ok'?'success':st==='attn'?'warning':'danger'}-fill)"></span>
+            <span class="min" style="left:${p.minStock/scale*100}%"></span>
+            <span class="min-label" style="left:${p.minStock/scale*100}%">mín. ${p.minStock}</span>
+          </div>
+          <div class="ms">${verdict}</div>
+        </div>
+        <div class="metric"><div class="ml">Estoque mínimo</div><div class="mv-n">${fmt(p.minStock)}<small>un.</small></div><div class="ms">Abaixo disso o status vira “Estoque baixo”</div></div>
+        <div class="metric"><div class="ml">Entradas · 30 dias</div><div class="mv-n" style="${sumIn?'color:var(--success)':''}">${signed(sumIn)}<small>un.</small></div><div class="ms">${ins.length} lançamentos</div></div>
+        <div class="metric"><div class="ml">Saídas · 30 dias</div><div class="mv-n" style="${sumOut?'color:var(--danger)':''}">${signed(-sumOut)}<small>un.</small></div><div class="ms">${outs.length} lançamentos</div></div>
+      </div>
+    </section>
+    <section class="card" style="margin-bottom:16px">
+      <div class="card-head"><div><h2 class="section-title">Saldo nos últimos 30 dias</h2><div class="caption">Saldo no fim de cada dia</div></div>
+        <button class="btn tertiary sm" type="button" data-table-toggle="trend-p">${ic('table','sm')}Ver como tabela</button></div>
+      <div class="card-body"><div class="chart" data-chart="area" data-series="${p.id}" data-min="${p.minStock}" id="trend-p"></div></div>
+    </section>
+    <section class="card region">
+      <div class="card-head" style="padding-bottom:14px"><div><h2 class="section-title">Últimas movimentações</h2><div class="caption">${mine.length} no total</div></div>
+        <a class="btn tertiary sm" href="#/movimentacoes?produto=${p.id}">Ver no histórico</a></div>
+      ${mine.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>Quando</th><th>Tipo</th><th class="num">Quantidade</th><th class="num">Saldo</th><th>Responsável</th><th>Observação</th></tr></thead>
+      <tbody>${mine.slice(0,8).map(m=>`<tr><td class="tnum" style="white-space:nowrap">${rel(m.date)}</td><td>${mtype(m.type)}</td><td class="num">${deltaHtml(delta(m))}</td><td class="num">${flowHtml(m)}</td><td class="caption" style="font-size:13px">${m.user}</td><td class="caption" style="font-size:13px">${esc(m.note||'—')}</td></tr>`).join('')}</tbody></table></div>
+      <div class="cards">${mine.slice(0,6).map(m=>`<div class="pcard"><div class="pcard-top">${mtype(m.type)}${deltaHtml(delta(m))}</div><div class="pcard-mid" style="margin:6px 0 0"><span class="caption">${rel(m.date)}</span>${flowHtml(m)}</div></div>`).join('')}</div>`
+      : `<div class="state"><span class="big-ic">${ic('history')}</span><h3>Nenhuma movimentação ainda</h3><p>A primeira entrada aparece aqui assim que for registrada.</p></div>`}
+    </section>
+  </div>`;
+}
+
+/* ---------------- Movimentações (histórico) ---------------- */
+const HIST = { q:'', product:'', user:'', period:'30', page:1, open:new Set() };
+function pageHistory(route){
+  const q = new URLSearchParams(route.query);
+  const tipo = q.get('tipo')||'';
+  HIST.product = byId[q.get('produto')] ? q.get('produto') : '';
+  const typeMap = { '':null, entradas:['IN','INITIAL_STOCK'], saidas:['OUT'], ajustes:['ADJUSTMENT'] };
+  const since = HIST.period==='hoje' ? startOfDay(NOW).getTime() : NOW - Number(HIST.period)*DAY;
+  let base = movements.filter(m => m.date >= since && (!HIST.product || m.productId===HIST.product) && (!HIST.user || m.user===HIST.user));
+  if (HIST.q){ const t = HIST.q.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); base = base.filter(m => (byId[m.productId].name+' '+byId[m.productId].sku+' '+m.note).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(t)); }
+  const tc = k => viewState==='empty' ? 0 : typeMap[k] ? base.filter(m=>typeMap[k].includes(m.type)).length : base.length;
+  const list = typeMap[tipo] ? base.filter(m=>typeMap[tipo].includes(m.type)) : base;
+  const size = 25, pages = Math.max(1, Math.ceil(list.length/size)); if (HIST.page>pages) HIST.page = pages;
+  const rows = list.slice((HIST.page-1)*size, HIST.page*size);
+  const inU = list.filter(m=>m.type==='IN'||m.type==='INITIAL_STOCK').reduce((s,m)=>s+m.quantity,0), outU = list.filter(m=>m.type==='OUT').reduce((s,m)=>s+m.quantity,0);
+  const periods = [['hoje','Hoje','hoje'],['7','Últimos 7 dias','nos últimos 7 dias'],['30','Últimos 30 dias','nos últimos 30 dias']];
+  const histHref = (t, prod) => { const u = new URLSearchParams(); if (t) u.set('tipo', t); if (prod) u.set('produto', prod); const x = u.toString(); return '#/movimentacoes' + (x ? '?'+x : ''); };
+  const chips = [];
+  if (HIST.product) chips.push(['product', 'Produto: '+byId[HIST.product].name]);
+  if (HIST.user) chips.push(['user', 'Responsável: '+HIST.user]);
+  if (HIST.q) chips.push(['q', 'Busca: “'+HIST.q+'”']);
+  let groups = '', lastDay = null;
+  if (viewState==='loading') groups = Array.from({length:7}).map(()=>`<div class="mv" style="cursor:default"><span class="skel"></span><span class="skel"></span><span class="skel" style="width:70%"></span><span class="skel"></span><span class="skel"></span><span class="skel" style="width:60%"></span><span></span></div>`).join('') + '<span class="sr-only" role="status">Carregando movimentações…</span>';
+  else if (viewState==='error') groups = `<div class="state err" role="alert"><span class="big-ic">${ic('alert')}</span><h3>Não foi possível carregar o histórico</h3><p>O servidor não respondeu em 8 segundos.</p><button class="btn secondary" type="button" data-st-reset>${ic('retry','sm')}Tentar de novo</button></div>`;
+  else if (viewState==='empty') groups = `<div class="state"><span class="big-ic">${ic('history')}</span><h3>Nenhuma movimentação registrada</h3><p>Entradas, saídas e ajustes aparecem aqui, do mais recente para o mais antigo.</p><button class="btn primary" type="button" data-open-move>${ic('plus','sm')}Nova movimentação</button></div>`;
+  else if (viewState==='noresult' || !rows.length) groups = `<div class="state"><span class="big-ic">${ic('search')}</span><h3>Nada encontrado com esses filtros</h3><p>Amplie o período ou remova um filtro.</p><button class="btn secondary" type="button" data-hist-clear>Limpar filtros</button></div>`;
+  else rows.forEach(m => {
+    const dk = startOfDay(m.date).getTime();
+    if (dk!==lastDay){ const dayList = list.filter(x=>startOfDay(x.date).getTime()===dk); groups += `<div class="day"><span>${dayLabel(m.date)}</span><span class="tnum">${dayList.length} movimentaç${dayList.length>1?'ões':'ão'}</span></div>`; lastDay = dk; }
+    const p = byId[m.productId]; const open = HIST.open.has(m.id);
+    groups += `<div class="mv" role="button" tabindex="0" aria-expanded="${open}" aria-controls="d-${m.id}" data-mv="${m.id}">
+      <span class="time">${hm(m.date)}</span>${mtype(m.type)}
+      <span class="mprod" style="min-width:0"><span class="prod-name" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</span>${m.note?`<span class="note" style="display:block">${esc(m.note)}</span>`:`<span class="prod-sku">${p.sku}</span>`}</span>
+      ${deltaHtml(delta(m))}${flowHtml(m)}<span class="mv-who">${m.user}</span><span class="chev">${ic('down','sm')}</span></div>
+      <div class="mv-detail ${open?'open':''}" id="d-${m.id}"><dl class="kv">
+        <div><dt>Data e hora</dt><dd>${new Date(m.date).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</dd></div>
+        <div><dt>Produto</dt><dd><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a></dd></div>
+        <div><dt>Saldo</dt><dd>${flowHtml(m)} (${signed(delta(m))})</dd></div>
+        <div><dt>Responsável</dt><dd>${m.user}</dd></div>
+        <div><dt>SKU</dt><dd class="tnum">${p.sku}</dd></div>
+        <div style="grid-column:span 3"><dt>Observação</dt><dd>${esc(m.note||'—')}</dd></div></dl></div>`;
+  });
+  return `<div class="page">
+    <div class="page-head"><div><h1 class="page-title">Movimentações</h1><p class="page-sub">Histórico de todas as entradas, saídas e ajustes, do mais recente para o mais antigo</p></div></div>
+    <section class="card region" aria-label="Histórico de movimentações">
+      <div class="toolbar"><nav class="tabs" aria-label="Filtrar por tipo">${[['','Todas'],['entradas','Entradas'],['saidas','Saídas'],['ajustes','Ajustes']].map(([k,l])=>`<a href="${histHref(k, HIST.product)}"${k===tipo?' aria-current="true"':''}>${l}<span class="n tnum">${tc(k)}</span></a>`).join('')}</nav></div>
+      <div class="filters">
+        <div class="search" style="width:auto">${ic('search','sm')}<label class="sr-only" for="hq">Buscar por produto, SKU ou observação</label><input class="input" id="hq" type="search" placeholder="Produto, SKU ou observação" value="${esc(HIST.q)}"></div>
+        <label class="sr-only" for="hp">Produto</label><select class="select" id="hp"><option value="">Todos os produtos</option>${[...products].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}" ${HIST.product===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+        <label class="sr-only" for="hu">Responsável</label><select class="select" id="hu"><option value="">Todos os responsáveis</option>${[...new Set(USERS)].map(u=>`<option ${HIST.user===u?'selected':''}>${u}</option>`).join('')}</select>
+        <label class="sr-only" for="hd">Período</label><select class="select" id="hd">${periods.map(([k,l])=>`<option value="${k}" ${HIST.period===k?'selected':''}>${l}</option>`).join('')}<option disabled>Personalizado…</option></select>
+      </div>
+      ${chips.length ? `<div class="chips"><span class="caption" style="color:var(--text-secondary)">Filtros ativos:</span>${chips.map(([k,l])=>`<span class="fchip">${esc(l)}<button type="button" aria-label="Remover filtro ${esc(l)}" data-chip="${k}">${ic('x','xs')}</button></span>`).join('')}<button class="btn tertiary sm" type="button" data-hist-clear>Limpar todos</button></div>` : ''}
+      <div class="summary" aria-live="polite" ${viewState==='content'?'':'hidden'}><span><b class="tnum">${fmt(list.length)}</b> movimentaç${list.length===1?'ão':'ões'} ${periods.find(p=>p[0]===HIST.period)[2]}</span><span>Entraram <b class="tnum" style="color:var(--success)">${signed(inU)} un.</b></span><span>Saíram <b class="tnum" style="color:var(--danger)">${signed(-outU)} un.</b></span></div>
+      <div>${groups}</div>
+      ${rows.length && viewState==='content' ? `<div class="region-foot"><span class="tnum">${fmt((HIST.page-1)*size+1)}–${fmt(Math.min(HIST.page*size,list.length))} de ${fmt(list.length)}</span><div class="pager" role="navigation" aria-label="Paginação do histórico"><button type="button" data-hpage="${HIST.page-1}" ${HIST.page===1?'disabled':''} aria-label="Página anterior">${ic('left','sm')}</button><span class="caption" style="padding:0 8px">Página ${HIST.page} de ${pages}</span><button type="button" data-hpage="${HIST.page+1}" ${HIST.page===pages?'disabled':''} aria-label="Próxima página">${ic('right','sm')}</button></div></div>` : ''}
+    </section>
+  </div>`;
+}
+
+/* ---------------- gráfico de área (SVG próprio — research.md Q3) ---------------- */
+function mountCharts(){
+  document.querySelectorAll('[data-chart="area"]').forEach(el => {
+    const data = series(30, el.dataset.series==='all' ? null : el.dataset.series);
+    el._data = data;
+    const draw = () => drawArea(el, data, el.dataset.min ? Number(el.dataset.min) : null);
+    draw();
+    if (window.ResizeObserver){ const ro = new ResizeObserver(draw); ro.observe(el); }
+  });
+}
+// Escala com passo "redondo" (1 · 2 · 2,5 · 5 · 10 × 10ⁿ), no máximo 5 intervalos;
+// passo 2,5 só quando o resultado continua inteiro (unidades não são fracionárias).
+function niceScale(v){
+  v = Math.max(v, 4);
+  const p = Math.pow(10, Math.floor(Math.log10(v/5)));
+  const step = [1,2,2.5,5,10].map(k=>k*p).filter(st => Number.isInteger(st) || st>=10).find(st => Math.ceil(v/st) <= 5) || 10*p;
+  const n = Math.ceil(v/step);
+  return { max: n*step, ticks: Array.from({length:n+1}, (_,i)=>i*step) };
+}
+function drawArea(el, data, min){
+  const W = Math.max(280, el.clientWidth), H = 220, padL = 44, padR = 64, padT = 12, axisB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - axisB;
+  const scale = niceScale(Math.max(...data.map(d=>d.value), min||0) * 1.1), maxV = scale.max;
+  const x = i => padL + (data.length===1 ? plotW/2 : i/(data.length-1)*plotW);
+  const y = v => padT + plotH - v/maxV*plotH;
+  const ticks = scale.ticks;
+  const pts = data.map((d,i)=>`${x(i).toFixed(1)},${y(d.value).toFixed(1)}`);
+  const line = 'M'+pts.join('L');
+  const area = `M${x(0)},${y(0)}L${pts.join('L')}L${x(data.length-1)},${y(0)}Z`;
+  const every = plotW < 420 ? 14 : 7;
+  const xt = data.map((d,i)=>i).filter(i => (data.length-1-i)%every===0);
+  const last = data[data.length-1];
+  const label = `Evolução do saldo: de ${fmt(data[0].value)} unidades em ${dShort(data[0].date)} para ${fmt(last.value)} unidades hoje. Use as setas para percorrer os dias.`;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" tabindex="0" aria-label="${label}">
+    ${ticks.map(t=>`<line class="grid-line" x1="${padL}" x2="${W-padR}" y1="${y(t)}" y2="${y(t)}"/><text class="axis-text tnum" x="${padL-8}" y="${y(t)+4}" text-anchor="end">${t>=1000?fmt(Math.round(t/100)/10)+' mil':fmt(Math.round(t))}</text>`).join('')}
+    ${min!=null ? `<line x1="${padL}" x2="${W-padR}" y1="${y(min)}" y2="${y(min)}" stroke="var(--warning-fill)" stroke-width="1.5"/><text class="axis-text" x="${W-padR+8}" y="${y(min)+4}" style="fill:var(--warning)">mín. ${min}</text>` : ''}
+    <path class="series-area" d="${area}"/><path class="series-line" d="${line}"/>
+    ${xt.map(i=>`<text class="axis-text" x="${x(i)}" y="${H-8}" text-anchor="middle">${i===data.length-1?'hoje':dShort(data[i].date)}</text>`).join('')}
+    <circle class="end-dot" cx="${x(data.length-1)}" cy="${y(last.value)}" r="4.5"/>
+    <text class="end-label tnum" x="${x(data.length-1)+10}" y="${y(last.value)+(min!=null && Math.abs(y(last.value)-y(min))<14 ? -10 : 4)}">${fmt(last.value)} un.</text>
+    <line class="cross" x1="0" x2="0" y1="${padT}" y2="${padT+plotH}" style="display:none"/>
+    <circle class="hover-dot end-dot" r="4.5" style="display:none"/>
+    <rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="transparent" class="hit"/>
+  </svg><div class="tip"></div>
+  <table class="data-table" ${el._table?'':'hidden'}><caption class="sr-only">Saldo no fim de cada dia</caption><thead><tr><th>Dia</th><th class="num">Saldo (un.)</th></tr></thead><tbody>${data.slice().reverse().map(d=>`<tr><td>${dShort(d.date)}</td><td class="num tnum">${fmt(d.value)}</td></tr>`).join('')}</tbody></table>`;
+  const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), cross = svg.querySelector('.cross'), hd = svg.querySelector('.hover-dot');
+  const show = i => {
+    i = Math.max(0, Math.min(data.length-1, i)); el._i = i;
+    const sx = x(i) * (svg.clientWidth / W), sy = y(data[i].value) * (svg.clientHeight / H);
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.style.display = '';
+    hd.setAttribute('cx', x(i)); hd.setAttribute('cy', y(data[i].value)); hd.style.display = '';
+    const prev = i>0 ? data[i].value - data[i-1].value : 0;
+    tip.innerHTML = ''; const b = document.createElement('b'); b.textContent = fmt(data[i].value)+' un.'; const s = document.createElement('span');
+    s.textContent = (i===data.length-1 ? 'hoje' : new Date(data[i].date).toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'})) + (i>0 ? ' · '+signed(prev)+' no dia' : '');
+    tip.append(b, s); tip.style.left = sx+'px'; tip.style.top = (sy-12)+'px'; tip.classList.add('show');
+  };
+  const hide = () => { cross.style.display='none'; hd.style.display='none'; tip.classList.remove('show'); };
+  svg.addEventListener('pointermove', e => { const r = svg.getBoundingClientRect(); const px = (e.clientX - r.left) * (W / r.width); show(Math.round((px - padL) / plotW * (data.length-1))); });
+  svg.addEventListener('pointerleave', hide);
+  svg.addEventListener('focus', () => show(el._i ?? data.length-1));
+  svg.addEventListener('blur', hide);
+  svg.addEventListener('keydown', e => { if (e.key==='ArrowLeft'||e.key==='ArrowRight'){ e.preventDefault(); show((el._i ?? data.length-1) + (e.key==='ArrowLeft'?-1:1)); } if (e.key==='Home') show(0); if (e.key==='End') show(data.length-1); });
+}
+
+/* ---------------- menu de ações ---------------- */
+const menu = document.getElementById('menu');
+let menuFor = null;
+function openMenu(btn, pid){
+  const p = byId[pid];
+  menu.innerHTML = `
+    <button role="menuitem" type="button" data-toast="Ajustar estoque: fluxo N2 de hoje (saldo alvo + motivo + resumo), agora no painel lateral.">${ic('adj','sm')}Ajustar estoque</button>
+    ${btn.hasAttribute('data-menu-page') ? '' : `<button role="menuitem" type="button" data-go="#/produtos/${pid}">${ic('history','sm')}Ver produto e histórico</button>`}
+    <button role="menuitem" type="button" data-toast="Editar: formulário preenchido com o estado atual.">${ic('edit','sm')}Editar</button>
+    <hr>
+    <button role="menuitem" type="button" class="destr" data-toast="Zerar estoque de ${esc(p.name)}: diálogo N3 dedicado (fluxo existente).">${ic('minus','sm')}Zerar estoque</button>
+    <button role="menuitem" type="button" class="destr" data-toast="Excluir ${esc(p.name)}: diálogo N3 avisando que o histórico também é apagado (fluxo existente).">${ic('trash','sm')}Excluir</button>`;
+  const r = btn.getBoundingClientRect();
+  menu.classList.add('open');
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  menu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw)) + 'px';
+  menu.style.top = (r.bottom + mh + 8 > window.innerHeight ? r.top - mh - 6 : r.bottom + 6) + 'px';
+  menuFor = btn; btn.setAttribute('aria-expanded','true');
+  menu.querySelector('button').focus();
+}
+function closeMenu(){ if (!menu.classList.contains('open')) return; menu.classList.remove('open'); if (menuFor){ menuFor.setAttribute('aria-expanded','false'); menuFor.focus(); menuFor = null; } }
+menu.addEventListener('keydown', e => {
+  const items = [...menu.querySelectorAll('button')]; const i = items.indexOf(document.activeElement);
+  if (e.key==='ArrowDown'){ e.preventDefault(); items[(i+1)%items.length].focus(); }
+  if (e.key==='ArrowUp'){ e.preventDefault(); items[(i-1+items.length)%items.length].focus(); }
+  if (e.key==='Escape'){ e.preventDefault(); closeMenu(); }
+  if (e.key==='Tab'){ closeMenu(); }
+});
+
+/* ---------------- toast ---------------- */
+function toast(html){
+  const t = document.createElement('div'); t.className = 'toast';
+  t.innerHTML = `<span class="ok">${ic('check','sm')}</span><div>${html}</div>`;
+  document.getElementById('toasts').append(t);
+  setTimeout(()=>t.remove(), 5200);
+}
+
+/* ---------------- drawer: Nova movimentação (D3) ---------------- */
+const drawer = document.getElementById('drawer'), veil = document.getElementById('veil');
+const MV = { type:null, product:null, qty:1, note:'', date:'', opener:null, query:'', active:0 };
+function openMove(opener, productId, type){
+  Object.assign(MV, { type: type||null, product: productId ? byId[productId] : null, qty:1, note:'', date:'', opener, query:'', active:0 });
+  drawer.hidden = false; renderDrawer();
+  requestAnimationFrame(()=>{ drawer.classList.add('open'); veil.classList.add('open'); });
+  document.body.style.overflow = 'hidden';
+  setTimeout(()=>{ const f = drawer.querySelector(MV.type ? (MV.product ? '#mvQty' : '#mvSearch') : '.seg button'); f && f.focus(); }, 40);
+}
+function closeMove(){
+  drawer.classList.remove('open'); veil.classList.remove('open'); document.body.style.overflow = '';
+  setTimeout(()=>{ drawer.hidden = true; }, 190);
+  if (MV.opener && document.body.contains(MV.opener)) MV.opener.focus();
+}
+function renderDrawer(focusSel){
+  const p = MV.product, t = MV.type;
+  const next = p && t ? p.balance + (t==='IN' ? MV.qty : -MV.qty) : null;
+  const over = p && t==='OUT' && MV.qty > p.balance;
+  const willLow = p && t==='OUT' && !over && next < p.minStock && p.balance >= p.minStock;
+  const stAfter = next==null ? null : next===0 ? 'out' : next < p.minStock ? 'attn' : 'ok';
+  const title = t==='IN' ? 'Registrar entrada' : t==='OUT' ? 'Registrar saída' : 'Nova movimentação';
+  const matches = MV.query ? products.filter(x => (x.name+' '+x.sku).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(MV.query.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase())).slice(0,6) : [];
+  const ok = p && t && MV.qty>0 && !over;
+  drawer.innerHTML = `
+    <div class="dr-head"><div><h2 id="drTitle">${title}</h2><p id="drSub">${p ? esc(p.name) : 'Escolha o tipo e o produto'}</p></div>
+      <button class="icon-btn" type="button" aria-label="Fechar" data-close-move>${ic('x')}</button></div>
+    <div class="dr-body">
+      <div class="field"><span class="lbl" id="segL">Tipo de movimentação</span>
+        <div class="seg" role="radiogroup" aria-labelledby="segL">
+          <button type="button" role="radio" class="in" aria-checked="${t==='IN'}" data-type-set="IN">${ic('in','sm')}Entrada</button>
+          <button type="button" role="radio" class="out" aria-checked="${t==='OUT'}" data-type-set="OUT">${ic('out','sm')}Saída</button>
+        </div>
+        ${t ? '' : `<span class="hint">Nada vem marcado: escolha conscientemente se o estoque vai subir ou descer.</span>`}
+      </div>
+      <div class="field"><label for="mvSearch">Produto</label>
+        ${p ? `<div class="ctx"><span class="nm">${esc(p.name)}</span><button class="change" type="button" data-change-product>Trocar</button>
+                <span class="ln tnum">${p.sku}</span><span>${badge(statusOf(p))}</span>
+                <span class="ln">Saldo atual <b class="tnum" style="color:var(--text-primary)">${fmt(p.balance)} un.</b> · mínimo ${p.minStock}</span></div>`
+            : `<div class="combo"><div class="search" style="width:100%">${ic('search','sm')}<input class="input" id="mvSearch" role="combobox" aria-expanded="${matches.length>0}" aria-controls="mvList" aria-autocomplete="list" ${matches.length?`aria-activedescendant="opt-${MV.active}"`:''} placeholder="Buscar por nome ou SKU" value="${esc(MV.query)}" autocomplete="off"></div>
+               ${matches.length ? `<ul class="combo-list" id="mvList" role="listbox" aria-label="Produtos encontrados">${matches.map((x,i)=>`<li role="option" id="opt-${i}" aria-selected="${i===MV.active}" data-pick="${x.id}"><span><span style="font-weight:500">${esc(x.name)}</span><br><span class="prod-sku">${x.sku}</span></span><span class="caption tnum" style="align-self:center">${fmt(x.balance)} un.</span></li>`).join('')}</ul>` : ''}</div>`}
+      </div>
+      <div class="field"><label for="mvQty">Quantidade</label>
+        <div class="stepper"><button type="button" aria-label="Diminuir" data-step="-1">${ic('minus','sm')}</button><input id="mvQty" inputmode="numeric" value="${MV.qty}" aria-describedby="mvPrev"><button type="button" aria-label="Aumentar" data-step="1">${ic('plus','sm')}</button></div>
+        <div class="quick">${[1,5,10,25,50].map(n=>`<button type="button" data-qty="${n}" aria-pressed="${String(MV.qty)===String(n)}">${n}</button>`).join('')}</div>
+      </div>
+      <div id="mvPrev" aria-live="polite">
+        ${p && t ? `<div class="preview" style="${over?'border-color:#FECACA;background:var(--danger-subtle)':''}"><div><div class="lbl">Saldo após a operação</div>
+            <div class="nums">${fmt(p.balance)}<span class="arrow" aria-hidden="true">→</span><span class="sr-only"> para </span>${over ? '—' : fmt(next)}</div></div>
+            <div style="text-align:right">${over ? '' : deltaHtml(next - p.balance)}<div style="margin-top:6px">${over ? '' : badge(stAfter)}</div></div></div>`
+          : `<div class="alert info">${ic('swap','sm')}<span>Escolha o tipo e o produto para ver o saldo antes e depois.</span></div>`}
+        ${over ? `<div class="alert err" role="alert" style="margin-top:10px">${ic('alert','sm')}<span>A saída de <b>${MV.qty} un.</b> é maior que o saldo disponível (<b>${p.balance} un.</b>). O estoque nunca fica negativo.</span></div>` : ''}
+        ${willLow ? `<div class="alert warn" style="margin-top:10px">${ic('alert','sm')}<span>Depois desta saída, <b>${esc(p.name)}</b> fica com estoque baixo (${next} &lt; mínimo ${p.minStock}).</span></div>` : ''}
+      </div>
+      <div class="field"><label for="mvDate">Data <span class="hint">(opcional — padrão: agora)</span></label><input class="input" id="mvDate" type="datetime-local" value="${MV.date}"></div>
+      <div class="field"><label for="mvNote">Observação <span class="hint">(opcional)</span></label><textarea class="input" id="mvNote" rows="3" placeholder="Ex.: nota fiscal, pedido, motivo">${esc(MV.note)}</textarea></div>
+    </div>
+    <div class="dr-foot"><button class="btn secondary" type="button" data-close-move>Cancelar</button>
+      <button class="btn primary" type="button" data-confirm-move ${ok?'':'disabled'}>${t==='OUT' ? 'Confirmar saída' : t==='IN' ? 'Confirmar entrada' : 'Confirmar'}${ok ? ` de ${MV.qty} un.` : ''}</button></div>`;
+  if (focusSel){ const f = drawer.querySelector(focusSel); if (f){ f.focus(); if (f.setSelectionRange && f.value) f.setSelectionRange(f.value.length, f.value.length); } }
+}
+drawer.addEventListener('click', e => {
+  const b = e.target.closest('button,[data-pick]'); if (!b) return;
+  if (b.hasAttribute('data-close-move')) return closeMove();
+  if (b.dataset.typeSet){ MV.type = b.dataset.typeSet; renderDrawer(`[data-type-set="${MV.type}"]`); }
+  if (b.dataset.pick){ MV.product = byId[b.dataset.pick]; MV.query=''; renderDrawer('#mvQty'); }
+  if (b.hasAttribute('data-change-product')){ MV.product = null; renderDrawer('#mvSearch'); }
+  if (b.dataset.step){ MV.qty = Math.max(1, MV.qty + Number(b.dataset.step)); renderDrawer(`[data-step="${b.dataset.step}"]`); }
+  if (b.dataset.qty){ MV.qty = Number(b.dataset.qty); renderDrawer(`[data-qty="${b.dataset.qty}"]`); }
+  if (b.hasAttribute('data-confirm-move')){
+    const p = MV.product, d = MV.type==='IN' ? MV.qty : -MV.qty, prev = p.balance;
+    p.balance += d;
+    movements.unshift({ id:'m'+(++mid), productId:p.id, type:MV.type, quantity:MV.qty, date:Date.now(), prev, next:p.balance, user:'admin@simplestock.local', note:MV.note });
+    closeMove();
+    toast(`${MV.type==='IN'?'Entrada':'Saída'} de <b>${MV.qty} un.</b> em ${esc(p.name)}. Novo saldo: <b>${fmt(p.balance)}</b>. <a href="#/produtos/${p.id}">Ver produto</a>`);
+    go();
+  }
+});
+drawer.addEventListener('input', e => {
+  if (e.target.id==='mvSearch'){ MV.query = e.target.value; MV.active = 0; renderDrawer('#mvSearch'); }
+  if (e.target.id==='mvQty'){ const v = parseInt(e.target.value.replace(/\D/g,''),10); MV.qty = isNaN(v) ? 0 : v; renderDrawer('#mvQty'); }
+  if (e.target.id==='mvNote'){ MV.note = e.target.value; }
+  if (e.target.id==='mvDate'){ MV.date = e.target.value; }
+});
+drawer.addEventListener('keydown', e => {
+  if (e.key==='Escape'){ e.preventDefault(); return closeMove(); }
+  if (e.target.id==='mvSearch'){
+    const opts = drawer.querySelectorAll('[data-pick]');
+    if (e.key==='ArrowDown' && opts.length){ e.preventDefault(); MV.active = (MV.active+1)%opts.length; renderDrawer('#mvSearch'); }
+    if (e.key==='ArrowUp' && opts.length){ e.preventDefault(); MV.active = (MV.active-1+opts.length)%opts.length; renderDrawer('#mvSearch'); }
+    if (e.key==='Enter' && opts.length){ e.preventDefault(); MV.product = byId[opts[MV.active].dataset.pick]; MV.query=''; renderDrawer('#mvQty'); }
+  }
+  if (e.key==='Tab'){ // foco preso, como o Radix Dialog faz no Modal real
+    const f = [...drawer.querySelectorAll('button:not([disabled]),input,textarea,select,[tabindex="0"]')];
+    if (!f.length) return; const first = f[0], last = f[f.length-1];
+    if (e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  }
+});
+veil.addEventListener('click', () => { if (document.body.classList.contains('nav-open')) toggleNav(false); else closeMove(); });
+
+/* ---------------- ligações da página ---------------- */
+function bindPage(route){
+  const main = document.getElementById('conteudo');
+  const q = main.querySelector('#q');
+  if (q) q.addEventListener('input', () => { PAGE.q = q.value; PAGE.page = 1; const pos = q.selectionStart; go(); const n = document.getElementById('q'); if (n){ n.focus(); n.setSelectionRange(pos,pos); } });
+  const hq = main.querySelector('#hq');
+  if (hq) hq.addEventListener('input', () => { HIST.q = hq.value; HIST.page = 1; const pos = hq.selectionStart; go(); const n = document.getElementById('hq'); if (n){ n.focus(); n.setSelectionRange(pos,pos); } });
+  [['hu','user'],['hd','period']].forEach(([id,k]) => { const s = main.querySelector('#'+id); if (s) s.addEventListener('change', () => { HIST[k] = s.value; HIST.page = 1; go(); }); });
+  const hp = main.querySelector('#hp'); if (hp) hp.addEventListener('change', () => { HIST.page = 1; const t = new URLSearchParams(parseRoute().query).get('tipo'); history.replaceState(null, '', '#/movimentacoes' + (()=>{ const u = new URLSearchParams(); if (t) u.set('tipo', t); if (hp.value) u.set('produto', hp.value); const x = u.toString(); return x ? '?'+x : ''; })()); go(); document.getElementById('hp').focus(); });
+  const size = main.querySelector('[data-size]'); if (size) size.addEventListener('change', () => { PAGE.size = Number(size.value); PAGE.page = 1; go(); });
+}
+document.addEventListener('click', e => {
+  const t = e.target;
+  const openBtn = t.closest('[data-open-move]');
+  if (openBtn){ e.preventDefault(); return openMove(openBtn, openBtn.dataset.product, openBtn.dataset.type); }
+  const mb = t.closest('[data-menu]'); if (mb){ e.stopPropagation(); return menu.classList.contains('open') && menuFor===mb ? closeMenu() : (closeMenu(), openMenu(mb, mb.dataset.menu)); }
+  if (menu.classList.contains('open') && !t.closest('#menu')) closeMenu();
+  const gb = t.closest('[data-go]'); if (gb){ menu.classList.remove('open'); menuFor=null; location.hash = gb.dataset.go; return; }
+  const tb = t.closest('[data-toast]'); if (tb){ if (t.closest('#menu')) closeMenu(); return toast(esc(tb.dataset.toast).replace(/&lt;b&gt;|&lt;\/b&gt;/g,'')); }
+  const sb = t.closest('[data-sort]'); if (sb){ const k = sb.dataset.sort; PAGE.dir = PAGE.sort===k && PAGE.dir==='asc' ? 'desc' : 'asc'; PAGE.sort = k; return go(); }
+  const pg = t.closest('[data-page]'); if (pg){ PAGE.page = Number(pg.dataset.page); PAGE.sel.clear(); go(); return document.querySelector('.region')?.scrollIntoView({block:'start'}); } // seleção limpa ao paginar (decisão 8 da Fase 4)
+  const hp = t.closest('[data-hpage]'); if (hp){ HIST.page = Number(hp.dataset.hpage); return go(); }
+  const cb = t.closest('[data-sel]'); if (cb){ cb.checked ? PAGE.sel.add(cb.dataset.sel) : PAGE.sel.delete(cb.dataset.sel); return go(); }
+  const all = t.closest('[data-sel-all]'); if (all){ document.querySelectorAll('[data-sel]').forEach(c => all.checked ? PAGE.sel.add(c.dataset.sel) : PAGE.sel.delete(c.dataset.sel)); return go(); }
+  if (t.closest('[data-sel-clear]')){ PAGE.sel.clear(); return go(); }
+  if (t.closest('[data-clear-search]')){ PAGE.q=''; setState('content'); return; }
+  if (t.closest('[data-st-reset]')){ setState('content'); return; }
+  if (t.closest('[data-hist-clear]')){ Object.assign(HIST,{q:'',user:'',period:'30',page:1}); history.replaceState(null, '', '#/movimentacoes'); setState('content'); return; }
+  const chip = t.closest('[data-chip]'); if (chip){
+    if (chip.dataset.chip==='product'){ const tp = new URLSearchParams(parseRoute().query).get('tipo'); history.replaceState(null, '', '#/movimentacoes' + (tp ? '?tipo='+tp : '')); }
+    else HIST[chip.dataset.chip] = '';
+    return go(); }
+  const tt = t.closest('[data-table-toggle]'); if (tt){ const el = document.getElementById(tt.dataset.tableToggle); el._table = !el._table; el.querySelector('.data-table').hidden = !el._table; tt.lastChild.textContent = el._table ? 'Ocultar tabela' : 'Ver como tabela'; return; }
+  const mv = t.closest('[data-mv]'); if (mv && !t.closest('a')){ toggleMv(mv); return; }
+  const row = t.closest('[data-row]'); if (row && !t.closest('button,a,input')){ location.hash = '#/produtos/'+row.dataset.row; }
+});
+function toggleMv(mv){ const id = mv.dataset.mv; HIST.open.has(id) ? HIST.open.delete(id) : HIST.open.add(id); const open = HIST.open.has(id); mv.setAttribute('aria-expanded', open); document.getElementById('d-'+id).classList.toggle('open', open); }
+document.addEventListener('keydown', e => {
+  const mv = e.target.closest && e.target.closest('[data-mv]');
+  if (mv && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); toggleMv(mv); }
+  if (e.key==='Escape' && document.body.classList.contains('nav-open')) toggleNav(false);
+});
+
+/* ---------------- shell: menu no celular e trilho no tablet ---------------- */
+function toggleNav(open){ document.body.classList.toggle('nav-open', open); veil.classList.toggle('open', open); document.getElementById('navOpen').setAttribute('aria-expanded', open); if (open) document.querySelector('.nav a').focus(); }
+document.getElementById('navOpen').addEventListener('click', () => toggleNav(true));
+const mq = window.matchMedia('(min-width:768px) and (max-width:1023px)');
+let railPref = null;
+function applyRail(){ const rail = railPref ?? mq.matches; document.body.classList.toggle('rail', rail && window.innerWidth >= 768); const b = document.getElementById('railToggle'); b.setAttribute('aria-label', rail ? 'Expandir menu' : 'Recolher menu'); b.title = b.getAttribute('aria-label'); }
+mq.addEventListener('change', () => { railPref = null; applyRail(); });
+document.getElementById('railToggle').addEventListener('click', () => { railPref = !document.body.classList.contains('rail'); applyRail(); });
+
+/* ---------------- andaimes ---------------- */
+function setState(s){ viewState = s; document.querySelectorAll('[data-st]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.st===s)); go(); }
+document.querySelectorAll('[data-st]').forEach(b => b.addEventListener('click', () => setState(b.dataset.st)));
+document.querySelectorAll('[data-sb]').forEach(b => b.addEventListener('click', () => { document.body.classList.toggle('sidebar-light', b.dataset.sb==='light'); document.querySelectorAll('[data-sb]').forEach(x=>x.setAttribute('aria-pressed', x===b)); }));
+const params = new URLSearchParams(location.search);
+if (params.get('sidebar')==='clara') document.querySelector('[data-sb="light"]').click();
+if (params.get('estado')) setState(params.get('estado'));
+if (params.get('andaimes')==='0') document.querySelector('.scaffold').remove();
+if (params.get('rail')==='1') railPref = true;
+
+window.addEventListener('hashchange', () => go(true));
+window.addEventListener('resize', applyRail);
+applyRail();
+go(false);
+if (params.get('mov')) { const [pid, type] = params.get('mov').split(':'); openMove(null, pid||null, type||null); }
+</script>
+</body>
+</html>
