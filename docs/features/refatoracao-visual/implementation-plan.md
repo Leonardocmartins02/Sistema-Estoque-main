@@ -37,6 +37,7 @@
 | P-1 | **Ordem das fases difere da do plano visual** (§15 dele): design system → backend → shell → **nova movimentação** → produtos → **movimentações** → **produto** → **dashboard** → restantes | Dependência real: "Repor" (dashboard) e "Movimentar" (lista, produto) precisam do painel novo; "Ver no histórico" (produto) e "Ver histórico" (dashboard) precisam de Movimentações; a página do produto só pode substituir o modal de histórico depois que Movimentações cobre os filtros dele. Nada fica com link para tela que ainda não existe |
 | P-2 | Uma **branch** (`feat/refatoracao-visual`), **um commit por task**, cada commit com diff visual aprovado antes. PR quando o usuário decidir (o plano não presume um PR por fase) | Regra do projeto |
 | P-3 | Até a Fase 8, `/` **redireciona** para `/produtos`, e a sidebar só ganha um item quando a tela dele existe | Regra da sidebar (só telas reais); cada commit deixa o app utilizável |
+| P-17 | **Execução em fatia vertical** (decidido com o usuário em 19/10/2026, depois da Task 2): T5 → T5b → T3 → T10 → T11 → T14 → T15 primeiro, para a sidebar e a tela de Produtos do protótipo aparecerem cedo; depois T12 → T13 → T6–T9 → T16 → T17 → T4 → T18 → T19 → T20 → T21 → T22. A numeração das tasks não muda | Na ordem por fases o visual novo só aparecia na Task 10 e Produtos na 15 — as capturas das Tasks 1–2 mostravam a tela antiga. Ajustes para não quebrar P-3 (nada aponta para o que não existe): até a T12, "Movimentar" abre o modal atual e o botão global "Nova movimentação"/"Movimentar" do celular não aparece; o gráfico (T4) já nasce sobre a Data Table |
 | P-4 | Painel de movimentação aberto por um **provider** no shell (`openMovement({ product?, type? })`), não por estado em cada tela | É aberto de 5 lugares (sidebar, barra do celular, linha, página do produto, "Repor"); um provider evita cinco cópias do estado e mantém um único painel montado |
 | P-5 | Ações de produto (editar, ajustar, baixa rápida, zerar, excluir) saem do `ProductDashboard` para um hook `useProductActionDialogs()` que devolve `{ actions, dialogs }`, no molde de `useConfirm` (`{ confirm, confirmDialog }`) | A lista e a página do produto precisam das mesmas ações e diálogos; é também a decomposição do componente-deus que o `AGENTS.md` pede |
 | P-6 | Invalidação centralizada num `invalidateStock()` que invalida `['products']`, `['movements']` e `['dashboard']`; as chaves novas ficam sob esses prefixos (`['products', 'detail', id]`, `['products', 'trend', id, tz]`, `['movements', 'list', filtros]`, `['dashboard', tz]`) | Qualquer operação muda saldo, contagem, série e histórico ao mesmo tempo (RF 37, 48) |
@@ -101,7 +102,7 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
 #### Task 4 — Gráficos em SVG próprio
 - **Requisitos**: RF 14, 15, 32; P-11.
 - **Arquivos**: `components/charts/AreaTrend.tsx`, `components/charts/StatusBar.tsx`, `lib/niceScale.ts`, testes.
-- **Alterações**: `AreaTrend` (série de pontos, linha de referência opcional para o mínimo, crosshair + tooltip por mouse e por teclado, `Home`/`End`, "Ver como tabela", `aria-label` descritivo, rótulos do eixo x espaçados conforme a largura); `StatusBar` (três segmentos com 2 px de separação, legenda com palavra, número e percentual, cada item como link).
+- **Alterações**: `AreaTrend` (série de pontos, linha de referência opcional para o mínimo, crosshair + tooltip por mouse e por teclado, `Home`/`End`, "Ver como tabela" sobre a Data Table (T5b vem antes, P-17), `aria-label` descritivo, rótulos do eixo x espaçados conforme a largura); `StatusBar` (três segmentos com 2 px de separação, legenda com palavra, número e percentual, cada item como link).
 - **Testes**: `niceScale` (ticks inteiros "redondos"; série plana em 0); `AreaTrend` (descrição acessível com mínimo/máximo/último; setas movem o tooltip; tabela mostra os 30 valores); `StatusBar` (legenda com os três status e percentuais que somam 100; link de cada item).
 - **Commit**: `feat(ui): gráficos de tendência e status em SVG`
 
@@ -113,7 +114,7 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
 
 #### Task 5b — Data Table única
 - **Requisitos**: RT 1–5, 7–11; RNF 13; P-13, P-14; D9.
-- **Arquivos**: `ui/DataTable.tsx`, `test/DataTable.test.tsx`, `components/charts/AreaTrend.tsx` (a alternativa "Ver como tabela" passa a usá-la), novo `ui/SelectionBar.tsx` (barra contextual de seleção, saída do `ProductDashboard` sem mudar texto nem comportamento).
+- **Arquivos**: `ui/DataTable.tsx`, `test/DataTable.test.tsx`, novo `ui/SelectionBar.tsx` (barra contextual de seleção, saída do `ProductDashboard` sem mudar texto nem comportamento).
 - **Alterações**:
   - `caption` obrigatória (aceita `visuallyHidden`); `role` redundante removido (a semântica nativa basta);
   - `priority?: 'P0' | 'P1' | 'P2'` por coluna → classes responsivas (P2 só ≥ 1180 px, P1 só ≥ 768 px);
@@ -192,7 +193,7 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
 #### Task 11 — Shell responsivo
 - **Requisitos**: RF 6, 7; RNF 7.
 - **Arquivos**: `app/AppShell.tsx`, `app/Sidebar.tsx`, novo `app/MobileTopbar.tsx`.
-- **Alterações**: 768–1023 px trilho de ícones (nome acessível por item, contador como ponto + número no nome); < 768 px barra superior escura com menu, marca e "Movimentar"; navegação móvel em `Modal variant="drawer" side="left"`, fechando ao navegar.
+- **Alterações**: 768–1023 px trilho de ícones (nome acessível por item, contador como ponto + número no nome); < 768 px barra superior escura com menu e marca (o "Movimentar" da barra entra na Task 12, P-17); navegação móvel em `Modal variant="drawer" side="left"`, fechando ao navegar.
 - **Testes**: navegação móvel abre como diálogo nomeado, `Esc` fecha e devolve o foco ao botão de menu, navegar fecha; trilho mantém nomes acessíveis. Capturas a 390, 900 e 1440 px.
 - **Commit**: `feat(app): sidebar recolhível e navegação no celular`
 
@@ -202,7 +203,7 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
 
 #### Task 12 — Painel de movimentação
 - **Requisitos**: RF 3, 38–50; P-4, P-6.
-- **Arquivos**: `MovementFormModal.tsx` → `components/movement/MovementDrawer.tsx`, novos `components/movement/MovementDrawerProvider.tsx` (`useMovementDrawer().openMovement({ product?, type? })`), `components/movement/ProductPicker.tsx` (combobox), `hooks/useInvalidateStock.ts`; `useProductMutations.ts` passa a usar `invalidateStock`; `ProductDashboard.tsx` troca o estado `movingProduct` por `openMovement`; `AppShell` monta o provider e o botão "Nova movimentação".
+- **Arquivos**: `MovementFormModal.tsx` → `components/movement/MovementDrawer.tsx`, novos `components/movement/MovementDrawerProvider.tsx` (`useMovementDrawer().openMovement({ product?, type? })`), `components/movement/ProductPicker.tsx` (combobox), `hooks/useInvalidateStock.ts`; `useProductMutations.ts` passa a usar `invalidateStock`; `pages/ProductsPage.tsx` troca o estado `movingProduct` por `openMovement` ("Movimentar" da linha passa a abrir o painel) e o menu da linha ganha "Nova entrada"/"Nova saída"; `AppShell` monta o provider, o botão "Nova movimentação" da sidebar e o "Movimentar" da barra do celular (P-17).
 - **Antes de mover**: `MovementFormModal.test.tsx` e `MovementFormModal.characterization.test.tsx` (MFM-1…MFM-6) passam a apontar para o painel **sem mudar nenhuma asserção** — são o contrato. Só depois entram os testes novos.
 - **Testes novos**: abrir sem contexto → nenhum tipo, nenhum produto, confirmação indisponível; `type: 'IN'` → "Entrada" marcado e título "Registrar entrada"; combobox (filtra por nome e SKU, setas + `Enter`, mostra saldo, permite trocar); valores rápidos `1 · 5 · 10 · 25 · 50` com `aria-pressed`; preview com status resultante; aviso de abaixo do mínimo sem bloquear; saída = saldo não avisa; bloqueio de saída > saldo; 422 do servidor aparece no painel com dados preservados; sucesso fecha, toast com novo saldo e invalida `['products']`, `['movements']`, `['dashboard']`.
 - **Commit**: `feat(stock): painel de nova movimentação`
@@ -226,8 +227,8 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
 #### Task 15 — Tela de Produtos v2
 - **Requisitos**: RF 19–28, 63; RT 1–12; D4, D8, D11.
 - **Arquivos**: `ProductDashboard.tsx` → `pages/ProductsPage.tsx`; `products/ProductsTable.tsx`, `products/ProductCardList.tsx`, `products/ProductActionsMenu.tsx`, `products/ProductFiltersSheet.tsx` (vira "Ordenar"); remover `products/StatusFilterMenu.tsx`, `ui/LowStockBanner.tsx` e seus testes.
-- **Alterações**: `PageHeader` com as duas ações; `LinkTabs` com contagens do `summary`; `ProductsTable` sobre a Data Table v2 (`caption`, `stickyHeader`, `density="two-line"`, seleção com a receita); linha com iniciais, nome-link, SKU, saldo × mínimo, `StatusBadge`, "Movimentar" `tonal` e `⋯` — **a baixa rápida sai da linha e entra no menu** (D11); menu em três grupos: *Ver histórico* (modal, até a Task 19) · Editar | Nova entrada · Nova saída · Baixa rápida · Ajustar estoque | Zerar estoque · Excluir, com "Nova entrada"/"Nova saída" chamando `openMovement({ product, type })`; linha clicável (P-8); seleção e regiões destrutivas como hoje, a barra pelo `SelectionBar`; `Pagination` numerada com itens por página. Sidebar passa a mostrar o item "Produtos" como página real (já existia) e os atalhos levam às abas.
-- **Testes**: abas (contagem = `summary`, `aria-current`, partição); clique na linha navega, clique em controle não; o link do nome é o alvo de teclado; "Movimentar" abre o painel com o produto e sem tipo; "Nova saída" do menu abre o painel com produto e "Saída" marcada, e ao fechar o foco volta ao `⋯`; nenhuma linha tem botão de baixa rápida e o menu tem; `sorting.globalContract.test.tsx` verde; testes de `ProductsTable`/`ProductCardList`/`ProductActionsMenu` atualizados só onde o PRD muda (botão `tonal`, D11); o item "Ver histórico" continua abrindo o modal até a Task 19.
+- **Alterações**: `PageHeader` com as duas ações; `LinkTabs` com contagens do `summary`; `ProductsTable` sobre a Data Table v2 (`caption`, `stickyHeader`, `density="two-line"`, seleção com a receita); linha com iniciais, nome-link, SKU, saldo × mínimo, `StatusBadge`, "Movimentar" `tonal` e `⋯` — **a baixa rápida sai da linha e entra no menu** (D11); menu em três grupos: *Ver histórico* (modal, até a Task 19) · Editar | Baixa rápida · Ajustar estoque | Zerar estoque · Excluir — "Nova entrada"/"Nova saída" entram na Task 12 e "Movimentar" abre o modal atual até lá (P-17); linha clicável (P-8); seleção e regiões destrutivas como hoje, a barra pelo `SelectionBar`; `Pagination` numerada com itens por página. Sidebar passa a mostrar o item "Produtos" como página real (já existia) e os atalhos levam às abas.
+- **Testes**: abas (contagem = `summary`, `aria-current`, partição); clique na linha navega, clique em controle não; o link do nome é o alvo de teclado; "Movimentar" abre o modal de movimentação com o produto (o painel e "Nova saída" com "Saída" marcada e foco de volta ao `⋯` são testados na Task 12); nenhuma linha tem botão de baixa rápida e o menu tem; `sorting.globalContract.test.tsx` verde; testes de `ProductsTable`/`ProductCardList`/`ProductActionsMenu` atualizados só onde o PRD muda (botão `tonal`, D11); o item "Ver histórico" continua abrindo o modal até a Task 19.
 - **Matriz de paridade**: linhas 2, 19 e o banner atualizadas como mudança declarada; **linha 20** (baixa rápida) passa a "Overflow nas duas larguras" e o teste `o menu do desktop NÃO repete a baixa rápida` vira `a baixa rápida é alcançável pelo menu da linha` — mudança declarada da D11.
 - **Commit**: `feat(products): tela de produtos com abas, linha clicável e ação tonal`
 
@@ -302,26 +303,29 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
 - **README**: capturas novas em `docs/images/` (dashboard, produtos, produto, movimentações, painel de movimentação) no lugar das três atuais; "Funcionalidades" com dashboard, página do produto, histórico geral e painel de movimentação; "Arquitetura" com React Router e as rotas de leitura; acessibilidade (WCAG 2.2 AA); sai o item "refatoração visual em andamento" de "Limites e próximos passos".
 - **Commit**: `test(app): QA da refatoração visual` (se houver correção) ou nenhum; o README entra em commit próprio, `docs(readme): refatoração visual`.
 
-## 5. Grafo de dependências
+## 5. Ordem de execução e dependências
+
+**Ordem de execução (fatia vertical, P-17):**
 
 ```text
-T0 ─┐
-    ├─ T1 → T2 → T3 → T4 → T5 → T5b ───────┐
-    └─ T6 → T7 → T8 → T9 ──────────────────┤   (Fase 1 ∥ Fase 2)
-                                           ▼
-                                   T10 → T11 → T12 → T13
-                                                       │
-                                               T14 → T15
-                                                       │
-                                               T16 → T17
-                                                       │
-                                               T18 → T19
-                                                       │
-                                                      T20 → T21 → T22
+T0 ✓ → T1 ✓ → T2 ✓
+  → T5 → T5b → T3 → T10 → T11 → T14 → T15      ← sidebar e Produtos do protótipo no app
+  → T12 → T13                                   ← painel lateral; "Movimentar" passa a usá-lo
+  → T6 → T7 → T8 → T9                           ← rotas de leitura (backend)
+  → T16 → T17                                   ← Movimentações
+  → T4 → T18 → T19                              ← gráficos e página do produto
+  → T20                                         ← dashboard (/ deixa de redirecionar)
+  → T21 → T22                                   ← diálogos restantes e QA
 ```
 
-- **Paralelizável**: Fase 1 com Fase 2 (pacotes diferentes, contrato fechado no PRD).
-- **Sequencial de propósito**: T12 antes de T15/T18/T20 (todas abrem o painel); T17 antes de T19 (o modal só sai depois que Movimentações cobre os filtros dele); T5b antes de toda task que mostra tabela (15, 17, 18, 20, 21) — T5b depende de T4 (a alternativa tabular do gráfico passa a usá-la) e de T5 (`RegionState`, `Skeleton`).
+**Dependências reais** (o que obriga a ordem):
+
+- T5 (`RegionState`, `Skeleton`, `Pagination`) antes de T5b; T5b antes de toda task que mostra tabela (4, 15, 17, 18, 20, 21).
+- T3 (`drawer`) antes de T11 (navegação no celular) e de T12/T13.
+- T10 (roteador) antes de T11 e T14; T14 antes de T15.
+- T12 antes de "Nova entrada/Nova saída", do botão global e do "Repor" (T15 usa o modal atual até lá; T20 vem depois).
+- T6–T9 (backend) antes de T16–T20, que consomem as rotas novas.
+- T17 antes de T19 (o modal de histórico só sai depois que Movimentações cobre os filtros dele).
 
 ## 6. Matriz PRD → Task → Teste
 
