@@ -136,7 +136,7 @@ O catálogo continua sendo este protótipo + os testes de componente. Cada compo
 | Colunas em tela menor | Responsável sumia por CSS solto | **Prioridade de coluna** P0/P1/P2: P2 some abaixo de 1180 px, nunca rolagem lateral | §49–50 |
 | Ordenação | `aria-sort` estava no **botão** (errado) e o ícone era sempre ↕ | `aria-sort` no **`<th>`**; ícone ↕ sem ordem, ↑/↓ com ordem — a forma muda, não só a cor | §9, §36; W3C Sortable Table |
 | Paginação | Produtos numerada; Movimentações "Página X de Y" | **Numerada nas duas** (até 7 páginas todas; acima, primeira · vizinhas · última com "…"); Movimentações com itens por página 10 · 20 · 50 | §15 |
-| Linha selecionada | Só o checkbox | Fundo `surface-selected` + barra de 2 px em `accent` (receita da Fase 5, dois sinais) | §11 |
+| Linha selecionada | Só o checkbox | Fundo `surface-selected` (`#F4F8FF`, não `accent-subtle`: o SKU cairia para 4,44:1) + barra de 2 px em `accent` (receita da Fase 5, dois sinais) | §11 |
 | Raio | 8 px solto em menu, paginação, tooltip, ícone de tipo | Token **`radius-sm` 6 px** | §24 |
 | "×" do chip de filtro | 20 × 20 | **24 × 24** (WCAG 2.5.8) | §45 |
 | Foco sob cabeçalho fixo | — | `scroll-padding-top: 56px` (WCAG 2.4.11) | §31 |

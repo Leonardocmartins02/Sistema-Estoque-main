@@ -29,7 +29,7 @@
   --text-secondary:#4B5563;      /* único tom de texto secundário permitido sobre o canvas */
   --text-muted:#6B7280;          /* só sobre superfície branca (4.83:1); sobre o canvas cai p/ 4.3:1 */
   --text-disabled:#9CA3AF;       /* só controle desabilitado (isento de contraste, WCAG 1.4.3) — nunca texto informativo */
-  --surface-selected:#EFF6FF;    /* linha selecionada: sempre com a barra de 2px em accent (dois sinais) */
+  --surface-selected:#F4F8FF;    /* linha selecionada: sempre com a barra de 2px em accent (dois sinais); não é accent-subtle — o muted cairia p/ 4.44:1 */
   /* acento (inalterado) */
   --accent:#2563EB; --accent-strong:#1D4ED8; --accent-subtle:#EFF6FF; --accent-subtle-text:#1E40AF;
   --focus:#2563EB;
@@ -172,8 +172,8 @@ body.rail .nav a .rail-badge{display:block;position:absolute;top:7px;right:9px;w
 .kpi-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary);margin-top:auto}
 .kpi.hero{background:#111318;border-color:#111318;color:#fff}
 .kpi.hero .kpi-label{color:#C9CBD1}
-.kpi.hero .kpi-value small{color:#A1A1AA}
-.kpi.hero .kpi-foot{color:#D4D4D8}
+.kpi.hero .kpi-value small{color:#C9CBD1}   /* inverse-text-muted: um tom secundário só na superfície invertida */
+.kpi.hero .kpi-foot{color:#C9CBD1}
 .kpi.hero .chip-ic{background:rgb(245 158 11 / .16);color:#FBBF24}
 .kpi.hero a.inline{color:#fff}
 .kpi.hero .split a{color:#fff}

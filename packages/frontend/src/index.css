@@ -3,50 +3,92 @@
 @tailwind utilities;
 
 /*
- * Tokens semânticos — Fase 5 (docs/ui-ux/design-system.md).
+ * Tokens semânticos — v2 da refatoração visual
+ * (docs/features/refatoracao-visual/research.md Q5 e Q8; valores do protótipo
+ * aprovado em docs/features/refatoracao-visual/prototype/index.html).
  *
- * Dois níveis: primitivo (paleta default do Tailwind, não redefinida aqui)
- * → semântico (estas variáveis, referenciadas pelo `theme.extend` do
- * tailwind.config.js). Componente só deve consumir o nível semântico
- * (`bg-accent`, `text-secondary`, `rounded-control`, `shadow-overlay`...).
+ * Mesma arquitetura da Fase 5 (docs/ui-ux/design-system.md): primitivo
+ * (paleta default do Tailwind, não redefinida aqui) → semântico (estas
+ * variáveis, referenciadas pelo `theme.extend` do tailwind.config.js).
+ * Componente só consome o nível semântico (`bg-accent`, `text-text-secondary`,
+ * `rounded-control`, `shadow-card`...). Mudam valores e entram papéis novos;
+ * os nomes da Fase 5 ficam.
  *
  * Canais RGB sem função, para preservar `<alpha-value>` (`bg-accent/10`
- * continua funcionando) — ver design-system.md §19.
+ * continua funcionando) — ver design-system.md §19. Por isso a sidebar e a
+ * superfície invertida usam cores sólidas, e não branco com alfa: cada uma é
+ * o branco a 5/8/10% já composto sobre o fundo escuro.
  *
- * Nenhum componente consome estas variáveis ainda (Task 1 do
- * docs/ui-ux/implementation-plan.md); a migração dos consumidores é feita
- * task a task a partir da Task 5.
+ * Contraste de cada par usado nas telas: test/designTokens.contrast.test.ts.
  */
 :root {
   color-scheme: light;
 
   /* Neutros */
-  --color-background: 249 250 251; /* gray-50 */
+  --color-background: 242 244 247; /* #F2F4F7 — canvas um degrau abaixo do gray-50: a superfície branca se separa (P1) */
   --color-surface: 255 255 255; /* white */
-  --color-surface-subtle: 249 250 251; /* gray-50 — alias declarado de background, ver §3.1 */
-  --color-border: 229 231 235; /* gray-200 — separador decorativo */
+  --color-surface-subtle: 248 249 251; /* #F8F9FB — deixa de ser alias de background: cabeçalho de tabela, hover de linha */
+  --color-surface-selected: 244 248 255; /* #F4F8FF — linha selecionada, sempre com a barra de 2px em accent. Mais claro que accent-subtle: sobre ele o muted cairia para 4,44:1 */
+  --color-track: 238 240 243; /* #EEF0F3 — trilho de barra, grade de gráfico, skeleton */
+  --color-border: 228 231 236; /* #E4E7EC — separador decorativo */
   --color-border-strong: 107 114 128; /* gray-500 — contorno de controle, 4.83:1 (WCAG 1.4.11) */
   --color-border-hover: 75 85 99; /* gray-600 */
   --color-text-primary: 17 24 39; /* gray-900 */
-  --color-text-secondary: 75 85 99; /* gray-600 */
-  --color-text-muted: 107 114 128; /* gray-500 */
+  --color-text-secondary: 75 85 99; /* gray-600 — único tom secundário permitido sobre o canvas (6,86:1) */
+  --color-text-muted: 107 114 128; /* gray-500 — só sobre surface, surface-subtle e surface-selected; sobre o canvas cai para 4,39:1 */
+  --color-text-disabled: 156 163 175; /* gray-400 — só controle desabilitado (isento, WCAG 1.4.3); nunca texto informativo */
 
-  /* Acento — família blue (D4) */
+  /* Acento — família blue (D4 da Fase 5) */
   --color-accent: 37 99 235; /* blue-600 */
   --color-accent-strong: 29 78 216; /* blue-700 — hover/active e links */
-  --color-accent-subtle: 239 246 255; /* blue-50 */
-  --color-accent-subtle-text: 30 64 175; /* blue-800 */
+  --color-accent-subtle: 239 246 255; /* blue-50 — botão tonal, aba ativa, barra de seleção */
+  --color-accent-subtle-hover: 219 234 254; /* blue-100 — botão tonal em hover */
+  --color-accent-subtle-border: 191 219 254; /* blue-200 — borda sobre accent-subtle */
+  --color-accent-subtle-text: 30 64 175; /* blue-800 — 8,01:1 sobre accent-subtle */
 
-  /* Foco — alias deliberado de accent (ver §3.1) */
+  /* Foco — alias deliberado de accent (ver design-system.md §3.1) */
   --color-focus: 37 99 235; /* blue-600 */
 
-  /* Estados de estoque — cada papel é um par (texto/ícone + fundo sutil) */
+  /* Estados de estoque — texto/ícone + fundo sutil (+ borda do fundo sutil) */
   --color-success: 4 120 87; /* emerald-700 */
   --color-success-subtle: 236 253 245; /* emerald-50 */
   --color-warning: 180 83 9; /* amber-700 */
   --color-warning-subtle: 255 251 235; /* amber-50 */
+  --color-warning-subtle-border: 253 230 138; /* amber-200 — aviso */
   --color-danger: 185 28 28; /* red-700 */
   --color-danger-subtle: 254 242 242; /* red-50 */
+  --color-danger-subtle-border: 254 202 202; /* red-200 — erro */
+  --color-info: 30 64 175; /* blue-800 — ajuste (antes usava o par de acento) */
+  --color-info-subtle: 239 246 255; /* blue-50 */
+
+  /* Estados — preenchimento de gráfico e ponto de status. Validados lado a
+     lado (research.md Q5); o âmbar fica em 2,15:1 sobre branco, então nunca
+     aparece sem rótulo e número ao lado. */
+  --color-success-fill: 5 150 105; /* emerald-600 */
+  --color-warning-fill: 245 158 11; /* amber-500 */
+  --color-danger-fill: 239 68 68; /* red-500 */
+
+  /* Sidebar escura (D2) — branco composto sobre #0F1115 */
+  --color-sidebar: 15 17 21; /* #0F1115 */
+  --color-sidebar-text: 161 161 170; /* #A1A1AA — 7,37:1 */
+  --color-sidebar-text-active: 255 255 255;
+  --color-sidebar-label: 139 139 148; /* #8B8B94 — 5,60:1 */
+  --color-sidebar-item-active: 34 36 40; /* #222428 = branco 8% */
+  --color-sidebar-item-hover: 27 29 33; /* #1B1D21 = branco 5% */
+  --color-sidebar-border: 34 36 40; /* #222428 — alias declarado de sidebar-item-active */
+  --color-sidebar-indicator: 59 130 246; /* blue-500 — 5,14:1 */
+  --color-sidebar-badge: 39 41 44; /* #27292C = branco 10% */
+  --color-sidebar-badge-text: 228 228 231; /* zinc-200 */
+  --color-sidebar-avatar: 43 47 56; /* #2B2F38 */
+  --color-sidebar-avatar-text: 228 228 231; /* zinc-200 */
+
+  /* Superfície invertida — KPI em destaque (D6), toast, tooltip */
+  --color-inverse: 17 19 24; /* #111318 */
+  --color-inverse-text: 255 255 255;
+  --color-inverse-text-muted: 201 203 209; /* #C9CBD1 — 11,46:1 */
+  --color-inverse-warning: 251 191 36; /* amber-400 */
+  --color-inverse-success: 52 211 153; /* emerald-400 */
+  --color-inverse-link: 147 197 253; /* blue-300 */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -64,7 +106,13 @@ html, body, #root {
   height: 100%;
 }
 
+/* WCAG 2.4.11 (2.2): o elemento focado nunca fica escondido atrás do cabeçalho
+   fixo da tabela nem da barra superior do celular (56px). */
+html {
+  scroll-padding-top: 56px;
+}
+
 body {
   margin: 0;
-  @apply font-sans bg-gray-50 text-gray-900;
+  @apply font-sans bg-background text-text-primary;
 }

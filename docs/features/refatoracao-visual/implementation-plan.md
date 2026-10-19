@@ -299,7 +299,8 @@ Cada task segue o ciclo do `AGENTS.md`: teste que expõe o requisito (red) → m
   - tempos das rotas novas;
   - revisão de segurança (rotas novas, Zod, `tz` como parâmetro, DTO) e de acessibilidade (cada tela);
   - matriz da seção 6 revisitada.
-- **Commit**: `test(app): QA da refatoração visual` (se houver correção) ou nenhum.
+- **README**: capturas novas em `docs/images/` (dashboard, produtos, produto, movimentações, painel de movimentação) no lugar das três atuais; "Funcionalidades" com dashboard, página do produto, histórico geral e painel de movimentação; "Arquitetura" com React Router e as rotas de leitura; acessibilidade (WCAG 2.2 AA); sai o item "refatoração visual em andamento" de "Limites e próximos passos".
+- **Commit**: `test(app): QA da refatoração visual` (se houver correção) ou nenhum; o README entra em commit próprio, `docs(readme): refatoração visual`.
 
 ## 5. Grafo de dependências
 
