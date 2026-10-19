@@ -14,6 +14,9 @@ model User {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   movements    StockMovement[]
+
+  webhookEndpointsCreated WebhookEndpoint[] @relation("WebhookEndpointCreatedBy")
+  webhookEndpointsUpdated WebhookEndpoint[] @relation("WebhookEndpointUpdatedBy")
 }
 
 model Product {
@@ -73,4 +76,110 @@ model StockMovement {
   @@index([productId, type])
   @@index([type, date])
   @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Integrações por webhook (docs/features/integracoes-webhooks/).
+//
+// Outbox transacional: `WebhookEvent` + uma `WebhookDelivery` por destino
+// inscrito nascem na MESMA transação da StockMovement (StockService). O
+// worker (src/worker.ts) reivindica entregas com `FOR UPDATE SKIP LOCKED` e
+// faz a chamada HTTP fora de qualquer transação.
+// ---------------------------------------------------------------------------
+
+model WebhookEndpoint {
+  id               String    @id @default(cuid())
+  url              String
+  description      String?
+  /// Tipos de evento inscritos (`SUBSCRIBABLE_WEBHOOK_EVENT_TYPES` em
+  /// packages/shared). Validado na rota — o banco só guarda a lista.
+  eventTypes       String[]
+  active           Boolean   @default(true)
+  /// Preenchido quando o sistema desativa sozinho (410 Gone, ou falhando há
+  /// 5 dias) — o usuário vê o motivo na tela de Integrações.
+  disabledReason   String?
+  /// Segredo `whsec_...` cifrado com AES-256-GCM (src/webhooks/secrets.ts).
+  /// HMAC precisa do segredo em claro para assinar, então não dá para guardar
+  /// só um hash como a senha de usuário.
+  secretCiphertext String
+  /// Início da sequência atual de falhas; limpo no próximo sucesso. Base da
+  /// desativação automática por "falhando há 5 dias".
+  failingSince     DateTime?
+
+  createdBy   User?    @relation("WebhookEndpointCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  updatedBy   User?    @relation("WebhookEndpointUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deliveries WebhookDelivery[]
+}
+
+model WebhookEvent {
+  /// Vira o header `webhook-id` — o mesmo em toda tentativa e no reenvio
+  /// manual; é a chave de deduplicação do receptor.
+  id         String   @id
+  type       String
+  /// Corpo completo `{ type, timestamp, data }` já montado (fotografia do
+  /// momento — não depende do produto continuar existindo).
+  payload    Json
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+}
+
+/// "Retentando" não é status próprio: é PENDING com attemptCount > 0.
+enum WebhookDeliveryStatus {
+  PENDING
+  SENDING
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+model WebhookDelivery {
+  id            String                @id @default(cuid())
+  event         WebhookEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId       String
+  endpoint      WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  endpointId    String
+  status        WebhookDeliveryStatus @default(PENDING)
+  attemptCount  Int                   @default(0)
+  nextAttemptAt DateTime              @default(now())
+  /// Prazo da reivindicação do worker. SENDING com prazo vencido volta a ser
+  /// elegível — é o que recupera entregas de um worker que morreu no meio.
+  lockedUntil   DateTime?
+  deliveredAt   DateTime?
+  /// Momento em que a entrega chegou a um estado final (DELIVERED, FAILED,
+  /// CANCELLED) — base da retenção de 30 dias.
+  finishedAt    DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  attempts WebhookAttempt[]
+
+  @@unique([eventId, endpointId])
+  // Reivindicação do worker: status pendente + vencidas primeiro. Índice
+  // composto, não parcial — Prisma 5 não representa índice parcial no schema
+  // (desvio da RESEARCH registrado no implementation-plan.md).
+  @@index([status, nextAttemptAt])
+  @@index([endpointId, createdAt])
+  @@index([finishedAt])
+}
+
+model WebhookAttempt {
+  id              String          @id @default(cuid())
+  delivery        WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  deliveryId      String
+  startedAt       DateTime
+  durationMs      Int
+  responseStatus  Int?
+  /// TIMEOUT | NETWORK | BLOCKED_DESTINATION | REDIRECT | HTTP_ERROR
+  errorCode       String?
+  /// Trecho da resposta/erro, limitado a 1 KB — nunca o corpo inteiro.
+  responseSnippet String?
+
+  @@index([deliveryId, startedAt])
 }

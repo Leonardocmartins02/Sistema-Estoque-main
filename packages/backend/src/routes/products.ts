@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import type { ProductStockSummary } from '@simplestock/shared';
+import { deriveStockStatus, type ProductStockSummary } from '@simplestock/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 
@@ -245,9 +245,9 @@ router.get('/summary', async (_req, res, next) => {
 
     const summary: ProductStockSummary = { ok: 0, attn: 0, out: 0 };
     for (const product of products) {
-      const balance = balances.get(product.id) ?? 0;
-      if (balance === 0) summary.out += 1;
-      else if (balance < product.minStock) summary.attn += 1;
+      const status = deriveStockStatus(balances.get(product.id) ?? 0, product.minStock);
+      if (status === 'OUT') summary.out += 1;
+      else if (status === 'ATTN') summary.attn += 1;
       else summary.ok += 1;
     }
 
