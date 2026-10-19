@@ -2,7 +2,7 @@
 
 > Fase 1 do workflow (`IDEA → RESEARCH → PROTOTYPE → PRD → IMPLEMENTATION PLAN → EXECUTION → QA`). Este documento define O PROBLEMA, O ESCOPO e AS REGRAS. Não decide biblioteca, valor de token nem forma de endpoint — isso é RESEARCH/PRD/PLAN.
 >
-> Origem: plano do usuário "Plano de Refatoração Visual — Sistema de Estoque" (19/10/2026), com quatro referências do Dribbble (2, 3, 6 e 7 — análise em `research.md`).
+> Origem: plano do usuário "Plano de Refatoração Visual — Sistema de Estoque" (19/10/2026), com quatro referências do Dribbble (2, 3, 6 e 7 — análise em `research.md`). Complementado no mesmo dia pelo "Plano de Tabelas, Acessibilidade e Design System" (análise em `research.md`, Questão 8; decisões D9–D12 em `prototype.md`).
 
 ## Problema
 

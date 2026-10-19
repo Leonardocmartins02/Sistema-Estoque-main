@@ -213,6 +213,98 @@ A forma dos endpoints (um ou dois, nomes, campos) é decisão do PRD. Restriçõ
 
 ---
 
+## Questão 8 — Tabelas, acessibilidade e design system (complemento de 19/10/2026)
+
+O usuário trouxe um segundo plano, **"Plano de Tabelas, Acessibilidade e Design System"**: uma Data Table única para todas as listas, WCAG 2.2 AA, tokens semânticos, um sistema de componentes e gates de aprovação. As referências visuais são as mesmas (Dribbble 2, 3, 6, 7); as de comportamento são novas: W3C APG (Table, Grid, Sortable Table), IBM Carbon (Data Table e acessibilidade para desenvolvedores) e Atlassian (acessibilidade). Esta questão cruza o plano com o código, o protótipo e o PRD. As decisões que mudavam algo aprovado (D9–D12) estão em `prototype.md`.
+
+### Inventário (fase T1 do plano)
+
+Quatro tabelas existem hoje; só uma usa o componente compartilhado.
+
+| | `ProductsTable` | `QuickOutListModal` | `QuickOutHistoryModal` | `MovementHistoryModal` |
+|---|---|---|---|---|
+| Componente | `ui/DataTable` | `<table>` própria | `<table>` própria | `<table>` própria |
+| Colunas | seleção · produto (nome + SKU) · saldo/mín. · status · ações | nome · SKU · saldo · mín. estoque · status | produto · SKU · qtde · data · observação | data · tipo · saldo · observação |
+| Ordenação | nome, SKU, saldo — no banco; `aria-sort` no `<th>` | nome, SKU, saldo — em memória; `aria-sort` no `<th>` | produto, SKU, qtde, data — em memória; `aria-sort` no `<th>` | — |
+| Busca | nome ou SKU, sem acento | nome ou SKU | produto, SKU ou observação | observação |
+| Filtros | status (menu múltiplo) | — | de/até (data) | tipo · de/até |
+| Paginação | numerada + total | Anterior/Próxima, 10 fixo | Anterior/Próxima, 10 fixo | Anterior/Próxima + itens por página |
+| Seleção | sim (página) + zerar/excluir em lote | linha inteira escolhe o produto para a baixa | — | — |
+| Ações por linha | Movimentar · baixa rápida · `⋯` | clique na linha | — | — |
+| Responsivo | cartões abaixo de `md` | rolagem lateral (`min-w-[42rem]`) | rolagem lateral (`min-w-[48rem]`) | rolagem lateral |
+| Vazio | dois textos (sem cadastro × sem resultado) | um texto | um texto | um texto |
+| Carregando | texto "Carregando..." | texto | texto | texto |
+| Erro | faixa `role="alert"` | `role="alert"` | `role="alert"` | `role="alert"` |
+
+Depois da refatoração serão seis listas: Produtos, Movimentações, "Últimas movimentações" (produto), "Produtos para repor" (dashboard) e as duas de baixa. O `MovementHistoryModal` sai (D5).
+
+### Auditoria (fase T2)
+
+- **Duplicação.** Cabeçalho ordenável, paginação Anterior/Próxima e estados estão escritos três vezes. Os comentários dos dois modais de baixa dizem "como em `ui/DataTable`" — o padrão foi copiado, não reusado.
+- **`ui/DataTable` fora do design system.** Usa cinza cru (`bg-gray-50`, `text-gray-600`, `border-gray-100`, `bg-white`), `role` redundante em elementos nativos (`role="table"`, `role="row"`…), um único estado vazio, "Carregando..." em texto (layout pula quando os dados chegam), e ainda carrega dois pares de props de ordenação: `sort`/`onSortChange`, sem nenhum chamador, e `sorts`/`onSortsChange`, usado pelo `ProductsTable` mas só com o primeiro critério desde a Task 3 da Fase 2.
+- **Rolagem lateral.** Os dois modais de baixa forçam largura mínima e rolam de lado no celular — corta informação essencial (gate do plano, §58).
+- **Densidade.** `ui/DataTable` usa 12 px de respiro (~44 px); o protótipo v2 subiu para ~56 px. O plano pede 40/48 px.
+- **Contrato a preservar.** Os modais de baixa têm comportamentos assinados em `docs/ui-ux/user-flows.md` §9.3 (linha inteira clicável na lista, `Escape` não fecha a lista, coluna "Mín. Estoque", contador de itens, ordenação em memória do histórico). Migrar para a tabela única **não** muda nenhum deles — a tabela é apresentação; o estado continua no chamador.
+
+### Data Table única — como
+
+O plano sugere uma API composta (`<DataTable.Toolbar/>`, `<DataTable.Body/>`…) e diz que ela não é obrigatória. **Fica a API de colunas que o `ui/DataTable` já tem** (padrão do projeto: `columns`, `getRowId`, `render`, `align`, `tabularNums`, `sortKeys`), estendida com o que falta:
+
+| O que entra | Por quê |
+|---|---|
+| `caption` (obrigatória, pode ser visualmente oculta) | §34; leitor de tela anuncia o recorte |
+| `priority: 'P0' \| 'P1' \| 'P2'` por coluna | §49–50; P2 some abaixo de 1180 px; P1 fica no tablet; abaixo de 768 px a tabela vira cartões — nunca rolagem lateral |
+| `stickyHeader` | §16; só funciona sem rolagem lateral e sem `overflow: hidden` no contêiner (vira `overflow: clip`) |
+| `density: 'single' \| 'two-line'` | §6; 40/48 px |
+| `state: 'loading' \| 'empty' \| 'no-results' \| 'error' \| 'content'` | §17–19; skeleton com a altura final da linha, os outros via `RegionState` |
+| `selection` (ids, alternar um, alternar a página) | §11; receita de linha selecionada da Fase 5 |
+| `onRowClick` | P-8; ignora cliques que nascem em `a, button, input, label` |
+| `groups` (cabeçalho por grupo de linhas) | D9; um `<tbody>` por grupo com `<th scope="rowgroup">` |
+| `renderRowDetail` + `expandedIds` | D9; linha de detalhe controlada por botão com `aria-expanded` |
+
+Barra de ferramentas, busca, chips de filtro, barra de seleção e paginação ficam como **componentes irmãos** (`TableToolbar`, `FilterChips`, `SelectionBar`, `Pagination`), compostos pela página — cada tela já tem filtros diferentes, e uma tabela que conhece todos eles vira o componente-deus que o `ProductDashboard` é hoje.
+
+**Table, não Grid** (§35): nenhuma lista é editável célula a célula nem precisa de setas entre células. `role="grid"` fica fora.
+
+### WCAG 2.2 AA no lugar de 2.1 AA
+
+O PRD pedia 2.1 AA. A 2.2 acrescenta poucos critérios de nível A/AA, e só três tocam esta feature:
+
+| Critério | O que muda aqui |
+|---|---|
+| 2.4.11 Foco não encoberto (mínimo) | Cabeçalho fixo da tabela e barra do celular não podem esconder o elemento focado → `scroll-padding-top` no documento |
+| 2.5.8 Tamanho do alvo (mínimo, 24 × 24) | "×" do chip de filtro tinha 20 px (protótipo) → 24 px. Checkbox de 18 px passa pela exceção de espaçamento, mas a célula inteira vira o rótulo |
+| 3.3.8 Autenticação acessível | Login já usa `autocomplete="username"`/`"current-password"` e aceita colar — registrar como verificado, sem mudança |
+
+2.4.12/2.4.13 são AAA; 3.2.6 (ajuda consistente) e 3.3.7 (entrada redundante) não têm caso no produto.
+
+### Tokens
+
+Os nomes atuais ficam (mesmo raciocínio da Questão 5): `accent` cumpre o papel de `primary`, `surface-subtle` o de `surface-hover`, `border`/`border-strong` os de `border-default`/`border-strong`. Entram só os papéis que faltam:
+
+| Token | Valor | Uso |
+|---|---|---|
+| `rounded-sm` (`--radius-sm`) | 6 px | item de menu, botão de paginação, tooltip, ícone do tipo de movimentação |
+| `text-disabled` | gray-400 | só controle desabilitado (isento de contraste, 1.4.3); nunca texto informativo |
+| `surface-selected` | = `accent-subtle` | fundo de linha selecionada, sempre com a barra de 2 px |
+
+Espaçamentos fora da escala no protótipo (18, 14, 10, 9 px) viram valores da escala 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48 · 64 ao virar código.
+
+### Fora do escopo — e por quê
+
+| Item do plano | Motivo |
+|---|---|
+| Categoria (filtro, coluna, ação em lote) | `Product` não tem categoria — exige schema |
+| Exportar, Arquivar (ações em lote) | Exportação está fora do PRD; arquivar exige estado novo (hoje é exclusão definitiva) |
+| Colunas "Criado por" / "Atualizado em" | "Criado por" não existe; `updatedAt` existe, mas só muda ao editar o cadastro — numa tabela de estoque leria como "última movimentação" e enganaria |
+| Telas de Usuários e Relatórios | Sem backend (escopo do PRD) |
+| Preferência de densidade | O próprio plano: "não implementar sem necessidade real" |
+| Tema escuro | O próprio plano: "não priorizar" |
+| Storybook | D12 |
+| Primitivos `Stack`, `Inline`, `Container`, `Switch`, `DatePicker`, `Radio` isolado | Nenhuma tela desta feature usa; entram quando houver o primeiro consumidor |
+
+---
+
 ## Resultado
 
 | Questão | Decisão |
@@ -224,3 +316,4 @@ A forma dos endpoints (um ou dois, nomes, campos) é decisão do PRD. Restriçõ
 | Tokens | Mesma arquitetura e mesmo lint; valores novos (raio 10/14, pílula, canvas, sidebar, info, preenchimentos de status validados, sombra de cartão, 2 papéis numéricos) |
 | Nova movimentação | Drawer = terceira variante do `Modal` |
 | Endpoints | Histórico geral + agregados; saldo por dia andando para trás a partir do saldo atual; corte de dia por fuso |
+| Tabelas, a11y, DS (complemento) | Uma Data Table (API de colunas estendida, irmãos para toolbar/filtros/paginação); Table, não Grid; WCAG 2.2 AA; densidade 40/48; 3 tokens novos; D9–D12 |

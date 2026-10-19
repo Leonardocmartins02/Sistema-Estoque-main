@@ -45,6 +45,10 @@ Fluxos que continuam existindo e **não foram redesenhados aqui** (aparecem como
 | D6 · KPI em destaque "Precisam de reposição" | Aprovada |
 | D7 · Tokens novos + regra do `muted` | Aprovada |
 | D8 · Abas como partição + atalhos na sidebar | Aprovada |
+| D9 · Movimentações como tabela agrupada por dia | Aprovada (complemento, ver abaixo) |
+| D10 · Histórico ordena só por data | Aprovada (complemento) |
+| D11 · Linha de Produtos com "Movimentar" + `⋯` | Aprovada (complemento) — **substitui** a parte de D4 que mantinha a baixa rápida visível |
+| D12 · Sem Storybook nesta feature | Aprovada (complemento) |
 
 O detalhe de cada uma fica abaixo, como foi apresentado.
 
@@ -67,7 +71,7 @@ Alternável nos andaimes. Recomendação e motivo em `research.md` (Questão 4):
 
 ### D4 · "Movimentar" da linha em tom suave, e a linha inteira abre o produto
 
-Com dez linhas por página, dez botões azuis cheios competem com a ação primária da página ("Adicionar produto"). Proposta: "Movimentar" continua **visível e primeiro** em toda linha (é a ação primária da linha, decisão 2 da Fase 4), mas em estilo **tonal** (fundo azul-claro, texto azul-escuro, 8,0:1). Baixa rápida e o menu `⋯` continuam visíveis (D3-a da Fase 4). Clicar em qualquer outro ponto da linha abre a página do produto.
+Com dez linhas por página, dez botões azuis cheios competem com a ação primária da página ("Adicionar produto"). Proposta: "Movimentar" continua **visível e primeiro** em toda linha (é a ação primária da linha, decisão 2 da Fase 4), mas em estilo **tonal** (fundo azul-claro, texto azul-escuro, 8,0:1). ~~Baixa rápida e o menu `⋯` continuam visíveis (D3-a da Fase 4).~~ *Revisto pela D11: a baixa rápida passa para o `⋯`.* Clicar em qualquer outro ponto da linha abre a página do produto.
 
 Isso é um **estilo novo de botão** (`tonal`) no design system — por isso está aqui para aprovação.
 
@@ -86,6 +90,57 @@ Raio `10px` (controle) · `14px` (superfície) · pílula (badge, chip, contador
 ### D8 · Abas de Produtos como partição + dois atalhos na sidebar
 
 `Todos · Em estoque · Estoque baixo · Sem estoque` — nenhuma aba contém outra. A sidebar ganha "Estoque baixo" e "Sem estoque" com contador, cada um **exatamente** uma aba. "Precisam de reposição" (as duas juntas) só existe no dashboard, com a divisão à mostra.
+
+## Complemento — tabelas, acessibilidade e design system (19/10/2026)
+
+O usuário trouxe um segundo plano, "Plano de Tabelas, Acessibilidade e Design System" (inventário, Data Table única, WCAG 2.2 AA, tokens e gates de aprovação; referências W3C APG Table/Grid/Sortable Table, IBM Carbon Data Table e Atlassian). A análise contra este protótipo, o PRD e o código está em `research.md` (Questão 8). Quatro pontos mudavam coisas já aprovadas e foram decididos com o usuário; o resto entrou direto no protótipo e no PRD.
+
+### D9 · Movimentações vira tabela, agrupada por dia
+
+O protótipo aprovado mostrava o histórico como linhas soltas (`div` com `role="button"`), sem cabeçalho de colunas. O plano pede que todas as listas usem a mesma arquitetura de tabela. Agora é **uma `<table>`**, com:
+
+- cabeçalho de colunas (Quando · Tipo · Produto · Quantidade · Saldo · Responsável);
+- **um `<tbody>` por dia**, aberto por uma linha `<th colspan scope="rowgroup">` ("Ontem · domingo, 18 de outubro" · "5 movimentações");
+- o detalhe numa linha seguinte, aberta por um **botão** com `aria-expanded` e nome que identifica a movimentação ("Detalhes: Saída de Caneta Azul às 14:20"); o clique de ponteiro em qualquer ponto da linha também abre (mesma regra da linha clicável de Produtos — o alvo de teclado é o botão).
+
+No celular a tabela vira cartões com o mesmo agrupamento, como Produtos já faz.
+
+### D10 · O histórico ordena só por data
+
+O PRD fixava "mais recente primeiro" e o agrupamento por dia depende disso. O cabeçalho "Quando" alterna **mais recentes ↔ mais antigas**; as outras colunas não ordenam (ordenar por quantidade desfaria os grupos). `aria-sort` fica sempre no `<th>` "Quando".
+
+### D11 · Na linha de Produtos, só "Movimentar" + `⋯`
+
+O plano pede para evitar vários botões por linha. A baixa rápida sai da linha e entra no `⋯` — no celular ela já morava no overflow, então desktop e celular passam a ter o mesmo caminho. O menu ganha três grupos:
+
+```text
+Ver produto · Ver no histórico · Editar
+──────
+Nova entrada · Nova saída · Baixa rápida · Ajustar estoque
+──────
+Zerar estoque · Excluir
+```
+
+"Nova entrada"/"Nova saída" abrem o painel com o tipo marcado e o título afirmando a intenção, como "Repor" — a intenção veio de um clique explícito, então a regra da D3 (sem pré-seleção) não se aplica. Na página do produto, os três primeiros itens saem do menu (já estão na tela). **Mudança declarada** na matriz de paridade, linha 20: o teste "o menu do desktop NÃO repete a baixa rápida" se inverte.
+
+### D12 · Storybook fica fora
+
+O catálogo continua sendo este protótipo + os testes de componente. Cada componente novo do design system ganha um bloco curto de documentação (propósito, anatomia, variantes, estados, acessibilidade, faça/não faça) — formato no `implementation-plan.md`.
+
+### O que mudou no protótipo sem precisar de decisão
+
+| Item | Antes | Agora | Origem |
+|---|---|---|---|
+| Altura de linha | ~56 px (quadro 36 + 10 px de respiro) | **40 px** uma linha · **48 px** dois níveis; cabeçalho 36 px; quadro de iniciais 32 px na tabela | Plano de tabelas §6 |
+| Cabeçalho da tabela | Rola junto | **Fixo** em Produtos e Movimentações; a região usa `overflow: clip` (com `hidden` o `sticky` não gruda) | §16 |
+| Colunas em tela menor | Responsável sumia por CSS solto | **Prioridade de coluna** P0/P1/P2: P2 some abaixo de 1180 px, nunca rolagem lateral | §49–50 |
+| Ordenação | `aria-sort` estava no **botão** (errado) e o ícone era sempre ↕ | `aria-sort` no **`<th>`**; ícone ↕ sem ordem, ↑/↓ com ordem — a forma muda, não só a cor | §9, §36; W3C Sortable Table |
+| Paginação | Produtos numerada; Movimentações "Página X de Y" | **Numerada nas duas** (até 7 páginas todas; acima, primeira · vizinhas · última com "…"); Movimentações com itens por página 10 · 20 · 50 | §15 |
+| Linha selecionada | Só o checkbox | Fundo `surface-selected` + barra de 2 px em `accent` (receita da Fase 5, dois sinais) | §11 |
+| Raio | 8 px solto em menu, paginação, tooltip, ícone de tipo | Token **`radius-sm` 6 px** | §24 |
+| "×" do chip de filtro | 20 × 20 | **24 × 24** (WCAG 2.5.8) | §45 |
+| Foco sob cabeçalho fixo | — | `scroll-padding-top: 56px` (WCAG 2.4.11) | §31 |
+| Detalhe do histórico no celular | "Observação" com 3 colunas numa grade de 2 vazava para a direita | Ocupa a linha inteira | Achado da revisão |
 
 ## Onde o protótipo se afasta do plano — e por quê
 
@@ -120,7 +175,7 @@ Conteúdo · carregando (skeleton com a altura da linha) · vazio (com a próxim
 
 | Largura | Comportamento |
 |---|---|
-| ≥ 1024 | Sidebar completa (recolhível pelo botão do rodapé) |
+| ≥ 1024 | Sidebar completa (recolhível pelo botão do rodapé); abaixo de 1180 px as colunas P2 das tabelas somem |
 | 768–1023 | Sidebar como **trilho de ícones** (contadores viram ponto colorido); conteúdo com margem menor |
 | < 768 | Barra superior escura com menu, marca e "Movimentar"; sidebar abre por cima; tabelas viram cartões; painel lateral em tela cheia; KPIs em 2 × 2 |
 
@@ -132,6 +187,8 @@ Busca, abas, status, saldo, mínimo, "Movimentar" e baixa rápida continuam vis�
 - Painel: foco preso, `Esc` fecha, foco volta para o botão que abriu; tipo como `radiogroup`; busca de produto como `combobox` com setas e `Enter`; preview em região `aria-live`.
 - Gráfico navegável por teclado (setas, `Home`, `End`) com o mesmo tooltip do mouse; "Ver como tabela" mostra os 30 valores; descrição em `aria-label`.
 - Status e tipo de movimentação sempre **cor + palavra + ponto/ícone**; variação sempre com sinal textual (`+12`, `−5`); a seta `→` tem equivalente "para" para leitor de tela (dívida A5 da revisão de Ajuste de Estoque).
+- Tabelas: `<caption>` (visualmente oculta) descrevendo recorte, ordem e página; `<th scope>`; `aria-sort` só no `<th>` da coluna ordenada; checkbox "Selecionar ‹nome›"; `⋯` "Mais ações para ‹nome›"; botão de detalhe do histórico com nome próprio; grupos de dia como `scope="rowgroup"`.
+- WCAG 2.2: alvos ≥ 24 × 24 (2.5.8); foco levado à vista nunca fica atrás do cabeçalho fixo nem da barra do celular (2.4.11, `scroll-padding-top`).
 - Contrastes medidos dos pares novos: texto da sidebar 7,37:1, rótulo de grupo 5,60:1, indicador ativo 5,14:1, botão tonal 8,01:1, badges 4,84–5,91:1, KPI em destaque 11,46:1. O âmbar de gráfico (2,15:1 sobre branco) nunca aparece sem rótulo e número ao lado.
 
 ## Fora do escopo deste protótipo

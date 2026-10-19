@@ -1,6 +1,6 @@
 # PRD — Refatoração visual (SimpleStock v2)
 
-> Consolida `idea.md`, `research.md` e `prototype.md` (D1–D8 aprovadas em 19/10/2026) num contrato de produto verificável. Define **o que** cada tela faz, os contratos de URL e de API e o que não pode se perder. Não define nomes de componente, arquivos, ordem de implementação nem testes específicos — isso é do `implementation-plan.md`.
+> Consolida `idea.md`, `research.md` e `prototype.md` (D1–D8 aprovadas em 19/10/2026; D9–D12 do complemento de tabelas, acessibilidade e design system aprovadas no mesmo dia) num contrato de produto verificável. Define **o que** cada tela faz, os contratos de URL e de API e o que não pode se perder. Não define nomes de componente, arquivos, ordem de implementação nem testes específicos — isso é do `implementation-plan.md`.
 
 ## Contexto
 
@@ -29,7 +29,8 @@ Sem papéis: todo usuário autenticado vê e faz tudo (inalterado).
 
 ## Escopo
 
-- Design system v2: tokens novos e revistos (`research.md` Q5), botão `tonal` (D4), variante `drawer` do `Modal` (D3), dois gráficos em SVG próprio (`research.md` Q3).
+- Design system v2: tokens novos e revistos (`research.md` Q5 e Q8), botão `tonal` (D4), variante `drawer` do `Modal` (D3), dois gráficos em SVG próprio (`research.md` Q3).
+- **Uma Data Table** para todas as listas — Produtos, Movimentações, últimas movimentações do produto, produtos para repor, baixa de produtos e histórico de baixas (`research.md` Q8).
 - App shell: sidebar escura (D2), barra superior no celular, rotas reais, foco e título por rota.
 - Telas: Dashboard, Produtos, Produto, Movimentações; painel "Nova movimentação".
 - Quatro endpoints **de leitura**: histórico geral, responsáveis, visão geral do dashboard, tendência do produto.
@@ -40,6 +41,7 @@ Sem papéis: todo usuário autenticado vê e faz tudo (inalterado).
 - Qualquer mudança de schema ou migration — categoria, estoque máximo, foto, nome de usuário e motivo estruturado ficam para features próprias (`idea.md`, tabela "Fora").
 - Telas de Usuários, Relatórios, Configurações e Integrações (Integrações volta com a branch de webhooks, em *Administração*).
 - Exportação do histórico, tema escuro da aplicação inteira, i18n, PWA, tempo real.
+- Do plano de tabelas: categoria, ações em lote de exportar e arquivar, colunas "Criado por"/"Atualizado em", preferência de densidade, Storybook (D12) e primitivos sem consumidor nesta feature (`research.md` Q8, "Fora do escopo").
 - Mudança no conteúdo ou na cerimônia de ajuste, baixa rápida, baixa de produtos, histórico de baixas, zerar e excluir.
 - Unificar o "Histórico de baixas" com Movimentações (ver "Questões em aberto").
 - Migrar os tipos que já existem no frontend para `packages/shared` (dívida registrada em `current-state.md`). Os tipos **novos** desta feature nascem em `packages/shared`, como manda o `AGENTS.md`.
@@ -84,6 +86,7 @@ Parâmetros em português, porque aparecem para quem usa. Valor desconhecido ou 
 | | `periodo` | `hoje` · `7d` · `30d` · `tudo` · `personalizado` | `30d` |
 | | `de`, `ate` | `AAAA-MM-DD` (só com `periodo=personalizado`) | — |
 | | `q` | texto | — |
+| | `dir` | `desc` (mais recentes) · `asc` (mais antigas) | `desc` |
 | | `pagina` | inteiro ≥ 1 | 1 |
 | | `por` | `10` · `20` · `50` | 20 |
 
@@ -138,18 +141,18 @@ Mudar busca, filtro, aba, ordem ou tamanho de página volta para a página 1. A 
 19. Abas `Todos · Em estoque · Estoque baixo · Sem estoque`, cada uma com contagem; as abas são uma **partição** (nenhuma contém outra) e as contagens não dependem da busca (D8).
 20. Busca por nome ou SKU, insensível a acento e caixa (comportamento atual).
 21. Ordenação por nome, SKU e saldo: no cabeçalho da tabela (desktop) e na sheet "Ordenar" (celular); um critério por vez; ordenação global no backend (comportamento atual).
-22. Cada linha deve mostrar: iniciais do produto, nome (link para a página do produto), SKU, saldo pareado ao mínimo, status (cor + palavra + ponto) e as ações "Movimentar" (botão `tonal`, D4), "Baixa rápida" e o menu `⋯`.
+22. Cada linha deve mostrar: iniciais do produto, nome (link para a página do produto), SKU, saldo pareado ao mínimo, status (cor + palavra + ponto), a ação "Movimentar" (botão `tonal`, D4) e o menu `⋯`. Nenhuma outra ação fica visível na linha (D11).
 23. Clicar em qualquer ponto da linha fora de um controle deve abrir a página do produto; pelo teclado o caminho é o link do nome (a linha não vira um segundo alvo de foco).
-24. O menu `⋯` deve conter: Editar, Ver produto, Ajustar estoque e, após o separador, Zerar estoque (desabilitado sem saldo) e Excluir.
-25. Seleção múltipla, barra contextual "N selecionados nesta página" com "Excluir selecionados", e a região "Zerar página" / "Excluir página" devem continuar existindo no desktop; a seleção limpa ao mudar de página, aba, busca ou ordenação (decisão 8 da Fase 4).
-26. A paginação vem depois da lista, com "1–10 de 50" e seletor de itens por página (10 · 20 · 50).
+24. O menu `⋯` ("Mais ações para ‹nome›") deve ter três grupos separados: **Ver produto · Ver no histórico · Editar**; **Nova entrada · Nova saída · Baixa rápida · Ajustar estoque**; **Zerar estoque** (desabilitado sem saldo) **· Excluir**. "Nova entrada"/"Nova saída" abrem o painel com o produto e o tipo já marcados e o título afirmando a intenção; "Ver no histórico" leva a Movimentações filtrado pelo produto e por todo o período.
+25. Seleção múltipla, barra contextual "N selecionados nesta página" com "Excluir selecionados", e a região "Zerar página" / "Excluir página" devem continuar existindo no desktop; a seleção limpa ao mudar de página, aba, busca ou ordenação (decisão 8 da Fase 4). A linha selecionada tem fundo próprio **e** barra lateral, além do checkbox marcado.
+26. A paginação vem depois da lista, com "1–10 de 50 produtos", páginas numeradas (RT 6) e seletor de itens por página (10 · 20 · 50).
 27. O cabeçalho da página deve ter "Adicionar produto" (primária) e "Baixa de produtos" (secundária).
-28. No celular a lista vira cartões com nome, SKU, saldo × mínimo, status, "Movimentar", baixa rápida (no overflow) e o menu — sem seleção múltipla nem ações em lote (ausências já assinadas na matriz de paridade).
+28. No celular a lista vira cartões com nome, SKU, saldo × mínimo, status, "Movimentar" e o menu `⋯` (o mesmo do desktop, com a baixa rápida) — sem seleção múltipla nem ações em lote (ausências já assinadas na matriz de paridade).
 
 ### Produto
 
 29. Trilha "Produtos › Nome"; `<h1>` com o nome; status ao lado; SKU e descrição.
-30. Ações: "Movimentar" (primária), "Baixa rápida" e `⋯` (Editar, Ajustar estoque, Zerar estoque, Excluir).
+30. Ações: "Movimentar" (primária), "Editar" (secundária) e `⋯` com os dois últimos grupos do RF 24 (Nova entrada, Nova saída, Baixa rápida, Ajustar estoque · Zerar estoque, Excluir) — "Ver produto", "Ver no histórico" e "Editar" já estão na página.
 31. Saldo atual em destaque, pareado ao mínimo, com uma barra que marca o mínimo e um veredito em texto: "N acima do mínimo", "Faltam N para o mínimo" ou "Sem estoque".
 32. "Saldo nos últimos 30 dias": gráfico de área do produto com a linha do mínimo, com a mesma interação e alternativa em tabela do RF 14.
 33. Entradas e saídas do produto nos últimos 30 dias, em unidades.
@@ -179,19 +182,36 @@ Mudar busca, filtro, aba, ordem ou tamanho de página volta para a página 1. A 
 51. Abas `Todas · Entradas · Saídas · Ajustes · Estoque inicial`, uma por tipo do vocabulário fechado, cada uma com a contagem sob os demais filtros ativos. *(O protótipo tinha quatro abas, com Estoque inicial dentro de Entradas; a quinta preserva o filtro só de Estoque inicial que o histórico por produto já oferece — F-09.)*
 52. Filtros: busca (nome do produto, SKU ou observação, insensível a acento), produto, responsável e período (`Hoje`, `Últimos 7 dias`, `Últimos 30 dias`, `Todo o período`, `Personalizado` com datas de/até). Cada filtro ativo aparece como chip removível, com "Limpar filtros".
 53. Resumo do recorte: quantidade de movimentações, unidades que entraram (`+N un.`, Entrada + Estoque inicial) e unidades que saíram (`−N un.`).
-54. Lista agrupada por dia no fuso local ("Hoje", "Ontem", data por extenso), com a contagem de movimentações daquele dia no recorte.
-55. Cada linha: hora, tipo (ícone + palavra), produto (com observação ou SKU), diferença assinada, `antes → depois` e responsável; a linha expande (botão com `aria-expanded`) para mostrar data e hora completas, produto (link), SKU, saldo, responsável e observação.
+54. O histórico é uma **tabela** (D9) com colunas Quando · Tipo · Produto · Quantidade · Saldo · Responsável, agrupada por dia no fuso local: cada dia é um grupo de linhas aberto por um cabeçalho de grupo ("Hoje", "Ontem", data por extenso) com a contagem de movimentações daquele dia no recorte.
+55. Cada linha: hora, tipo (ícone + palavra), produto (com observação ou SKU), diferença assinada, `antes → depois` e responsável. Um botão por linha, com `aria-expanded` e nome que identifica a movimentação ("Detalhes: Saída de Caneta Azul às 14:20"), abre uma linha de detalhe com data e hora completas, produto (link), SKU, saldo, responsável e observação; o clique de ponteiro em qualquer ponto da linha faz o mesmo. No celular, cartões com o mesmo agrupamento e o mesmo detalhe.
 56. Dados legados: sem `antes/depois`, mostrar `—` (nunca zero inventado); sem responsável, "Usuário não disponível"; ajuste legado sem `antes/depois` aparece com a quantidade e a indicação de dado incompleto.
-57. Paginação com intervalo ("1–20 de 209") e seletor de itens por página (10 · 20 · 50).
-58. Ordem: mais recente primeiro, determinística entre páginas.
+57. Paginação com intervalo ("1–20 de 209 movimentações"), páginas numeradas (RT 6) e seletor de itens por página (10 · 20 · 50).
+58. Ordem: por data, **mais recentes primeiro** por padrão; o cabeçalho "Quando" alterna para mais antigas primeiro (D10) e volta à página 1. Nenhuma outra coluna ordena. Determinística entre páginas.
 
 ### Demais fluxos
 
 59. Cadastro/edição de produto, ajuste de estoque e baixa rápida passam a abrir no painel lateral; campos, validações, passos, mensagens e cerimônia continuam iguais.
-60. "Baixa de produtos" (lista) e "Histórico de baixas" continuam como diálogos, com o visual novo; os 20 comportamentos de `user-flows.md` §9.3 continuam valendo.
+60. "Baixa de produtos" (lista) e "Histórico de baixas" continuam como diálogos, com o visual novo, e as tabelas deles passam a ser a Data Table (RT 1) — sem rolagem lateral no celular; os 20 comportamentos de `user-flows.md` §9.3 continuam valendo.
 61. Zerar e excluir (item, seleção e página) continuam usando o diálogo de confirmação atual.
 62. O modal de histórico por produto deixa de existir; "Ver histórico" passa a ser "Ver produto" e abre a página do produto (D5).
 63. O banner de estoque baixo deixa de existir; sua função passa para os contadores da sidebar e para o destaque "Precisam de reposição" (declarado no mapa de capacidades).
+
+### Tabelas (todas as listas)
+
+Numeração própria (**RT**) para não deslocar os RF já referenciados no plano. Valem para Produtos, Movimentações, últimas movimentações do produto, produtos para repor, baixa de produtos e histórico de baixas.
+
+- **RT 1 · Uma Data Table.** Todas as listas usam o mesmo componente de tabela; nenhuma tela monta `<table>` própria. Busca, filtros, chips, barra de seleção e paginação são peças compartilhadas compostas pela página.
+- **RT 2 · Semântica nativa.** `<table>` com `<caption>` (pode ser visualmente oculta) que diz o recorte, a ordem e a página; `<th scope="col">`; grupos de linhas como `<tbody>` com `<th scope="rowgroup">`. Nada de `role="grid"` (nenhuma lista é editável célula a célula).
+- **RT 3 · Densidade.** 40 px para linha de um nível; 48 px para linha com dois níveis (nome + SKU, produto + observação); cabeçalho 36 px. Texto principal em `text-primary`, secundário em `text-muted`.
+- **RT 4 · Alinhamento.** Texto à esquerda; números comparáveis (saldo, quantidade, diferença) à direita com algarismos tabulares; ações na última coluna.
+- **RT 5 · Ordenação.** Cabeçalho ordenável é um botão dentro do `<th>`, operável por `Enter`/`Espaço`; `aria-sort` só no `<th>` da coluna ordenada; o ícone muda de forma (↕ sem ordem, ↑/↓ com ordem), não só de cor.
+- **RT 6 · Paginação.** Intervalo com o nome do item ("1–20 de 209 movimentações"), anterior/próxima e páginas numeradas — todas até 7, acima disso primeira, vizinhas da atual e última com "…"; a atual com `aria-current="page"`. Sem rolagem infinita.
+- **RT 7 · Cabeçalho fixo.** Em Produtos e Movimentações o cabeçalho de colunas fica visível ao rolar; só ele — nenhuma outra camada fixa compete com ele na mesma tela.
+- **RT 8 · Prioridade de coluna e celular.** Cada coluna tem prioridade: P0 sempre visível, P1 até o tablet, P2 só a partir de 1180 px. Abaixo de 768 px as telas mostram cartões com as informações P0 e P1; os diálogos de baixa mostram só as colunas P0 (as cinco colunas continuam no desktop). Nenhuma lista rola de lado em nenhuma largura.
+- **RT 9 · Estados.** Carregando = skeleton com a altura final das linhas (sem salto ao chegar o dado); vazio e sem resultado são diferentes, cada um com a sua próxima ação ("Adicionar produto" × "Limpar filtros"); erro com mensagem específica, `role="alert"` e "Tentar de novo".
+- **RT 10 · Hover e seleção.** Toda linha tem hover sutil; linha selecionada = fundo `surface-selected` + barra de 2 px em `accent` + checkbox marcado.
+- **RT 11 · Nomes acessíveis.** Checkbox de linha "Selecionar ‹nome›"; menu "Mais ações para ‹nome›"; botão de detalhe com o que a linha é; ícone decorativo com `aria-hidden`.
+- **RT 12 · Filtros visíveis.** Todo filtro ativo aparece como chip removível ("Remover filtro ‹rótulo›") e há "Limpar filtros" quando houver ao menos um.
 
 ### API (somente leitura)
 
@@ -225,6 +245,7 @@ type TypeTotals = Record<'IN' | 'OUT' | 'ADJUSTMENT' | 'INITIAL_STOCK', { count:
 | `productId`, `userId` | texto opcional |
 | `from`, `to` | data/hora ISO, opcionais, inclusivos |
 | `q` | texto; casa nome do produto, SKU ou observação, sem acento e sem caixa |
+| `order` | `desc` · `asc`, padrão `desc` (D10) |
 | `tz` | fuso (ver acima) |
 
 ```ts
@@ -247,7 +268,7 @@ type TypeTotals = Record<'IN' | 'OUT' | 'ADJUSTMENT' | 'INITIAL_STOCK', { count:
 }
 ```
 
-Ordem fixa: `date` decrescente, `id` como desempate.
+Ordem: `date` conforme `order` (decrescente por padrão), `id` crescente como desempate nos dois sentidos.
 
 **`GET /api/movements/users`** → `{ items: Array<{ id: string; email: string }> }`.
 
@@ -280,12 +301,13 @@ Ordem fixa: `date` decrescente, `id` como desempate.
 4. **Paginação, filtro e contagem no banco** no histórico geral; a busca textual pode usar o mesmo pré-filtro sem acento já usado em `/quick-out/history` (risco registrado).
 5. **Desempenho**: cada rota nova responde em menos de 300 ms no ambiente local com o seed (50 produtos), medido no QA.
 6. **Design system**: tokens v2 conforme `research.md` Q5; a lista de 19 utilitários proibidos da Task 27 não muda; todo valor novo entra por token, não por utilitário cru; `rounded-full` continua proibido fora do ponto decorativo (a pílula entra como `rounded-pill`).
-7. **Acessibilidade WCAG 2.1 AA** como gate de cada tela: contraste dos pares novos medido (`prototype.md`), texto `muted` só sobre superfície branca, teclado em tudo, foco visível único, status e tipo nunca só por cor, mensagens assíncronas em `aria-live`/`role="status"`/`role="alert"`, alvos de toque ≥ 44 × 44 no celular.
+7. **Acessibilidade WCAG 2.2 AA** como gate de cada tela (era 2.1; diferença em `research.md` Q8): contraste dos pares novos medido (`prototype.md`), texto `muted` só sobre superfície branca, teclado em tudo, foco visível único, status e tipo nunca só por cor, mensagens assíncronas em `aria-live`/`role="status"`/`role="alert"`, alvos ≥ 24 × 24 em qualquer largura (2.5.8) e ≥ 44 × 44 no celular, foco levado à vista nunca escondido por cabeçalho fixo ou barra superior (2.4.11), nada essencial perdido com zoom de 200 %. Uma tela não está pronta com falha crítica em teclado, foco, rótulo, contraste, semântica, leitor de tela, dependência só de cor ou ação sem nome acessível (*accessibility gate*), nem — se tiver tabela — com qualquer item do *table gate*: ordenação sem teclado ou sem `aria-sort`, checkbox sem rótulo, menu sem nome, filtro ativo invisível, vazio ambíguo, salto de layout ao carregar, paginação sem contexto ou informação essencial cortada no celular.
 8. **Motion**: só a política atual (120 ms estado, 180 ms overlay), respeitando `prefers-reduced-motion`; nenhuma animação atrasa uma operação.
 9. **Dado remoto só via React Query**; toda mutação invalida as consultas que mostram saldo, contagem, série ou histórico.
 10. **Um único primitivo de diálogo**: o painel lateral é a variante `drawer` do `Modal`, ao lado de `dialog` e `sheet`.
 11. **Deploy**: o Netlify precisa do fallback de SPA (`/*  /index.html  200`) depois do redirect de `/api/*`, para que recarregar `/produtos/123` funcione.
 12. **TDD** (`AGENTS.md`): rota nova com teste de integração contra Postgres antes da implementação; fluxo que muda de container com teste de caracterização antes de mover.
+13. **Uma tabela, sem cópia** (RT 1): nenhum componente fora da Data Table renderiza `<table>`, exceto a tabela de dados alternativa dos gráficos ("Ver como tabela"), que também passa a usá-la.
 
 ## Regras de Negócio
 
@@ -314,13 +336,13 @@ Toda capacidade de hoje e onde ela fica. Complementa `docs/ui-ux/parity-matrix.m
 | Seleção, excluir selecionados | Barra contextual | Idem | Mantida |
 | Zerar página, excluir página | Região rotulada no rodapé | Idem | Mantida |
 | Movimentar (IN/OUT) | `MovementFormModal` | Painel lateral (D3); botão `tonal` na linha (D4) | Mantida — container e estilo mudam |
-| Baixa rápida | `QuickOutModal` | Mesmo fluxo, no painel lateral | Mantida |
+| Baixa rápida | `QuickOutModal`; atalho na linha (desktop), overflow do card (celular) | Mesmo fluxo, no painel lateral; acesso pelo `⋯` da linha nas duas larguras (D11) | Mantida — **mudança declarada** de acesso (matriz de paridade, linha 20) |
 | Adicionar / editar produto | `ProductFormModal` | Mesmo formulário, no painel lateral | Mantida |
 | Ajustar estoque | `AdjustmentFormModal` | Mesmo fluxo (form → confirmação → conflito), no painel lateral | Mantida |
 | Zerar estoque / Excluir | `ConfirmDialog` | Idem, também na página do produto | Mantida |
 | Ver histórico do produto (tipo, de/até, busca na observação, itens por página) | `MovementHistoryModal` | Página do produto (últimas 8) + Movimentações filtrado pelo produto (todos os filtros) | Mantida (D5); a busca passa a casar também nome e SKU |
 | Filtrar só "Estoque inicial" (F-09) | Select do histórico | Aba "Estoque inicial" | Mantida |
-| Baixa de produtos (lista) + Histórico de baixas | `QuickOutListModal` + `QuickOutHistoryModal` | Mesmos diálogos | Mantida |
+| Baixa de produtos (lista) + Histórico de baixas | `QuickOutListModal` + `QuickOutHistoryModal` | Mesmos diálogos, tabelas na Data Table | Mantida |
 | E-mail do usuário + Sair | Cabeçalho | Rodapé da sidebar / menu no celular | Mantida |
 | Skip link, `ApiStatusBanner` | Shell | Shell | Mantida |
 
@@ -477,6 +499,35 @@ QUANDO consultar GET /api/dashboard
 ENTÃO a resposta deve ser 400
 ```
 
+**Tabelas**
+```
+DADO a lista de Produtos ordenada por nome
+QUANDO o usuário focar o cabeçalho "Saldo / mínimo" pelo teclado e apertar Enter
+ENTÃO a lista deve ordenar por saldo crescente
+E só o <th> "Saldo / mínimo" deve ter aria-sort="ascending"
+E o ícone do cabeçalho deve virar ↑
+```
+
+```
+DADO /movimentacoes com movimentações de hoje e de ontem
+ENTÃO cada dia deve ser um grupo da tabela, com cabeçalho "Hoje …" / "Ontem …" e a contagem do dia
+QUANDO o usuário acionar "Quando"
+ENTÃO a URL deve ganhar dir=asc, a lista deve começar pela mais antiga e voltar à página 1
+```
+
+```
+DADO a linha de "Caneta Azul" em Produtos
+QUANDO o usuário abrir "Mais ações para Caneta Azul" e escolher "Nova saída"
+ENTÃO o painel deve abrir com "Caneta Azul", o tipo "Saída" marcado e o título "Registrar saída"
+E, ao fechar o painel, o foco deve voltar ao botão "Mais ações para Caneta Azul"
+```
+
+```
+DADO qualquer lista em 390 px de largura
+ENTÃO ela não deve rolar de lado
+E produto, saldo e status devem continuar visíveis
+```
+
 **Nenhuma capacidade some**
 ```
 DADO o mapa de capacidades deste PRD
@@ -493,6 +544,9 @@ E cada "Mudança declarada" deve estar registrada na matriz de paridade revalida
 | Pré-filtro de busca em memória no histórico geral não escalar | Mesmo padrão aceito em `/quick-out/history`; volume atual pequeno; item de backlog (`unaccent`) já existe |
 | Série errada por fuso ou por movimentação retroativa | Regras explícitas acima + critérios de aceite de virada de dia |
 | Visual "SaaS genérico" | Princípios P1–P10 (`research.md`); revisão visual contra o protótipo aprovado em cada fase |
+| Data Table única virar um componente que sabe de toda tela | Ela só renderiza tabela, estados, seleção, grupos e detalhe; busca, filtros, chips e paginação são peças irmãs compostas pela página (`research.md` Q8) |
+| Cabeçalho fixo não grudar | `sticky` exige contêiner sem `overflow: hidden/auto`: a região usa `overflow: clip` e a prioridade de coluna elimina a rolagem lateral; teste visual a 1440 e 1024 px |
+| Migrar as tabelas de baixa quebrar o contrato §9.3 | As suítes atuais (incluindo `QuickOutModal.characterization`) passam sem alterar asserção; a tabela é apresentação, o estado fica no diálogo |
 | `ProductDashboard` crescer ainda mais | A refatoração **reduz** o container: rotas e páginas distribuem o estado; a decomposição é parte do plano, não dívida nova |
 
 ## Questões em Aberto

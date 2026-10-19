@@ -28,6 +28,8 @@
   --text-primary:#111827;
   --text-secondary:#4B5563;      /* único tom de texto secundário permitido sobre o canvas */
   --text-muted:#6B7280;          /* só sobre superfície branca (4.83:1); sobre o canvas cai p/ 4.3:1 */
+  --text-disabled:#9CA3AF;       /* só controle desabilitado (isento de contraste, WCAG 1.4.3) — nunca texto informativo */
+  --surface-selected:#EFF6FF;    /* linha selecionada: sempre com a barra de 2px em accent (dois sinais) */
   /* acento (inalterado) */
   --accent:#2563EB; --accent-strong:#1D4ED8; --accent-subtle:#EFF6FF; --accent-subtle-text:#1E40AF;
   --focus:#2563EB;
@@ -43,7 +45,7 @@
   --sidebar-label:#8B8B94; --sidebar-item-active:rgb(255 255 255 / .08); --sidebar-item-hover:rgb(255 255 255 / .05);
   --sidebar-border:rgb(255 255 255 / .08); --sidebar-indicator:#3B82F6; --sidebar-badge:rgb(255 255 255 / .10); --sidebar-badge-text:#E4E4E7;
   /* forma */
-  --r-control:10px; --r-surface:14px; --r-pill:999px;
+  --r-sm:6px; --r-control:10px; --r-surface:14px; --r-pill:999px;   /* sm = item de menu, paginação, tooltip, ícone de tipo */
   --shadow-card:0 1px 2px rgb(16 24 40 / .05);
   --shadow-overlay:0 10px 24px -6px rgb(0 0 0 / .18), 0 4px 8px -4px rgb(0 0 0 / .10);
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s8:32px; --s10:40px; --s12:48px;
@@ -57,6 +59,8 @@ body.sidebar-light{
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
+/* WCAG 2.4.11 (2.2): foco levado à vista nunca fica atrás do cabeçalho fixo da tabela nem da barra do celular */
+html{scroll-padding-top:56px}
 body{font:400 14px/1.55 Inter,ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;color:var(--text-primary);background:var(--background);-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:inherit}
@@ -191,7 +195,7 @@ body.rail .nav a .rail-badge{display:block;position:absolute;top:7px;right:9px;w
 .badge .dot{width:6px;height:6px}
 /* tipo de movimentação — seta + palavra, forma única */
 .mtype{display:inline-flex;align-items:center;gap:6px;font-weight:500;white-space:nowrap}
-.mtype .ic{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;flex:none}
+.mtype .ic{width:24px;height:24px;border-radius:var(--r-sm);display:grid;place-items:center;flex:none}
 .mtype.in .ic{background:var(--success-subtle);color:var(--success)}
 .mtype.out .ic{background:var(--danger-subtle);color:var(--danger)}
 .mtype.adj .ic{background:var(--info-subtle);color:var(--info)}
@@ -212,7 +216,7 @@ body.rail .nav a .rail-badge{display:block;position:absolute;top:7px;right:9px;w
 .chart .end-label{fill:var(--text-primary);font-size:12px;font-weight:600}
 .chart .cross{stroke:var(--text-muted);stroke-width:1}
 .chart svg:focus-visible{outline:2px solid var(--focus);outline-offset:4px;border-radius:6px}
-.tip{position:absolute;pointer-events:none;background:#111318;color:#fff;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.35;white-space:nowrap;box-shadow:var(--shadow-overlay);transform:translate(-50%,-100%);opacity:0;transition:opacity 120ms}
+.tip{position:absolute;pointer-events:none;background:#111318;color:#fff;border-radius:var(--r-sm);padding:8px 10px;font-size:12px;line-height:1.35;white-space:nowrap;box-shadow:var(--shadow-overlay);transform:translate(-50%,-100%);opacity:0;transition:opacity 120ms}
 .tip.show{opacity:1}
 .tip b{display:block;font-size:14px}
 .tip span{color:#C9CBD1}
@@ -236,7 +240,8 @@ body.rail .nav a .rail-badge{display:block;position:absolute;top:7px;right:9px;w
 .bullet .min-label{position:absolute;top:18px;transform:translateX(-50%);font-size:12px;color:var(--text-secondary);white-space:nowrap}
 
 /* ---------------- região de dados ---------------- */
-.region{overflow:hidden}
+/* clip, não hidden: hidden cria contêiner de rolagem e o cabeçalho fixo da tabela deixa de grudar */
+.region{overflow:clip}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;max-width:100%}
 .tabs a{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:var(--r-control);text-decoration:none;color:var(--text-secondary);font-weight:500;white-space:nowrap}
@@ -255,20 +260,32 @@ body.rail .nav a .rail-badge{display:block;position:absolute;top:7px;right:9px;w
 .field{display:flex;flex-direction:column;gap:6px}
 .field label,.field .lbl{font-weight:500}
 .hint{font-size:12px;color:var(--text-muted)}
+/* Densidade (plano de tabelas §6): 40px linha de uma linha · 48px linha com dois níveis (nome + SKU/observação).
+   Cabeçalho 36px. `height` em célula funciona como altura mínima. */
 table.dt{width:100%;border-collapse:collapse}
-.dt th{font-size:12px;font-weight:500;color:var(--text-muted);text-align:left;padding:10px 16px;background:var(--surface-subtle);border-bottom:1px solid var(--border);white-space:nowrap}
-.dt td{padding:10px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
-.dt tbody tr:last-child td{border-bottom:0}
+.dt th{height:36px;font-size:12px;font-weight:500;color:var(--text-muted);text-align:left;padding:0 16px;background:var(--surface-subtle);box-shadow:inset 0 -1px 0 var(--border);white-space:nowrap}
+.dt td{height:40px;padding:4px 16px;line-height:1.4;border-bottom:1px solid var(--border);vertical-align:middle}
+.dt.two-line td{height:48px}
+.dt tbody:last-child tr:last-child td,.dt tbody:last-child tr:has(+ tr.detail[hidden]:last-child) td{border-bottom:0}
+/* cabeçalho fixo: só em tabela sem rolagem horizontal (as colunas P2 somem antes de faltar largura) */
+.dt.sticky thead th{position:sticky;top:0;z-index:2}
+.dt tbody tr:hover td{background:var(--surface-subtle)}
 .dt tbody tr.clickable{cursor:pointer}
-.dt tbody tr.clickable:hover td{background:var(--surface-subtle)}
+.dt tbody tr.is-selected td{background:var(--surface-selected)}
+.dt tbody tr.is-selected td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 .dt .num{text-align:right}
 .dt th.num{text-align:right}
 .dt .w-check{width:44px;padding-right:0}
-.sort{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer}
+.dt .w-exp{width:56px;text-align:right}
+/* ordenação: o ícone muda de forma (↕ → ↑/↓), não só de cor; `aria-sort` fica no <th> */
+.sort{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer;border-radius:var(--r-sm)}
 .sort:hover{color:var(--text-primary)}
-.sort[aria-sort] svg{color:var(--accent)}
+.sort svg{color:var(--text-muted)}
+.sort.on{color:var(--text-primary)}
+.sort.on svg{color:var(--accent)}
 .prod{display:flex;align-items:center;gap:12px;min-width:0}
 .tile{width:36px;height:36px;border-radius:var(--r-control);background:var(--surface-subtle);border:1px solid var(--border);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--text-secondary);flex:none}
+.dt .tile{width:32px;height:32px;font-size:11px}
 .prod-name{font-weight:500;color:var(--text-primary);text-decoration:none}
 .dt .col-prod{width:100%;max-width:0}
 .dt .col-prod .prod-name,.dt .col-prod .prod-sku{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -280,7 +297,7 @@ a.prod-name:hover{text-decoration:underline}
 .checkbox{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin:0}
 .region-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap;font-size:13px;color:var(--text-secondary)}
 .pager{display:flex;align-items:center;gap:4px}
-.pager button{min-width:32px;height:32px;border-radius:8px;border:1px solid transparent;background:none;cursor:pointer;color:var(--text-secondary);font-weight:500}
+.pager button{min-width:32px;height:32px;border-radius:var(--r-sm);border:1px solid transparent;background:none;cursor:pointer;color:var(--text-secondary);font-weight:500}
 .pager button:hover{background:var(--surface-subtle)}
 .pager button[aria-current="page"]{border-color:var(--border-strong);color:var(--text-primary);background:var(--surface)}
 .pager button:disabled{opacity:.4;cursor:not-allowed}
@@ -308,20 +325,32 @@ a.prod-name:hover{text-decoration:underline}
 .filters{display:grid;grid-template-columns:minmax(200px,1.4fr) repeat(3,minmax(150px,1fr));gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
 .chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface-subtle)}
 .fchip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 10px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--border);font-size:12px;font-weight:500}
-.fchip button{width:20px;height:20px;border-radius:50%;border:0;background:none;display:grid;place-items:center;cursor:pointer;color:var(--text-secondary)}
+.fchip button{width:24px;height:24px;border-radius:50%;border:0;background:none;display:grid;place-items:center;cursor:pointer;color:var(--text-secondary)}
 .fchip button:hover{background:var(--surface-subtle)}
 .summary{display:flex;gap:8px 24px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-secondary)}
 .summary b{color:var(--text-primary)}
-.day{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text-secondary);background:var(--surface-subtle);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between}
-.mv{display:grid;grid-template-columns:60px 128px minmax(0,1.6fr) 96px 120px minmax(0,1fr) 32px;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer}
-.mv:hover{background:var(--surface-subtle)}
-.mv .time{color:var(--text-secondary);font-variant-numeric:tabular-nums}
-.mv .mv-who{font-size:13px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mv .note{font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mv .chev{color:var(--text-muted);transition:transform 120ms}
-.mv[aria-expanded="true"] .chev{transform:rotate(180deg)}
-.mv-detail{display:none;padding:4px 16px 16px 88px;border-bottom:1px solid var(--border);background:var(--surface-subtle)}
-.mv-detail.open{display:block}
+/* histórico em tabela (D9): um <tbody> por dia, cabeçalho do grupo como <th scope="rowgroup"> */
+.day,.dt .day-row th{font-size:12px;font-weight:600;color:var(--text-secondary);background:var(--surface-subtle);text-transform:uppercase;letter-spacing:.04em}
+.day{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+.dt .day-row th{height:36px;box-shadow:none;border-bottom:1px solid var(--border)}
+.dt tbody + tbody .day-row th{border-top:1px solid var(--border)}
+.day-in{display:flex;justify-content:space-between;gap:12px}
+.day-in .n,.day .n{font-weight:500;text-transform:none;letter-spacing:0;white-space:nowrap}
+.kv .wide{grid-column:1 / -1}
+.dt tbody tr.day-row:hover th{background:var(--surface-subtle)}
+.hist .c-time{width:72px;color:var(--text-secondary)}
+.hist .c-type{width:148px}
+.hist .c-qty{width:104px}
+.hist .c-flow{width:120px}
+.hist .c-who{width:208px;font-size:13px;color:var(--text-secondary)}
+.hist .c-who .who{display:block;width:176px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note{display:block;font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exp svg{transition:transform 120ms}
+.exp[aria-expanded="true"] svg{transform:rotate(180deg)}
+.dt tr.detail td{height:auto;padding:12px 16px 16px 104px;background:var(--surface-subtle)}
+.dt tr.detail:hover td{background:var(--surface-subtle)}
+.hc-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
+.hc-detail{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
 .kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 24px;margin:0}
 .kv dt{font-size:12px;color:var(--text-muted)}
 .kv dd{margin:2px 0 0;font-weight:500}
@@ -345,7 +374,7 @@ a.prod-name:hover{text-decoration:underline}
 /* ---------------- menu ---------------- */
 .menu{position:fixed;z-index:60;min-width:208px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-control);box-shadow:var(--shadow-overlay);padding:6px;display:none}
 .menu.open{display:block}
-.menu button{display:flex;width:100%;align-items:center;gap:10px;height:36px;padding:0 10px;border:0;background:none;border-radius:8px;cursor:pointer;text-align:left}
+.menu button{display:flex;width:100%;align-items:center;gap:10px;height:36px;padding:0 10px;border:0;background:none;border-radius:var(--r-sm);cursor:pointer;text-align:left}
 .menu button:hover,.menu button:focus-visible{background:var(--surface-subtle);outline:none}
 .menu hr{border:0;border-top:1px solid var(--border);margin:6px 0}
 .menu .destr{color:var(--danger)}
@@ -368,7 +397,7 @@ a.prod-name:hover{text-decoration:underline}
 .seg button[aria-checked="true"].out{border-color:var(--danger);background:var(--danger-subtle);color:var(--danger);box-shadow:inset 0 0 0 1px var(--danger)}
 .combo{position:relative}
 .combo-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-control);box-shadow:var(--shadow-overlay);list-style:none;margin:0;padding:6px;z-index:5;max-height:280px;overflow:auto}
-.combo-list li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:8px;cursor:pointer}
+.combo-list li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer}
 .combo-list li[aria-selected="true"],.combo-list li:hover{background:var(--surface-subtle)}
 .ctx{border:1px solid var(--border);border-radius:var(--r-control);padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;background:var(--surface-subtle)}
 .ctx .nm{font-weight:600}
@@ -417,8 +446,8 @@ body.rail .scaffold{left:calc(var(--rail-w) + 16px)}
   .metric:nth-child(3){border-left:0}
   .metric:nth-child(n+3){border-top:1px solid var(--border)}
   .filters{grid-template-columns:1fr 1fr}
-  .mv{grid-template-columns:52px 116px minmax(0,1.4fr) 84px 110px 32px}
-  .mv .mv-who{display:none}
+  /* prioridade de coluna (plano de tabelas §50): P2 sai antes de a tabela precisar rolar de lado */
+  .dt .p2{display:none}
 }
 @media (max-width:767px){
   .app{display:block}
@@ -445,17 +474,8 @@ body.rail .scaffold{left:calc(var(--rail-w) + 16px)}
   .pcard:last-child{border-bottom:0}
   .pcard-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
   .pcard-mid{display:flex;justify-content:space-between;align-items:center;margin:10px 0 12px}
-  .pcard-actions{display:grid;grid-template-columns:1fr auto auto;gap:8px}
+  .pcard-actions{display:grid;grid-template-columns:1fr auto;gap:8px}
   .filters{grid-template-columns:1fr;padding:12px}
-  .mv{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"type delta" "prod flow" "time time";gap:4px 12px}
-  .mv .time{grid-area:time;font-size:12px}
-  .mv .mtype{grid-area:type}
-  .mv .mprod{grid-area:prod}
-  .mv .delta{grid-area:delta;text-align:right}
-  .mv .flow{grid-area:flow;text-align:right}
-  .mv .chev,.mv .mv-who{display:none}
-  .mv-detail{padding:4px 16px 16px}
-  .day span:last-child{display:none}
   .kv{grid-template-columns:1fr 1fr}
   .p-head{flex-direction:column;gap:12px;padding:16px}
   .p-head .actions{width:100%}
@@ -507,6 +527,8 @@ body.rail .scaffold{left:calc(var(--rail-w) + 16px)}
   <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
   <symbol id="i-sort" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+  <symbol id="i-sort-asc" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-sort-desc" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
   <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
   <symbol id="i-table" viewBox="0 0 24 24"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></symbol>
 </svg>
@@ -641,6 +663,20 @@ const TYPES = { IN:['Entrada','in','in'], OUT:['Saída','out','out'], ADJUSTMENT
 const mtype = t => `<span class="mtype ${TYPES[t][1]}"><span class="ic">${ic(TYPES[t][2],'xs')}</span>${TYPES[t][0]}</span>`;
 const deltaHtml = n => `<span class="delta ${n>0?'pos':n<0?'neg':'zero'} tnum">${signed(n)} un.</span>`;
 const flowHtml = m => `<span class="flow tnum">${fmt(m.prev)} <span aria-hidden="true">→</span><span class="sr-only">para</span> <b>${fmt(m.next)}</b></span>`;
+/* Cabeçalho ordenável (W3C APG, sortable table): `aria-sort` no <th>, só na coluna ordenada;
+   o botão leva o rótulo; o ícone muda de forma (↕ → ↑/↓). */
+const sortTh = (attr, key, label, active, dir, cls='') => `<th class="${cls}"${active?` aria-sort="${dir==='asc'?'ascending':'descending'}"`:''}><button class="sort${active?' on':''}" type="button" ${attr}="${key}">${label}${ic(active ? (dir==='asc'?'sort-asc':'sort-desc') : 'sort','xs')}</button></th>`;
+/* Paginação numerada (plano de tabelas §15): até 7 páginas, todas; acima disso, primeira, vizinhas da atual
+   e última, com reticências. */
+function pagerHtml(page, pages, attr, label){
+  const nums = pages <= 7 ? Array.from({length:pages},(_,i)=>i+1)
+    : [...new Set([1, page-1, page, page+1, pages])].filter(n => n>=1 && n<=pages).sort((a,b)=>a-b);
+  let out = '', prev = 0;
+  nums.forEach(n => { if (n-prev > 1) out += '<span class="caption" aria-hidden="true">…</span>'; out += `<button type="button" ${attr}="${n}" ${n===page?'aria-current="page"':''} aria-label="Página ${n}">${n}</button>`; prev = n; });
+  return `<nav class="pager" aria-label="${label}">
+    <button type="button" ${attr}="${page-1}" ${page===1?'disabled':''} aria-label="Página anterior">${ic('left','sm')}</button>${out}
+    <button type="button" ${attr}="${page+1}" ${page===pages?'disabled':''} aria-label="Próxima página">${ic('right','sm')}</button></nav>`;
+}
 
 /* ---------------- estado de validação ---------------- */
 let viewState = 'content';
@@ -768,7 +804,8 @@ function pageDashboard(){
     <div class="card region">
       <div class="card-head" style="padding-bottom:14px"><div><h2 class="section-title">Produtos para repor</h2><div class="caption">Mais distantes do mínimo primeiro</div></div>
         <div class="actions"><a class="btn tertiary sm" href="#/produtos?status=sem-estoque">${c.out} sem estoque</a><a class="btn tertiary sm" href="#/produtos?status=baixo">${c.attn} estoque baixo</a></div></div>
-      <div class="table-wrap"><table class="dt">
+      <div class="table-wrap"><table class="dt two-line">
+        <caption class="sr-only">Produtos para repor, sem estoque primeiro</caption>
         <thead><tr><th>Produto</th><th class="num">Saldo</th><th>Status</th><th class="num"><span class="sr-only">Ação</span></th></tr></thead>
         <tbody>${reorder.slice(0,6).map(p=>`<tr>
           <td class="col-prod"><div class="prod"><span class="tile" aria-hidden="true">${initials(p.name)}</span><div style="min-width:0"><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a><div class="prod-sku">${p.sku}</div></div></div></td>
@@ -811,44 +848,38 @@ function pageProducts(route){
   const rows = list.slice((PAGE.page-1)*PAGE.size, PAGE.page*PAGE.size);
   const z = viewState==='empty' ? 0 : 1;
   const tabs = [['','Todos',c.all*z],['em-estoque','Em estoque',c.ok*z],['baixo','Estoque baixo',c.attn*z],['sem-estoque','Sem estoque',c.out*z]];
-  const sortBtn = (key,label,num) => `<button class="sort" type="button" data-sort="${key}"${PAGE.sort===key?` aria-sort="${PAGE.dir==='asc'?'ascending':'descending'}"`:''}>${label}${ic('sort','xs')}</button>`;
   const sel = PAGE.sel.size;
   let body;
-  if (viewState==='loading') body = `<div class="table-wrap"><table class="dt"><tbody>${Array.from({length:8}).map(()=>`<tr><td class="w-check"><span class="skel" style="width:18px;height:18px"></span></td><td><div class="prod"><span class="skel" style="width:36px;height:36px;border-radius:10px"></span><div style="flex:1"><span class="skel" style="width:46%"></span><span class="skel" style="width:30%;margin-top:6px;height:10px"></span></div></div></td><td><span class="skel" style="width:60px;margin-left:auto"></span></td><td><span class="skel" style="width:96px;height:22px;border-radius:999px"></span></td><td><span class="skel" style="width:180px;height:32px;margin-left:auto"></span></td></tr>`).join('')}</tbody></table></div><span class="sr-only" role="status">Carregando produtos…</span>`;
+  if (viewState==='loading') body = `<div class="table-wrap"><table class="dt two-line"><tbody>${Array.from({length:8}).map(()=>`<tr><td class="w-check"><span class="skel" style="width:18px;height:18px"></span></td><td><div class="prod"><span class="skel" style="width:32px;height:32px;border-radius:10px"></span><div style="flex:1"><span class="skel" style="width:46%"></span><span class="skel" style="width:30%;margin-top:6px;height:10px"></span></div></div></td><td><span class="skel" style="width:60px;margin-left:auto"></span></td><td><span class="skel" style="width:96px;height:22px;border-radius:999px"></span></td><td><span class="skel" style="width:132px;height:32px;margin-left:auto"></span></td></tr>`).join('')}</tbody></table></div><span class="sr-only" role="status">Carregando produtos…</span>`;
   else if (viewState==='empty') body = `<div class="state"><span class="big-ic">${ic('package')}</span><h3>Nenhum produto cadastrado ainda</h3><p>Cadastre o primeiro produto para começar a registrar entradas e saídas.</p><button class="btn primary" type="button" data-toast="Abre o cadastro de produto (fluxo existente).">${ic('plus','sm')}Adicionar produto</button></div>`;
   else if (viewState==='error') body = `<div class="state err" role="alert"><span class="big-ic">${ic('alert')}</span><h3>Não foi possível carregar os produtos</h3><p>O servidor não respondeu em 8 segundos. Seus dados não foram alterados.</p><button class="btn secondary" type="button" data-st-reset>${ic('retry','sm')}Tentar de novo</button></div>`;
   else if (viewState==='noresult' || (PAGE.q && !list.length)) body = `<div class="state"><span class="big-ic">${ic('search')}</span><h3>Nenhum produto encontrado para “${esc(PAGE.q||'lapis azul turquesa')}”</h3><p>Confira a grafia ou busque pelo SKU. A busca ignora acentos.</p><button class="btn secondary" type="button" data-clear-search>Limpar busca</button></div>`;
   else if (!list.length) body = `<div class="state"><span class="big-ic">${ic('check')}</span><h3>Nenhum produto nesta situação</h3><p>Ótimo sinal — nada para repor aqui agora.</p><a class="btn secondary" href="#/produtos">Ver todos os produtos</a></div>`;
   else body = `
-    <div class="table-wrap"><table class="dt">
+    <div class="table-wrap"><table class="dt sticky two-line">
       <caption class="sr-only">Produtos — ${(tabs.find(t=>t[0]===tabKey)||tabs[0])[1]}, página ${PAGE.page} de ${pages}</caption>
       <thead><tr>
         <th class="w-check"><input class="checkbox" type="checkbox" aria-label="Selecionar todos desta página" data-sel-all ${rows.every(p=>PAGE.sel.has(p.id))?'checked':''}></th>
-        <th>${sortBtn('name','Produto')}</th>
-        <th class="num">${sortBtn('balance','Saldo / mínimo')}</th>
+        ${sortTh('data-sort','name','Produto', PAGE.sort==='name', PAGE.dir)}
+        ${sortTh('data-sort','balance','Saldo / mínimo', PAGE.sort==='balance', PAGE.dir, 'num')}
         <th>Status</th>
         <th class="num"><span class="sr-only">Ações</span></th></tr></thead>
-      <tbody>${rows.map(p=>`<tr class="clickable" data-row="${p.id}">
+      <tbody>${rows.map(p=>`<tr class="clickable${PAGE.sel.has(p.id)?' is-selected':''}" data-row="${p.id}">
         <td class="w-check"><input class="checkbox" type="checkbox" aria-label="Selecionar ${esc(p.name)}" data-sel="${p.id}" ${PAGE.sel.has(p.id)?'checked':''}></td>
         <td class="col-prod"><div class="prod"><span class="tile" aria-hidden="true">${initials(p.name)}</span><div style="min-width:0"><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a><div class="prod-sku">${p.sku}</div></div></div></td>
         <td class="num tnum" style="white-space:nowrap"><span class="bal">${fmt(p.balance)}</span> <small class="caption">un.</small><div class="caption">mín. ${p.minStock}</div></td>
         <td>${badge(statusOf(p))}</td>
         <td><div class="row-actions">
           <button class="btn tonal sm" type="button" data-open-move data-product="${p.id}">Movimentar</button>
-          <button class="btn secondary sm icon-only" type="button" aria-label="Baixa rápida de ${esc(p.name)}" title="Baixa rápida" data-toast="Baixa rápida abre no painel lateral, com o mesmo fluxo de hoje (valores frequentes + preview).">${ic('quick','sm')}</button>
-          <button class="btn secondary sm icon-only" type="button" aria-label="Mais ações para ${esc(p.name)}" aria-haspopup="menu" data-menu="${p.id}">${ic('more','sm')}</button>
+          <button class="btn secondary sm icon-only" type="button" aria-label="Mais ações para ${esc(p.name)}" aria-haspopup="menu" aria-expanded="false" data-menu="${p.id}">${ic('more','sm')}</button>
         </div></td></tr>`).join('')}</tbody></table></div>
     <div class="cards">${rows.map(p=>`<div class="pcard">
       <div class="pcard-top"><div class="prod"><span class="tile" aria-hidden="true">${initials(p.name)}</span><div style="min-width:0"><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a><div class="prod-sku">${p.sku}</div></div></div>${badge(statusOf(p))}</div>
       <div class="pcard-mid"><span><span class="bal tnum" style="font-size:18px">${fmt(p.balance)}</span> <small class="caption">un.</small></span><span class="caption tnum">mínimo ${p.minStock}</span></div>
-      <div class="pcard-actions"><button class="btn tonal sm" type="button" data-open-move data-product="${p.id}">Movimentar</button><button class="btn secondary sm icon-only" type="button" aria-label="Baixa rápida de ${esc(p.name)}" data-toast="Baixa rápida (fluxo existente).">${ic('quick','sm')}</button><button class="btn secondary sm icon-only" type="button" aria-label="Mais ações para ${esc(p.name)}" aria-haspopup="menu" data-menu="${p.id}">${ic('more','sm')}</button></div></div>`).join('')}</div>
+      <div class="pcard-actions"><button class="btn tonal sm" type="button" data-open-move data-product="${p.id}">Movimentar</button><button class="btn secondary sm icon-only" type="button" aria-label="Mais ações para ${esc(p.name)}" aria-haspopup="menu" aria-expanded="false" data-menu="${p.id}">${ic('more','sm')}</button></div></div>`).join('')}</div>
     <div class="region-foot">
       <span class="tnum">${fmt((PAGE.page-1)*PAGE.size+1)}–${fmt(Math.min(PAGE.page*PAGE.size,list.length))} de ${fmt(list.length)} produtos</span>
-      <div class="pager" role="navigation" aria-label="Paginação">
-        <button type="button" data-page="${PAGE.page-1}" ${PAGE.page===1?'disabled':''} aria-label="Página anterior">${ic('left','sm')}</button>
-        ${Array.from({length:pages},(_,i)=>`<button type="button" data-page="${i+1}" ${i+1===PAGE.page?'aria-current="page"':''} aria-label="Página ${i+1}">${i+1}</button>`).join('')}
-        <button type="button" data-page="${PAGE.page+1}" ${PAGE.page===pages?'disabled':''} aria-label="Próxima página">${ic('right','sm')}</button>
-      </div>
+      ${pagerHtml(PAGE.page, pages, 'data-page', 'Paginação de produtos')}
       <label class="pg-size caption" style="display:flex;align-items:center;gap:8px">Por página <select class="select" style="height:32px;width:76px" data-size>${[10,20,50].map(n=>`<option ${n===PAGE.size?'selected':''}>${n}</option>`).join('')}</select></label>
     </div>`;
   const toolbar = sel ? `
@@ -934,18 +965,20 @@ function pageProduct(p){
 }
 
 /* ---------------- Movimentações (histórico) ---------------- */
-const HIST = { q:'', product:'', user:'', period:'30', page:1, open:new Set() };
+const HIST = { q:'', product:'', user:'', period:'30', page:1, size:20, dir:'desc', open:new Set() };
 function pageHistory(route){
   const q = new URLSearchParams(route.query);
   const tipo = q.get('tipo')||'';
   HIST.product = byId[q.get('produto')] ? q.get('produto') : '';
   const typeMap = { '':null, entradas:['IN','INITIAL_STOCK'], saidas:['OUT'], ajustes:['ADJUSTMENT'] };
+  const htabs = [['','Todas'],['entradas','Entradas'],['saidas','Saídas'],['ajustes','Ajustes']];
   const since = HIST.period==='hoje' ? startOfDay(NOW).getTime() : NOW - Number(HIST.period)*DAY;
   let base = movements.filter(m => m.date >= since && (!HIST.product || m.productId===HIST.product) && (!HIST.user || m.user===HIST.user));
-  if (HIST.q){ const t = HIST.q.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); base = base.filter(m => (byId[m.productId].name+' '+byId[m.productId].sku+' '+m.note).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(t)); }
+  if (HIST.q){ const t = HIST.q.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); base = base.filter(m => (byId[m.productId].name+' '+byId[m.productId].sku+' '+m.note).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().includes(t)); }
   const tc = k => viewState==='empty' ? 0 : typeMap[k] ? base.filter(m=>typeMap[k].includes(m.type)).length : base.length;
-  const list = typeMap[tipo] ? base.filter(m=>typeMap[tipo].includes(m.type)) : base;
-  const size = 25, pages = Math.max(1, Math.ceil(list.length/size)); if (HIST.page>pages) HIST.page = pages;
+  // D10: a única ordenação é por data (mais recentes ↔ mais antigas) — o agrupamento por dia depende dela
+  const list = (typeMap[tipo] ? base.filter(m=>typeMap[tipo].includes(m.type)) : base).slice().sort((a,b)=>(a.date-b.date)*(HIST.dir==='asc'?1:-1));
+  const size = HIST.size, pages = Math.max(1, Math.ceil(list.length/size)); if (HIST.page>pages) HIST.page = pages;
   const rows = list.slice((HIST.page-1)*size, HIST.page*size);
   const inU = list.filter(m=>m.type==='IN'||m.type==='INITIAL_STOCK').reduce((s,m)=>s+m.quantity,0), outU = list.filter(m=>m.type==='OUT').reduce((s,m)=>s+m.quantity,0);
   const periods = [['hoje','Hoje','hoje'],['7','Últimos 7 dias','nos últimos 7 dias'],['30','Últimos 30 dias','nos últimos 30 dias']];
@@ -954,31 +987,57 @@ function pageHistory(route){
   if (HIST.product) chips.push(['product', 'Produto: '+byId[HIST.product].name]);
   if (HIST.user) chips.push(['user', 'Responsável: '+HIST.user]);
   if (HIST.q) chips.push(['q', 'Busca: “'+HIST.q+'”']);
-  let groups = '', lastDay = null;
-  if (viewState==='loading') groups = Array.from({length:7}).map(()=>`<div class="mv" style="cursor:default"><span class="skel"></span><span class="skel"></span><span class="skel" style="width:70%"></span><span class="skel"></span><span class="skel"></span><span class="skel" style="width:60%"></span><span></span></div>`).join('') + '<span class="sr-only" role="status">Carregando movimentações…</span>';
-  else if (viewState==='error') groups = `<div class="state err" role="alert"><span class="big-ic">${ic('alert')}</span><h3>Não foi possível carregar o histórico</h3><p>O servidor não respondeu em 8 segundos.</p><button class="btn secondary" type="button" data-st-reset>${ic('retry','sm')}Tentar de novo</button></div>`;
-  else if (viewState==='empty') groups = `<div class="state"><span class="big-ic">${ic('history')}</span><h3>Nenhuma movimentação registrada</h3><p>Entradas, saídas e ajustes aparecem aqui, do mais recente para o mais antigo.</p><button class="btn primary" type="button" data-open-move>${ic('plus','sm')}Nova movimentação</button></div>`;
-  else if (viewState==='noresult' || !rows.length) groups = `<div class="state"><span class="big-ic">${ic('search')}</span><h3>Nada encontrado com esses filtros</h3><p>Amplie o período ou remova um filtro.</p><button class="btn secondary" type="button" data-hist-clear>Limpar filtros</button></div>`;
-  else rows.forEach(m => {
-    const dk = startOfDay(m.date).getTime();
-    if (dk!==lastDay){ const dayList = list.filter(x=>startOfDay(x.date).getTime()===dk); groups += `<div class="day"><span>${dayLabel(m.date)}</span><span class="tnum">${dayList.length} movimentaç${dayList.length>1?'ões':'ão'}</span></div>`; lastDay = dk; }
-    const p = byId[m.productId]; const open = HIST.open.has(m.id);
-    groups += `<div class="mv" role="button" tabindex="0" aria-expanded="${open}" aria-controls="d-${m.id}" data-mv="${m.id}">
-      <span class="time">${hm(m.date)}</span>${mtype(m.type)}
-      <span class="mprod" style="min-width:0"><span class="prod-name" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</span>${m.note?`<span class="note" style="display:block">${esc(m.note)}</span>`:`<span class="prod-sku">${p.sku}</span>`}</span>
-      ${deltaHtml(delta(m))}${flowHtml(m)}<span class="mv-who">${m.user}</span><span class="chev">${ic('down','sm')}</span></div>
-      <div class="mv-detail ${open?'open':''}" id="d-${m.id}"><dl class="kv">
+  // Agrupa a página por dia; a contagem do grupo é do recorte inteiro (campo `days` da API), não só da página
+  const nMov = n => `${fmt(n)} movimentaç${n>1?'ões':'ão'}`;
+  const days = [];
+  rows.forEach(m => { const dk = startOfDay(m.date).getTime(); let g = days[days.length-1];
+    if (!g || g.dk!==dk){ g = { dk, label: dayLabel(m.date), n: list.filter(x=>startOfDay(x.date).getTime()===dk).length, rows:[] }; days.push(g); }
+    g.rows.push(m); });
+  const detail = (m, p) => `<dl class="kv">
         <div><dt>Data e hora</dt><dd>${new Date(m.date).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</dd></div>
         <div><dt>Produto</dt><dd><a class="prod-name" href="#/produtos/${p.id}">${esc(p.name)}</a></dd></div>
         <div><dt>Saldo</dt><dd>${flowHtml(m)} (${signed(delta(m))})</dd></div>
         <div><dt>Responsável</dt><dd>${m.user}</dd></div>
         <div><dt>SKU</dt><dd class="tnum">${p.sku}</dd></div>
-        <div style="grid-column:span 3"><dt>Observação</dt><dd>${esc(m.note||'—')}</dd></div></dl></div>`;
-  });
+        <div class="wide"><dt>Observação</dt><dd>${esc(m.note||'—')}</dd></div></dl>`;
+  // Prioridade de coluna: P0 Quando·Tipo·Produto·Quantidade · P1 Saldo · P2 Responsável (sai abaixo de 1180px)
+  const head = `<thead><tr>
+        ${sortTh('data-hsort','date','Quando', true, HIST.dir, 'c-time')}
+        <th class="c-type">Tipo</th><th>Produto</th><th class="num c-qty">Quantidade</th><th class="num c-flow">Saldo</th>
+        <th class="p2 c-who">Responsável</th><th class="w-exp"><span class="sr-only">Detalhes</span></th></tr></thead>`;
+  let body;
+  if (viewState==='loading') body = `<div class="table-wrap"><table class="dt two-line hist">${head}<tbody>${Array.from({length:7}).map(()=>`<tr><td class="c-time"><span class="skel" style="width:40px"></span></td><td><span class="skel" style="width:96px;height:24px"></span></td><td><span class="skel" style="width:60%"></span><span class="skel" style="width:35%;margin-top:6px;height:10px"></span></td><td><span class="skel" style="width:48px;margin-left:auto"></span></td><td><span class="skel" style="width:72px;margin-left:auto"></span></td><td class="p2"><span class="skel" style="width:70%"></span></td><td></td></tr>`).join('')}</tbody></table></div><span class="sr-only" role="status">Carregando movimentações…</span>`;
+  else if (viewState==='error') body = `<div class="state err" role="alert"><span class="big-ic">${ic('alert')}</span><h3>Não foi possível carregar o histórico</h3><p>O servidor não respondeu em 8 segundos.</p><button class="btn secondary" type="button" data-st-reset>${ic('retry','sm')}Tentar de novo</button></div>`;
+  else if (viewState==='empty') body = `<div class="state"><span class="big-ic">${ic('history')}</span><h3>Nenhuma movimentação registrada</h3><p>Entradas, saídas e ajustes aparecem aqui, do mais recente para o mais antigo.</p><button class="btn primary" type="button" data-open-move>${ic('plus','sm')}Nova movimentação</button></div>`;
+  else if (viewState==='noresult' || !rows.length) body = `<div class="state"><span class="big-ic">${ic('search')}</span><h3>Nada encontrado com esses filtros</h3><p>Amplie o período ou remova um filtro.</p><button class="btn secondary" type="button" data-hist-clear>Limpar filtros</button></div>`;
+  else body = `
+    <div class="table-wrap"><table class="dt sticky two-line hist">
+      <caption class="sr-only">Movimentações — ${(htabs.find(t=>t[0]===tipo)||htabs[0])[1]}, ${periods.find(p=>p[0]===HIST.period)[1].toLowerCase()}, ${HIST.dir==='desc'?'mais recentes primeiro':'mais antigas primeiro'}, página ${HIST.page} de ${pages}</caption>
+      ${head}
+      ${days.map(g => `<tbody>
+        <tr class="day-row"><th colspan="7" scope="rowgroup"><div class="day-in"><span>${g.label}</span><span class="n tnum">${nMov(g.n)}</span></div></th></tr>
+        ${g.rows.map(m => { const p = byId[m.productId], open = HIST.open.has(m.id); return `<tr class="clickable" data-mvrow="${m.id}">
+          <td class="tnum c-time">${hm(m.date)}</td><td>${mtype(m.type)}</td>
+          <td class="col-prod"><span class="prod-name">${esc(p.name)}</span>${m.note?`<span class="note">${esc(m.note)}</span>`:`<span class="prod-sku">${p.sku}</span>`}</td>
+          <td class="num">${deltaHtml(delta(m))}</td><td class="num">${flowHtml(m)}</td><td class="p2 c-who"><span class="who" title="${m.user}">${m.user}</span></td>
+          <td class="w-exp"><button class="btn secondary sm icon-only exp" type="button" aria-expanded="${open}" aria-controls="d-${m.id}" aria-label="Detalhes: ${TYPES[m.type][0]} de ${esc(p.name)} às ${hm(m.date)}" data-mv="${m.id}">${ic('down','sm')}</button></td></tr>
+        <tr class="detail" id="d-${m.id}"${open?'':' hidden'}><td colspan="7">${detail(m,p)}</td></tr>`; }).join('')}
+      </tbody>`).join('')}
+    </table></div>
+    <div class="cards">${days.map(g => `<div class="day"><span>${g.label}</span><span class="n tnum">${nMov(g.n)}</span></div>${g.rows.map(m => { const p = byId[m.productId], open = HIST.open.has(m.id); return `<div class="pcard">
+      <div class="pcard-top">${mtype(m.type)}${deltaHtml(delta(m))}</div>
+      <div class="pcard-mid" style="margin:6px 0 0"><span style="min-width:0"><span class="prod-name" style="display:block">${esc(p.name)}</span>${m.note?`<span class="note">${esc(m.note)}</span>`:`<span class="prod-sku">${p.sku}</span>`}</span>${flowHtml(m)}</div>
+      <div class="hc-foot"><span class="caption tnum">${hm(m.date)} · ${m.user}</span><button class="btn tertiary sm exp" type="button" aria-expanded="${open}" aria-controls="dm-${m.id}" data-mv="${m.id}">Detalhes<span class="sr-only">: ${TYPES[m.type][0]} de ${esc(p.name)} às ${hm(m.date)}</span>${ic('down','sm')}</button></div>
+      <div class="hc-detail" id="dm-${m.id}"${open?'':' hidden'}>${detail(m,p)}</div></div>`; }).join('')}`).join('')}</div>
+    <div class="region-foot">
+      <span class="tnum">${fmt((HIST.page-1)*size+1)}–${fmt(Math.min(HIST.page*size,list.length))} de ${fmt(list.length)} movimentações</span>
+      ${pagerHtml(HIST.page, pages, 'data-hpage', 'Paginação do histórico')}
+      <label class="pg-size caption" style="display:flex;align-items:center;gap:8px">Por página <select class="select" style="height:32px;width:76px" data-hsize>${[10,20,50].map(n=>`<option ${n===HIST.size?'selected':''}>${n}</option>`).join('')}</select></label>
+    </div>`;
   return `<div class="page">
-    <div class="page-head"><div><h1 class="page-title">Movimentações</h1><p class="page-sub">Histórico de todas as entradas, saídas e ajustes, do mais recente para o mais antigo</p></div></div>
+    <div class="page-head"><div><h1 class="page-title">Movimentações</h1><p class="page-sub">Histórico de todas as entradas, saídas e ajustes do estoque</p></div></div>
     <section class="card region" aria-label="Histórico de movimentações">
-      <div class="toolbar"><nav class="tabs" aria-label="Filtrar por tipo">${[['','Todas'],['entradas','Entradas'],['saidas','Saídas'],['ajustes','Ajustes']].map(([k,l])=>`<a href="${histHref(k, HIST.product)}"${k===tipo?' aria-current="true"':''}>${l}<span class="n tnum">${tc(k)}</span></a>`).join('')}</nav></div>
+      <div class="toolbar"><nav class="tabs" aria-label="Filtrar por tipo">${htabs.map(([k,l])=>`<a href="${histHref(k, HIST.product)}"${k===tipo?' aria-current="true"':''}>${l}<span class="n tnum">${tc(k)}</span></a>`).join('')}</nav></div>
       <div class="filters">
         <div class="search" style="width:auto">${ic('search','sm')}<label class="sr-only" for="hq">Buscar por produto, SKU ou observação</label><input class="input" id="hq" type="search" placeholder="Produto, SKU ou observação" value="${esc(HIST.q)}"></div>
         <label class="sr-only" for="hp">Produto</label><select class="select" id="hp"><option value="">Todos os produtos</option>${[...products].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}" ${HIST.product===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
@@ -987,8 +1046,7 @@ function pageHistory(route){
       </div>
       ${chips.length ? `<div class="chips"><span class="caption" style="color:var(--text-secondary)">Filtros ativos:</span>${chips.map(([k,l])=>`<span class="fchip">${esc(l)}<button type="button" aria-label="Remover filtro ${esc(l)}" data-chip="${k}">${ic('x','xs')}</button></span>`).join('')}<button class="btn tertiary sm" type="button" data-hist-clear>Limpar todos</button></div>` : ''}
       <div class="summary" aria-live="polite" ${viewState==='content'?'':'hidden'}><span><b class="tnum">${fmt(list.length)}</b> movimentaç${list.length===1?'ão':'ões'} ${periods.find(p=>p[0]===HIST.period)[2]}</span><span>Entraram <b class="tnum" style="color:var(--success)">${signed(inU)} un.</b></span><span>Saíram <b class="tnum" style="color:var(--danger)">${signed(-outU)} un.</b></span></div>
-      <div>${groups}</div>
-      ${rows.length && viewState==='content' ? `<div class="region-foot"><span class="tnum">${fmt((HIST.page-1)*size+1)}–${fmt(Math.min(HIST.page*size,list.length))} de ${fmt(list.length)}</span><div class="pager" role="navigation" aria-label="Paginação do histórico"><button type="button" data-hpage="${HIST.page-1}" ${HIST.page===1?'disabled':''} aria-label="Página anterior">${ic('left','sm')}</button><span class="caption" style="padding:0 8px">Página ${HIST.page} de ${pages}</span><button type="button" data-hpage="${HIST.page+1}" ${HIST.page===pages?'disabled':''} aria-label="Próxima página">${ic('right','sm')}</button></div></div>` : ''}
+      ${body}
     </section>
   </div>`;
 }
@@ -1062,10 +1120,18 @@ const menu = document.getElementById('menu');
 let menuFor = null;
 function openMenu(btn, pid){
   const p = byId[pid];
+  // D11: na linha só "Movimentar" fica visível; o resto mora aqui, em três grupos (navegar · operar · destrutivo).
+  // Na página do produto, "Ver produto", "Ver no histórico" e "Editar" já estão na tela e saem do menu.
+  const onPage = btn.hasAttribute('data-menu-page');
   menu.innerHTML = `
-    <button role="menuitem" type="button" data-toast="Ajustar estoque: fluxo N2 de hoje (saldo alvo + motivo + resumo), agora no painel lateral.">${ic('adj','sm')}Ajustar estoque</button>
-    ${btn.hasAttribute('data-menu-page') ? '' : `<button role="menuitem" type="button" data-go="#/produtos/${pid}">${ic('history','sm')}Ver produto e histórico</button>`}
+    ${onPage ? '' : `<button role="menuitem" type="button" data-go="#/produtos/${pid}">${ic('package','sm')}Ver produto</button>
+    <button role="menuitem" type="button" data-go="#/movimentacoes?produto=${pid}">${ic('history','sm')}Ver no histórico</button>
     <button role="menuitem" type="button" data-toast="Editar: formulário preenchido com o estado atual.">${ic('edit','sm')}Editar</button>
+    <hr>`}
+    <button role="menuitem" type="button" data-open-move data-type="IN" data-product="${pid}">${ic('in','sm')}Nova entrada</button>
+    <button role="menuitem" type="button" data-open-move data-type="OUT" data-product="${pid}">${ic('out','sm')}Nova saída</button>
+    <button role="menuitem" type="button" data-toast="Baixa rápida de ${esc(p.name)}: mesmo fluxo de hoje (valores 1·5·10·25·50 + preview), no painel lateral.">${ic('quick','sm')}Baixa rápida</button>
+    <button role="menuitem" type="button" data-toast="Ajustar estoque: fluxo N2 de hoje (saldo alvo + motivo + resumo), agora no painel lateral.">${ic('adj','sm')}Ajustar estoque</button>
     <hr>
     <button role="menuitem" type="button" class="destr" data-toast="Zerar estoque de ${esc(p.name)}: diálogo N3 dedicado (fluxo existente).">${ic('minus','sm')}Zerar estoque</button>
     <button role="menuitem" type="button" class="destr" data-toast="Excluir ${esc(p.name)}: diálogo N3 avisando que o histórico também é apagado (fluxo existente).">${ic('trash','sm')}Excluir</button>`;
@@ -1205,10 +1271,13 @@ function bindPage(route){
   [['hu','user'],['hd','period']].forEach(([id,k]) => { const s = main.querySelector('#'+id); if (s) s.addEventListener('change', () => { HIST[k] = s.value; HIST.page = 1; go(); }); });
   const hp = main.querySelector('#hp'); if (hp) hp.addEventListener('change', () => { HIST.page = 1; const t = new URLSearchParams(parseRoute().query).get('tipo'); history.replaceState(null, '', '#/movimentacoes' + (()=>{ const u = new URLSearchParams(); if (t) u.set('tipo', t); if (hp.value) u.set('produto', hp.value); const x = u.toString(); return x ? '?'+x : ''; })()); go(); document.getElementById('hp').focus(); });
   const size = main.querySelector('[data-size]'); if (size) size.addEventListener('change', () => { PAGE.size = Number(size.value); PAGE.page = 1; go(); });
+  const hsize = main.querySelector('[data-hsize]'); if (hsize) hsize.addEventListener('change', () => { HIST.size = Number(hsize.value); HIST.page = 1; go(); document.querySelector('[data-hsize]')?.focus(); });
 }
 document.addEventListener('click', e => {
   const t = e.target;
   const openBtn = t.closest('[data-open-move]');
+  // item do menu: o foco volta para o ⋯ que abriu o menu, não para o item (que some)
+  if (openBtn && openBtn.closest('#menu')){ e.preventDefault(); const opener = menuFor; closeMenu(); return openMove(opener, openBtn.dataset.product, openBtn.dataset.type); }
   if (openBtn){ e.preventDefault(); return openMove(openBtn, openBtn.dataset.product, openBtn.dataset.type); }
   const mb = t.closest('[data-menu]'); if (mb){ e.stopPropagation(); return menu.classList.contains('open') && menuFor===mb ? closeMenu() : (closeMenu(), openMenu(mb, mb.dataset.menu)); }
   if (menu.classList.contains('open') && !t.closest('#menu')) closeMenu();
@@ -1216,7 +1285,8 @@ document.addEventListener('click', e => {
   const tb = t.closest('[data-toast]'); if (tb){ if (t.closest('#menu')) closeMenu(); return toast(esc(tb.dataset.toast).replace(/&lt;b&gt;|&lt;\/b&gt;/g,'')); }
   const sb = t.closest('[data-sort]'); if (sb){ const k = sb.dataset.sort; PAGE.dir = PAGE.sort===k && PAGE.dir==='asc' ? 'desc' : 'asc'; PAGE.sort = k; return go(); }
   const pg = t.closest('[data-page]'); if (pg){ PAGE.page = Number(pg.dataset.page); PAGE.sel.clear(); go(); return document.querySelector('.region')?.scrollIntoView({block:'start'}); } // seleção limpa ao paginar (decisão 8 da Fase 4)
-  const hp = t.closest('[data-hpage]'); if (hp){ HIST.page = Number(hp.dataset.hpage); return go(); }
+  const hp = t.closest('[data-hpage]'); if (hp){ HIST.page = Number(hp.dataset.hpage); go(); return document.querySelector('.region')?.scrollIntoView({block:'start'}); }
+  if (t.closest('[data-hsort]')){ HIST.dir = HIST.dir==='desc' ? 'asc' : 'desc'; HIST.page = 1; go(); return document.querySelector('[data-hsort]')?.focus(); }
   const cb = t.closest('[data-sel]'); if (cb){ cb.checked ? PAGE.sel.add(cb.dataset.sel) : PAGE.sel.delete(cb.dataset.sel); return go(); }
   const all = t.closest('[data-sel-all]'); if (all){ document.querySelectorAll('[data-sel]').forEach(c => all.checked ? PAGE.sel.add(c.dataset.sel) : PAGE.sel.delete(c.dataset.sel)); return go(); }
   if (t.closest('[data-sel-clear]')){ PAGE.sel.clear(); return go(); }
@@ -1228,13 +1298,17 @@ document.addEventListener('click', e => {
     else HIST[chip.dataset.chip] = '';
     return go(); }
   const tt = t.closest('[data-table-toggle]'); if (tt){ const el = document.getElementById(tt.dataset.tableToggle); el._table = !el._table; el.querySelector('.data-table').hidden = !el._table; tt.lastChild.textContent = el._table ? 'Ocultar tabela' : 'Ver como tabela'; return; }
-  const mv = t.closest('[data-mv]'); if (mv && !t.closest('a')){ toggleMv(mv); return; }
+  const mv = t.closest('[data-mv]'); if (mv){ toggleMv(mv.dataset.mv); return; }
+  // P-8: clique de ponteiro na linha do histórico expande; pelo teclado o alvo é o botão de detalhes
+  const mvr = t.closest('[data-mvrow]'); if (mvr && !t.closest('button,a,input')){ toggleMv(mvr.dataset.mvrow); return; }
   const row = t.closest('[data-row]'); if (row && !t.closest('button,a,input')){ location.hash = '#/produtos/'+row.dataset.row; }
 });
-function toggleMv(mv){ const id = mv.dataset.mv; HIST.open.has(id) ? HIST.open.delete(id) : HIST.open.add(id); const open = HIST.open.has(id); mv.setAttribute('aria-expanded', open); document.getElementById('d-'+id).classList.toggle('open', open); }
+function toggleMv(id){
+  HIST.open.has(id) ? HIST.open.delete(id) : HIST.open.add(id); const open = HIST.open.has(id);
+  document.querySelectorAll(`[data-mv="${id}"]`).forEach(b => b.setAttribute('aria-expanded', open));
+  ['d-','dm-'].forEach(k => { const el = document.getElementById(k+id); if (el) el.hidden = !open; });
+}
 document.addEventListener('keydown', e => {
-  const mv = e.target.closest && e.target.closest('[data-mv]');
-  if (mv && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); toggleMv(mv); }
   if (e.key==='Escape' && document.body.classList.contains('nav-open')) toggleNav(false);
 });
 
