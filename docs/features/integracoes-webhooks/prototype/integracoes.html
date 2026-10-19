@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protótipo — Integrações — SimpleStock</title>
+<!-- Mesma fonte e mesma origem do index.html de produção. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   PROTÓTIPO — NÃO É CÓDIGO DE PRODUÇÃO
+   Tokens copiados de docs/ui-ux/prototype/dashboard.html, que espelha
+   docs/ui-ux/design-system.md (Fase 5). HTML+CSS puro, sem script.
+   ============================================================ */
+:root{
+  --background:#F9FAFB; --surface:#FFFFFF; --surface-subtle:#F9FAFB;
+  --border:#E5E7EB; --border-strong:#6B7280; --border-hover:#4B5563;
+  --text-primary:#111827; --text-secondary:#4B5563; --text-muted:#6B7280;
+  --accent:#2563EB; --accent-strong:#1D4ED8; --accent-subtle:#EFF6FF; --accent-subtle-text:#1E40AF;
+  --success:#047857; --success-subtle:#ECFDF5;
+  --warning:#B45309; --warning-subtle:#FFFBEB;
+  --danger:#B91C1C;  --danger-subtle:#FEF2F2;
+  --r-control:6px; --r-surface:8px;
+  --shadow-overlay:0 10px 24px -6px rgb(0 0 0 / .18), 0 4px 8px -4px rgb(0 0 0 / .10);
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--background);color:var(--text-primary);
+  font:400 14px/1.55 Inter,system-ui,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,dl,dd,dt{margin:0}
+button,input,textarea,select{font:inherit;color:inherit}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+
+.t-page{font-size:24px;font-weight:600;line-height:1.25;letter-spacing:-.01em}
+.t-component{font-size:16px;font-weight:600;line-height:1.4}
+.t-label{font-size:14px;font-weight:500;line-height:1.4}
+.t-caption{font-size:12px;line-height:1.4;color:var(--text-secondary)}
+.t-th{font-size:12px;font-weight:600;line-height:1.4;letter-spacing:.03em;color:var(--text-secondary);text-transform:uppercase}
+.num{font-variant-numeric:tabular-nums}
+
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{outline:none;box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);border-radius:var(--r-control);
+  border:1px solid transparent;cursor:pointer;font-size:14px;font-weight:500;padding:0 var(--s3);height:36px;white-space:nowrap}
+.btn--sm{height:32px;padding:0 var(--s2);font-size:13px}
+.btn--primary{background:var(--accent);color:#fff}
+.btn--secondary{background:var(--surface);border-color:var(--border-strong);color:var(--text-primary)}
+.btn--tertiary{background:transparent;color:var(--text-secondary)}
+.btn--danger-rest{background:transparent;color:var(--danger)}
+.btn--destructive{background:var(--danger);color:#fff}
+.btn--icon{width:32px;padding:0}
+
+.badge{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-control);padding:2px var(--s2);font-size:12px;font-weight:500;white-space:nowrap}
+.badge--ok{background:var(--success-subtle);color:var(--success)}
+.badge--warn{background:var(--warning-subtle);color:var(--warning)}
+.badge--danger{background:var(--danger-subtle);color:var(--danger)}
+.badge--info{background:var(--accent-subtle);color:var(--accent-subtle-text)}
+
+/* shell — igual ao App.tsx atual + navegação primária nova */
+.appbar{background:var(--surface);border-bottom:1px solid var(--border)}
+.shell{max-width:1536px;margin:0 auto;padding:0 32px}
+.appbar__in{display:flex;align-items:center;justify-content:space-between;gap:var(--s6);padding-block:var(--s4)}
+.brand b{display:block;font-size:14px;font-weight:600;color:var(--text-secondary)}
+.brand span{font-size:14px;color:#4B5563}
+.nav{display:flex;gap:var(--s1);margin-right:auto;margin-left:var(--s6)}
+.nav a{display:inline-flex;align-items:center;height:36px;padding:0 var(--s3);border-radius:var(--r-control);
+  color:var(--text-secondary);font-weight:500;text-decoration:none}
+.nav a:hover{background:var(--surface-subtle);color:var(--text-primary)}
+.nav a[aria-current="page"]{background:var(--accent-subtle);color:var(--accent-subtle-text);box-shadow:inset 0 -2px 0 var(--accent)}
+.user{display:flex;gap:var(--s3);align-items:center;color:#4B5563}
+
+.page{padding-block:var(--s8) var(--s12)}
+.pagehead{display:flex;flex-wrap:wrap;gap:var(--s3);align-items:flex-end;justify-content:space-between;margin-bottom:var(--s6)}
+
+.dataregion{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--surface-subtle);border-bottom:1px solid var(--border);text-align:left;padding:var(--s2) var(--s4);height:44px}
+tbody td{border-top:1px solid var(--border);padding:var(--s3) var(--s4);vertical-align:top}
+tbody tr:first-child td{border-top:0}
+.url{font-weight:500;overflow-wrap:anywhere}
+.events{display:flex;flex-wrap:wrap;gap:var(--s1)}
+.health{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.rowacts{display:flex;gap:var(--s2);justify-content:flex-end;align-items:center}
+.reason{color:var(--danger);font-size:12px;max-width:34ch}
+
+/* menu de overflow (MenuPopover) */
+.menu{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);box-shadow:var(--shadow-overlay);
+  padding:var(--s1);width:230px}
+.menu button{display:flex;width:100%;text-align:left;background:none;border:0;border-radius:var(--r-control);padding:var(--s2) var(--s3);cursor:pointer}
+.menu button:hover{background:var(--surface-subtle)}
+.menu hr{border:0;border-top:1px solid var(--border);margin:var(--s1) 0}
+.menu .danger{color:var(--danger)}
+
+/* diálogos (Modal) renderizados estáticos */
+.dlg{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);box-shadow:var(--shadow-overlay);overflow:hidden}
+.dlg--md{max-width:520px}.dlg--lg{max-width:920px}
+.dlg__h{padding:var(--s4);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:var(--s3)}
+.dlg__b{padding:var(--s4);display:flex;flex-direction:column;gap:var(--s4)}
+.dlg__f{padding:var(--s3) var(--s4);border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:var(--s2)}
+.dlg__f .left{margin-right:auto}
+.x{background:none;border:0;cursor:pointer;color:var(--text-secondary);font-size:16px}
+
+.field{display:flex;flex-direction:column;gap:var(--s1)}
+.input{height:36px;border:1px solid var(--border-strong);border-radius:var(--r-control);background:var(--surface);padding:0 var(--s3);width:100%}
+.input[aria-invalid="true"]{border-color:var(--danger)}
+.input--ro{background:var(--surface-subtle);font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.err{color:var(--danger);font-size:12px}
+fieldset{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:var(--s3)}
+legend{font-weight:500;margin-bottom:var(--s2)}
+.check{display:flex;gap:var(--s3);align-items:flex-start;border:1px solid var(--border);border-radius:var(--r-control);padding:var(--s3)}
+.check input{margin-top:3px;width:16px;height:16px}
+
+.alert{border-radius:var(--r-surface);padding:var(--s3) var(--s4);border:1px solid}
+.alert--danger{background:var(--danger-subtle);border-color:#FECACA;color:#7F1D1D}
+.alert--warn{background:var(--warning-subtle);border-color:#FDE68A;color:#78350F}
+.alert--info{background:var(--accent-subtle);border-color:#BFDBFE;color:var(--accent-subtle-text)}
+
+.summary{display:grid;grid-template-columns:max-content 1fr;gap:var(--s2) var(--s4);background:var(--surface-subtle);
+  border:1px solid var(--border);border-radius:var(--r-control);padding:var(--s3) var(--s4)}
+.summary dt{color:var(--text-secondary)}
+.ledger{width:100%;border-collapse:collapse}
+.ledger th{border-bottom:1px solid var(--border);padding:var(--s2) var(--s3);text-align:left;background:none;height:auto}
+.ledger td{border-top:1px solid var(--border);padding:var(--s2) var(--s3);vertical-align:top}
+pre.payload{margin:0;background:#0F172A;color:#E2E8F0;border-radius:var(--r-control);padding:var(--s3);overflow:auto;font-size:12px;line-height:1.5}
+details summary{cursor:pointer;font-weight:500}
+
+.state{padding:var(--s12) var(--s4);text-align:center;color:var(--text-secondary);display:flex;flex-direction:column;gap:var(--s2);align-items:center}
+.state__t{font-weight:600;color:var(--text-primary);font-size:16px}
+.pager{display:flex;justify-content:space-between;align-items:center;padding:var(--s3) var(--s4);border-top:1px solid var(--border);background:var(--surface-subtle)}
+
+/* cards mobile */
+.cards{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--s3)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-surface);padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:var(--s2)}
+.card__acts{display:flex;gap:var(--s2)}
+.card__acts .btn{height:44px;flex:1}.card__acts .btn--icon{flex:none;width:44px}
+
+/* ====== RESPONSIVO ======
+   Lista de destinos: tabela ≥ 1024px (lg), cards abaixo — 4 colunas com URL
+   longa não cabem em 768px; §15 permite subir a troca para lg (D8).
+   Cabeçalho: abaixo de 768px (md) a navegação vai para a própria linha. */
+.only-wide{display:block}.only-narrow{display:none}
+@media (max-width:1023.98px){
+  .only-wide{display:none}.only-narrow{display:block}
+}
+@media (max-width:767.98px){
+  .shell,.scaffold{padding-left:16px;padding-right:16px}
+  .appbar__in{flex-wrap:wrap;gap:var(--s3)}
+  .nav{order:3;width:100%;margin:0}
+  .nav a{flex:1;justify-content:center;height:44px}
+  .user span{display:none}
+  .pagehead .btn{width:100%;height:44px}
+  .split{grid-template-columns:1fr}
+  /* listas dentro dos modais: linhas empilhadas em vez de colunas */
+  table.stack thead{display:none}
+  table.stack tr{display:block;padding:var(--s3) 0;border-top:1px solid var(--border)}
+  table.stack tr:first-child{border-top:0}
+  table.stack td{display:block;border:0;padding:2px var(--s3)}
+  table.stack td[data-l]::before{content:attr(data-l) ": ";color:var(--text-secondary);font-size:12px}
+  .summary{grid-template-columns:1fr}
+  .dlg__f{flex-wrap:wrap}.dlg__f .btn{flex:1}
+}
+
+/* andaimes (não fazem parte do design) */
+.scaffold{max-width:1536px;margin:0 auto;padding:var(--s6) 32px 0}
+.scaffold h2{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#7C3AED;margin:var(--s8) 0 var(--s2)}
+.scaffold .note{font-size:13px;color:var(--text-secondary);margin-bottom:var(--s3);max-width:90ch}
+.tag{display:inline-block;background:#F5F3FF;color:#5B21B6;border:1px solid #DDD6FE;border-radius:var(--r-control);padding:1px 6px;font-size:11px;font-weight:600;margin-right:6px;text-transform:none;letter-spacing:0}
+.split{display:grid;gap:var(--s6);grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));align-items:start}
+.frame{border:1px dashed #C4B5FD;border-radius:var(--r-surface);padding:var(--s3);background:#FCFCFD}
+.frame__t{font-size:12px;font-weight:600;color:#6D28D9;margin-bottom:var(--s2)}
+.w375{width:375px;max-width:100%}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+
+<!-- ================= SHELL ================= -->
+<header class="appbar">
+  <div class="shell appbar__in">
+    <div class="brand"><b>SimpleStock</b><span>Sistema de controle de estoque simplificado</span></div>
+    <nav class="nav" aria-label="Seções">
+      <a href="#estoque">Estoque</a>
+      <a href="#integracoes" aria-current="page">Integrações</a>
+    </nav>
+    <div class="user"><span>admin@simplestock.local</span><button class="btn btn--secondary btn--sm">Sair</button></div>
+  </div>
+</header>
+
+<!-- ================= TELA: INTEGRAÇÕES ================= -->
+<main class="shell page" id="integracoes">
+  <div class="pagehead">
+    <div>
+      <h1 class="t-page">Integrações</h1>
+      <p class="t-caption" style="font-size:14px">Envie eventos de estoque para outros sistemas por webhook</p>
+    </div>
+    <button class="btn btn--primary">＋ Novo destino</button>
+  </div>
+
+  <div class="dataregion only-wide">
+    <table>
+      <thead><tr>
+        <th class="t-th">Destino</th>
+        <th class="t-th" style="width:250px">Eventos</th>
+        <th class="t-th" style="width:290px">Situação</th>
+        <th class="t-th" style="width:170px;text-align:right">Ações</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="url">https://erp.papelaria-exemplo.com/<wbr>webhooks/<wbr>estoque</div><div class="t-caption">ERP — sincroniza saldo</div></td>
+          <td><div class="events"><span class="badge badge--info">Movimentação registrada</span><span class="badge badge--info">Mudança de status</span></div></td>
+          <td><div class="health"><span class="badge badge--ok">Ativo</span><span class="t-caption">Última entrega: <strong>Entregue</strong> · 14:32</span></div></td>
+          <td><div class="rowacts"><button class="btn btn--primary btn--sm">Ver entregas</button><button class="btn btn--secondary btn--sm btn--icon" aria-label="Mais ações para erp.papelaria-exemplo.com">⋯</button></div></td>
+        </tr>
+        <tr>
+          <td><div class="url">https://compras.exemplo.com/<wbr>alertas</div><div class="t-caption">Compras — avisa estoque baixo</div></td>
+          <td><div class="events"><span class="badge badge--info">Mudança de status</span></div></td>
+          <td><div class="health"><span class="badge badge--warn">Ativo · com falhas</span><span class="t-caption">Falhando desde 19/10 às 09:12 · última entrega: <strong>Retentando</strong> · 14:20</span></div></td>
+          <td><div class="rowacts"><button class="btn btn--primary btn--sm">Ver entregas</button><button class="btn btn--secondary btn--sm btn--icon" aria-label="Mais ações para compras.exemplo.com">⋯</button></div></td>
+        </tr>
+        <tr>
+          <td><div class="url" style="color:var(--text-secondary)">https://antigo.exemplo.com/<wbr>hook</div><div class="t-caption">Integração antiga</div></td>
+          <td><div class="events"><span class="badge badge--info">Movimentação registrada</span></div></td>
+          <td><div class="health"><span class="badge badge--danger">Desativado automaticamente</span><span class="reason">Destino respondeu 410 Gone em 17/10 às 18:40.</span></div></td>
+          <td><div class="rowacts"><button class="btn btn--secondary btn--sm">Ver entregas</button><button class="btn btn--secondary btn--sm btn--icon" aria-label="Mais ações para antigo.exemplo.com">⋯</button></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul class="cards only-narrow" aria-label="Destinos">
+    <li class="card">
+      <div class="url">https://erp.papelaria-exemplo.com/<wbr>webhooks/<wbr>estoque</div><div class="t-caption">ERP — sincroniza saldo</div>
+      <div class="events"><span class="badge badge--info">Movimentação registrada</span><span class="badge badge--info">Mudança de status</span></div>
+      <div class="health"><span class="badge badge--ok">Ativo</span><span class="t-caption">Última entrega: <strong>Entregue</strong> · 14:32</span></div>
+      <div class="card__acts"><button class="btn btn--primary">Ver entregas</button><button class="btn btn--secondary btn--icon" aria-label="Mais ações para erp.papelaria-exemplo.com">⋯</button></div>
+    </li>
+    <li class="card">
+      <div class="url">https://compras.exemplo.com/<wbr>alertas</div><div class="t-caption">Compras — avisa estoque baixo</div>
+      <div class="events"><span class="badge badge--info">Mudança de status</span></div>
+      <div class="health"><span class="badge badge--warn">Ativo · com falhas</span><span class="t-caption">Falhando desde 19/10 às 09:12 · última entrega: <strong>Retentando</strong> · 14:20</span></div>
+      <div class="card__acts"><button class="btn btn--primary">Ver entregas</button><button class="btn btn--secondary btn--icon" aria-label="Mais ações para compras.exemplo.com">⋯</button></div>
+    </li>
+    <li class="card">
+      <div class="url" style="color:var(--text-secondary)">https://antigo.exemplo.com/<wbr>hook</div><div class="t-caption">Integração antiga</div>
+      <div class="events"><span class="badge badge--info">Movimentação registrada</span></div>
+      <div class="health"><span class="badge badge--danger">Desativado automaticamente</span><span class="reason">Destino respondeu 410 Gone em 17/10 às 18:40.</span></div>
+      <div class="card__acts"><button class="btn btn--secondary">Ver entregas</button><button class="btn btn--secondary btn--icon" aria-label="Mais ações para antigo.exemplo.com">⋯</button></div>
+    </li>
+  </ul>
+  <p class="t-caption" style="margin-top:var(--s3)">Como verificar a assinatura no seu sistema: <a href="#contrato">contrato dos eventos</a>.</p>
+</main>
+
+<div class="scaffold">
+
+  <h2>Menu "Mais ações" do destino <span class="tag">MenuPopover existente</span></h2>
+  <p class="note">Mesmo padrão do menu de ações do produto: ações comuns antes do separador, destrutivas depois. "Enviar teste" fica desabilitado (com o motivo) em destino desativado; "Desativar" vira "Ativar".</p>
+  <div class="split">
+    <div class="frame"><div class="frame__t">Destino ativo</div>
+      <div class="menu" role="menu">
+        <button role="menuitem">Enviar evento de teste</button>
+        <button role="menuitem">Editar</button>
+        <button role="menuitem">Gerar novo segredo</button>
+        <hr>
+        <button role="menuitem">Desativar</button>
+        <button role="menuitem" class="danger">Excluir destino</button>
+      </div>
+    </div>
+    <div class="frame"><div class="frame__t">Destino desativado</div>
+      <div class="menu" role="menu">
+        <button role="menuitem" aria-disabled="true" style="color:var(--text-muted)">Enviar evento de teste<span class="sr"> — ative o destino primeiro</span></button>
+        <button role="menuitem">Editar</button>
+        <button role="menuitem">Gerar novo segredo</button>
+        <hr>
+        <button role="menuitem">Ativar</button>
+        <button role="menuitem" class="danger">Excluir destino</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Estados da lista</h2>
+  <div class="split">
+    <div class="frame"><div class="frame__t">Vazio — nenhum destino cadastrado</div>
+      <div class="dataregion"><div class="state">
+        <span class="state__t">Nenhum destino cadastrado</span>
+        <span>Cadastre a URL de um sistema para ele receber as movimentações e as mudanças de status do estoque.</span>
+        <button class="btn btn--primary" style="margin-top:var(--s2)">＋ Novo destino</button>
+      </div></div>
+    </div>
+    <div class="frame"><div class="frame__t">Carregando · erro</div>
+      <div class="dataregion"><div class="state" role="status"><span>Carregando destinos…</span></div></div>
+      <div class="alert alert--danger" role="alert" style="margin-top:var(--s3)">
+        Não foi possível carregar os destinos. Verifique a conexão e <button class="btn btn--secondary btn--sm">Tentar de novo</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Novo destino / Editar <span class="tag">Modal existente</span></h2>
+  <p class="note">Formulário no padrão de <code>MovementFormModal</code> (react-hook-form + Zod, erro do servidor em bloco <code>role="alert"</code>). A validação de rede interna só o servidor faz (precisa resolver o DNS), por isso ela chega como erro do servidor — com a explicação do porquê.</p>
+  <div class="split">
+    <div class="frame"><div class="frame__t">Preenchendo</div>
+      <div class="dlg dlg--md" role="dialog" aria-labelledby="d1">
+        <div class="dlg__h"><div><h3 class="t-component" id="d1">Novo destino</h3><p class="t-caption">O sistema recebe um POST assinado a cada evento escolhido.</p></div><button class="x" aria-label="Fechar">✕</button></div>
+        <div class="dlg__b">
+          <div class="field"><label class="t-label" for="u1">URL de destino</label><input class="input" id="u1" value="https://erp.papelaria-exemplo.com/webhooks/estoque"><span class="t-caption">Precisa ser https e acessível pela internet.</span></div>
+          <div class="field"><label class="t-label" for="n1">Descrição <span class="t-caption">(opcional)</span></label><input class="input" id="n1" value="ERP — sincroniza saldo"></div>
+          <fieldset><legend>Eventos</legend>
+            <label class="check"><input type="checkbox" checked><span><span class="t-label">Movimentação registrada</span><br><span class="t-caption">Toda entrada, saída, ajuste e estoque inicial, com o saldo antes e depois.</span></span></label>
+            <label class="check"><input type="checkbox" checked><span><span class="t-label">Mudança de status</span><br><span class="t-caption">Quando o produto passa entre Em estoque, Estoque baixo e Sem estoque.</span></span></label>
+          </fieldset>
+        </div>
+        <div class="dlg__f"><button class="btn btn--secondary">Cancelar</button><button class="btn btn--primary">Criar destino</button></div>
+      </div>
+    </div>
+    <div class="frame"><div class="frame__t">Erros — campo e servidor</div>
+      <div class="dlg dlg--md" role="dialog" aria-labelledby="d2">
+        <div class="dlg__h"><div><h3 class="t-component" id="d2">Novo destino</h3></div><button class="x" aria-label="Fechar">✕</button></div>
+        <div class="dlg__b">
+          <div class="alert alert--danger" role="alert">O destino aponta para um endereço de rede interna e não é permitido.</div>
+          <div class="field"><label class="t-label" for="u2">URL de destino</label><input class="input" id="u2" value="http://192.168.0.10/hook" aria-invalid="true" aria-describedby="e2"><span class="t-caption">Precisa ser https e acessível pela internet.</span></div>
+          <fieldset><legend>Eventos</legend>
+            <label class="check" style="border-color:var(--danger)"><input type="checkbox" aria-describedby="e3"><span class="t-label">Movimentação registrada</span></label>
+            <label class="check" style="border-color:var(--danger)"><input type="checkbox" aria-describedby="e3"><span class="t-label">Mudança de status</span></label>
+            <span class="err" id="e3">Selecione pelo menos um evento.</span>
+          </fieldset>
+        </div>
+        <div class="dlg__f"><button class="btn btn--secondary">Cancelar</button><button class="btn btn--primary">Criar destino</button></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Segredo — exibido uma única vez</h2>
+  <p class="note">Depois de criar (ou de "Gerar novo segredo"), o formulário dá lugar a este passo no mesmo Modal. Fechar exige a ação explícita "Já copiei" — Esc e o ✕ pedem confirmação, porque o segredo não volta.</p>
+  <div class="frame" style="max-width:560px"><div class="frame__t">Após criar</div>
+    <div class="dlg dlg--md" role="dialog" aria-labelledby="d3">
+      <div class="dlg__h"><div><h3 class="t-component" id="d3">Destino criado · erp.papelaria-exemplo.com</h3></div></div>
+      <div class="dlg__b">
+        <div class="alert alert--warn" role="status"><strong>Copie o segredo agora.</strong> Ele não será exibido de novo — se perder, gere outro no menu do destino.</div>
+        <div class="field"><label class="t-label" for="s1">Segredo de assinatura</label>
+          <div style="display:flex;gap:var(--s2)"><input class="input input--ro" id="s1" readonly value="whsec_De1bQ3m4kH8vYp0rZt9xW2aN7cF5eJ6uL1sG4dR8iO0="><button class="btn btn--secondary">Copiar</button></div>
+          <span class="t-caption">Use para verificar o header <code>webhook-signature</code> (padrão Standard Webhooks).</span></div>
+      </div>
+      <div class="dlg__f"><button class="btn btn--tertiary left">Ver como verificar</button><button class="btn btn--primary">Já copiei</button></div>
+    </div>
+  </div>
+
+  <h2>Entregas do destino <span class="tag">padrão MovementHistoryModal</span></h2>
+  <p class="note">Modal grande, como o histórico de movimentações: âncora com o destino no topo, filtro de situação, lista paginada. Situação sempre em palavra; "Retentando" mostra a tentativa e quando é a próxima.</p>
+  <div class="dlg dlg--lg" role="dialog" aria-labelledby="d4">
+    <div class="dlg__h"><div><h3 class="t-component" id="d4">Entregas · compras.exemplo.com</h3><p class="t-caption">Eventos enviados para este destino nos últimos 30 dias.</p></div><button class="x" aria-label="Fechar">✕</button></div>
+    <div class="dlg__b">
+      <div style="display:flex;gap:var(--s3);align-items:flex-end;justify-content:space-between;flex-wrap:wrap">
+        <div class="field" style="width:240px"><label class="t-label" for="f1">Situação</label>
+          <select class="input" id="f1"><option>Todas</option><option>Pendente</option><option>Retentando</option><option>Entregue</option><option>Falhou definitivamente</option><option>Cancelada</option></select></div>
+        <button class="btn btn--secondary">Enviar evento de teste</button>
+      </div>
+      <div class="dataregion">
+        <table class="stack">
+          <thead><tr><th class="t-th">Evento</th><th class="t-th" style="width:260px">Situação</th><th class="t-th" style="width:110px">Tentativas</th><th class="t-th" style="width:120px">Criada</th><th class="t-th" style="width:110px"><span class="sr">Ações</span></th></tr></thead>
+          <tbody>
+            <tr><td><div class="t-label">Mudança de status · CANETA_AZUL_001</div><div class="t-caption">Em estoque → Estoque baixo</div></td>
+              <td><span class="badge badge--warn">Retentando</span><div class="t-caption">próxima tentativa às 14:35</div></td><td class="num" data-l="Tentativas">4 de 8</td><td class="t-caption num" data-l="Criada">19/10 09:12</td><td><button class="btn btn--secondary btn--sm">Detalhes</button></td></tr>
+            <tr><td><div class="t-label">Mudança de status · LAPIS_HB_007</div><div class="t-caption">Estoque baixo → Sem estoque</div></td>
+              <td><span class="badge badge--danger">Falhou definitivamente</span><div class="t-caption">pode ser reenviada</div></td><td class="num" data-l="Tentativas">8 de 8</td><td class="t-caption num" data-l="Criada">18/10 08:01</td><td><button class="btn btn--secondary btn--sm">Detalhes</button></td></tr>
+            <tr><td><div class="t-label">Teste</div><div class="t-caption">Evento de teste enviado pelo SimpleStock.</div></td>
+              <td><span class="badge badge--ok">Entregue</span></td><td class="num" data-l="Tentativas">1</td><td class="t-caption num" data-l="Criada">17/10 16:20</td><td><button class="btn btn--secondary btn--sm">Detalhes</button></td></tr>
+            <tr><td><div class="t-label">Mudança de status · BORRACHA_BRANCA_012</div><div class="t-caption">Estoque baixo → Em estoque</div></td>
+              <td><span class="badge badge--info">Cancelada</span><div class="t-caption">destino foi desativado</div></td><td class="num" data-l="Tentativas">2</td><td class="t-caption num" data-l="Criada">16/10 11:47</td><td><button class="btn btn--secondary btn--sm">Detalhes</button></td></tr>
+          </tbody>
+        </table>
+        <div class="pager"><span class="t-caption num">Página 1 de 3 · 52 entregas</span><div style="display:flex;gap:var(--s2)"><button class="btn btn--secondary btn--sm" aria-disabled="true">← Anterior</button><button class="btn btn--secondary btn--sm">Próxima →</button></div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Detalhe da entrega</h2>
+  <p class="note">Resumo em lista de definição (gramática de confirmação do Modal), tentativas como extrato e o corpo enviado recolhido. "Reenviar" é a PRIMARY só quando a entrega falhou definitivamente; nos outros estados o rodapé só tem "Fechar".</p>
+  <div class="dlg dlg--lg" role="dialog" aria-labelledby="d5">
+    <div class="dlg__h"><div><h3 class="t-component" id="d5">Entrega · Mudança de status · LAPIS_HB_007</h3></div><button class="x" aria-label="Fechar">✕</button></div>
+    <div class="dlg__b">
+      <dl class="summary">
+        <dt>Situação</dt><dd><span class="badge badge--danger">Falhou definitivamente</span> depois de 8 tentativas</dd>
+        <dt>Destino</dt><dd>https://compras.exemplo.com/alertas</dd>
+        <dt>webhook-id</dt><dd><code>evt_8a9fab3212e54225aa88d0953ac0410c</code> <button class="btn btn--tertiary btn--sm">Copiar</button></dd>
+        <dt>Evento criado</dt><dd class="num">18/10/2026 08:01:12</dd>
+      </dl>
+      <div>
+        <p class="t-label" style="margin-bottom:var(--s2)">Tentativas</p>
+        <table class="ledger stack">
+          <thead><tr><th class="t-th">#</th><th class="t-th">Quando</th><th class="t-th">Resultado</th><th class="t-th">Resposta</th></tr></thead>
+          <tbody>
+            <tr><td class="num" data-l="Tentativas">1</td><td class="num">18/10 08:01:12</td><td>Conexão recusada</td><td class="t-caption"><code>ECONNREFUSED</code></td></tr>
+            <tr><td class="num" data-l="Tentativas">2</td><td class="num">18/10 08:01:17</td><td>HTTP 503 · 210 ms</td><td class="t-caption">Service Unavailable</td></tr>
+            <tr><td class="num">3</td><td class="num">18/10 08:06:20</td><td>Tempo esgotado (15 s)</td><td class="t-caption">—</td></tr>
+            <tr><td class="num">…</td><td colspan="3" class="t-caption">4 tentativas omitidas</td></tr>
+            <tr><td class="num">8</td><td class="num">19/10 10:12:40</td><td>HTTP 500 · 98 ms</td><td class="t-caption"><code>{"error":"internal"}</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <details><summary>Corpo enviado (JSON)</summary>
+<pre class="payload">{
+  "type": "stock.status.changed",
+  "timestamp": "2026-10-18T11:01:12.402Z",
+  "data": {
+    "movementId": "cmvf…",
+    "product": { "id": "cmvf…", "sku": "LAPIS_HB_007", "name": "Lápis HB", "minStock": 10 },
+    "previousStatus": "ATTN", "newStatus": "OUT",
+    "previousQuantity": 3, "newQuantity": 0
+  }
+}</pre></details>
+    </div>
+    <div class="dlg__f"><button class="btn btn--secondary">Fechar</button><button class="btn btn--primary">Reenviar entrega</button></div>
+  </div>
+
+  <h2>Confirmações <span class="tag">ConfirmDialog / useConfirm</span></h2>
+  <p class="note">Corpo = consequência concreta, sem texto genérico (§12). Botão de decisão nomeia a consequência; vermelho pleno só no momento da decisão.</p>
+  <div class="split">
+    <div class="frame"><div class="frame__t">Gerar novo segredo</div>
+      <div class="dlg dlg--md" role="alertdialog" aria-labelledby="c1">
+        <div class="dlg__h"><h3 class="t-component" id="c1">Gerar novo segredo · erp.papelaria-exemplo.com</h3></div>
+        <div class="dlg__b"><p>O segredo atual para de valer <strong>imediatamente</strong>. Até você atualizar o sistema receptor, ele vai recusar as entregas e elas entram em retentativa.</p></div>
+        <div class="dlg__f"><button class="btn btn--secondary">Cancelar</button><button class="btn btn--destructive">Gerar novo segredo</button></div>
+      </div>
+    </div>
+    <div class="frame"><div class="frame__t">Excluir destino</div>
+      <div class="dlg dlg--md" role="alertdialog" aria-labelledby="c2">
+        <div class="dlg__h"><h3 class="t-component" id="c2">Excluir destino · antigo.exemplo.com</h3></div>
+        <div class="dlg__b"><p>O destino e o histórico de <strong class="num">132 entregas</strong> serão apagados. Para parar os envios e manter o histórico, use <strong>Desativar</strong>.</p></div>
+        <div class="dlg__f"><button class="btn btn--secondary">Cancelar</button><button class="btn btn--destructive">Excluir destino e histórico</button></div>
+      </div>
+    </div>
+    <div class="frame"><div class="frame__t">Desativar</div>
+      <div class="dlg dlg--md" role="alertdialog" aria-labelledby="c3">
+        <div class="dlg__h"><h3 class="t-component" id="c3">Desativar · compras.exemplo.com</h3></div>
+        <div class="dlg__b"><p><strong class="num">3 entregas</strong> na fila serão canceladas, e os eventos gerados enquanto o destino estiver desativado não serão enviados depois.</p></div>
+        <div class="dlg__f"><button class="btn btn--secondary">Cancelar</button><button class="btn btn--destructive">Desativar destino</button></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Avisos em tela (toast, aria-live)</h2>
+  <div class="split">
+    <div class="alert alert--info" role="status">Evento de teste enfileirado para compras.exemplo.com. Acompanhe em "Ver entregas".</div>
+    <div class="alert alert--info" role="status">Entrega reenviada — ela volta para a fila com o mesmo webhook-id.</div>
+  </div>
+  <div style="height:var(--s12)"></div>
+</div>
+
+</body>
+</html>
