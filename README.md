@@ -86,6 +86,12 @@ Substitua `JWT_SECRET` em `packages/backend/.env` por um segredo local gerado co
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
+E preencha `WEBHOOK_SECRET_ENCRYPTION_KEY` (obrigatória; a API não sobe sem ela) com:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
 Depois, prepare o banco e inicie a aplicação:
 
 ```bash
@@ -114,6 +120,7 @@ configure `VITE_API_BASE` e a origem da interface em `CORS_ALLOWED_ORIGINS`.
 | `DATABASE_URL_TEST` | Banco exclusivo de testes; os testes removem dados |
 | `JWT_SECRET` | Assinatura dos tokens |
 | `CORS_ALLOWED_ORIGINS` | Origens autorizadas, separadas por vírgula |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Chave (base64, 32 bytes) que cifra os segredos dos webhooks no banco |
 | `PORT` | Porta da API, padrão 4000 |
 
 O Compose cria os bancos de desenvolvimento e teste na primeira inicialização do

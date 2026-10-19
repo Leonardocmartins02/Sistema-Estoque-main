@@ -32,6 +32,8 @@ jobs:
       DATABASE_URL_TEST: postgresql://simplestock:simplestock@localhost:5432/simplestock_test?schema=public
       JWT_SECRET: ci-only-secret-nao-usar-em-producao-0000000000
       CORS_ALLOWED_ORIGINS: http://localhost:5173
+      # Chave só de CI (32 bytes de 0x07 em base64); test/setup.ts usa a mesma.
+      WEBHOOK_SECRET_ENCRYPTION_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
       NODE_ENV: test
 
     steps:

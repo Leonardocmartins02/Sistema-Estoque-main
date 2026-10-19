@@ -16,3 +16,6 @@ process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
 process.env.NODE_ENV = 'test';
 process.env.CORS_ALLOWED_ORIGINS ||= 'http://localhost:5173';
 process.env.JWT_SECRET ||= 'chave-de-teste-nao-usar-em-producao-0000000000';
+// Chave fixa só de teste (32 bytes de 0x07) — sobrescreve qualquer valor do
+// .env local para os testes nunca dependerem da chave de dev de alguém.
+process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
