@@ -112,3 +112,24 @@ describe('Button — variantes (design-system.md §10.1)', () => {
     expect(screen.getByRole('button', { name: 'Baixa rápida' })).toBeInTheDocument();
   });
 });
+
+describe('Button — variante tonal (D4 da refatoração visual)', () => {
+  it('usa só tokens: fundo accent-subtle, texto accent-subtle-text e hover accent-subtle-hover', () => {
+    render(<Button variant="tonal">Movimentar</Button>);
+
+    expect(screen.getByRole('button', { name: 'Movimentar' })).toHaveClass(
+      'bg-accent-subtle',
+      'text-accent-subtle-text',
+      'hover:bg-accent-subtle-hover',
+    );
+  });
+
+  it('mantém a semântica única de foco (anel accent em focus-visible)', () => {
+    render(<Button variant="tonal">Movimentar</Button>);
+
+    const button = screen.getByRole('button', { name: 'Movimentar' });
+    expect(button).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-accent');
+    button.focus();
+    expect(button).toHaveFocus();
+  });
+});

@@ -3,7 +3,7 @@ import React from 'react';
 // `ghost` é alias de `tertiary` (design-system.md §10.1): 7 chamadores usam o
 // nome antigo hoje, e o rename é cosmético — pode sair depois (D-E). Os dois
 // resolvem para o mesmo estilo.
-type Variant = 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'destructive' | 'shortcut';
+type Variant = 'primary' | 'secondary' | 'tonal' | 'tertiary' | 'ghost' | 'destructive' | 'shortcut';
 type CanonicalVariant = Exclude<Variant, 'ghost'>;
 type Size = 'sm' | 'md';
 
@@ -24,6 +24,10 @@ const base =
 const variants: Record<CanonicalVariant, string> = {
   primary: 'bg-accent text-white hover:bg-accent-strong',
   secondary: 'bg-surface border border-border-strong text-text-primary hover:bg-surface-subtle',
+  // Ação primária repetida em lista (D4 da refatoração visual): "Movimentar"
+  // em cada linha. Dez botões azuis cheios competiriam com a primária da
+  // página; o tonal mantém a hierarquia sem apagar a ação (8,01:1).
+  tonal: 'bg-accent-subtle text-accent-subtle-text hover:bg-accent-subtle-hover',
   tertiary: 'text-text-secondary hover:bg-surface-subtle',
   destructive: 'bg-danger text-white hover:bg-danger/90',
   // SPECIALIZED SHORTCUT: neutro, sem peso de fonte destacado.
