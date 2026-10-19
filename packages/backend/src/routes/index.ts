@@ -7,6 +7,7 @@ import auth from './auth';
 import movements from './movements';
 import products from './products';
 import quickOut from './quick-out';
+import webhooks from './webhooks';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/products', requireAuth, products);
 router.use('/products', requireAuth, movements); // nested under /products/:id/movements
 router.use('/products', requireAuth, adjustments); // nested under /products/:id/adjustments
 router.use('/quick-out', requireAuth, quickOut); // rota para baixa rápida
+router.use('/webhooks', requireAuth, webhooks); // integrações (destinos, entregas, reenvio)
 
 export default router;

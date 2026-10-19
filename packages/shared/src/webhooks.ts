@@ -49,3 +49,62 @@ export type WebhookPayload =
   | Envelope<'stock.movement.created', StockMovementCreatedData>
   | Envelope<'stock.status.changed', StockStatusChangedData>
   | Envelope<'webhook.test', WebhookTestData>;
+
+// ---------------------------------------------------------------------------
+// API de configuração (`/api/webhooks`) — DTOs consumidos pelo frontend.
+// ---------------------------------------------------------------------------
+
+/**
+ * Situação da entrega como a UI mostra. `RETRYING` não existe no banco: é
+ * PENDING com pelo menos uma tentativa feita.
+ */
+export const WEBHOOK_DELIVERY_STATUSES = ['PENDING', 'RETRYING', 'SENDING', 'DELIVERED', 'FAILED', 'CANCELLED'] as const;
+export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
+
+export type WebhookAttemptErrorCode = 'TIMEOUT' | 'NETWORK' | 'BLOCKED_DESTINATION' | 'REDIRECT' | 'HTTP_ERROR';
+
+export type WebhookEndpointDTO = {
+  id: string;
+  url: string;
+  description: string | null;
+  eventTypes: SubscribableWebhookEventType[];
+  active: boolean;
+  /** Motivo quando o SISTEMA desativou (410 Gone, falhando há 5 dias). */
+  disabledReason: string | null;
+  failingSince: string | null;
+  lastDelivery: { status: WebhookDeliveryStatus; at: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Única resposta que carrega o segredo em claro: criação e rotação. */
+export type WebhookEndpointCreatedDTO = { endpoint: WebhookEndpointDTO; secret: string };
+export type WebhookSecretRotatedDTO = { secret: string };
+
+export type WebhookDeliveryDTO = {
+  id: string;
+  endpointId: string;
+  eventId: string;
+  eventType: WebhookEventType;
+  status: WebhookDeliveryStatus;
+  attemptCount: number;
+  /** `null` quando a entrega já terminou (entregue, falhou, cancelada). */
+  nextAttemptAt: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WebhookAttemptDTO = {
+  id: string;
+  startedAt: string;
+  durationMs: number;
+  responseStatus: number | null;
+  errorCode: WebhookAttemptErrorCode | null;
+  responseSnippet: string | null;
+};
+
+export type WebhookDeliveryDetailDTO = WebhookDeliveryDTO & {
+  payload: WebhookPayload;
+  attempts: WebhookAttemptDTO[];
+};

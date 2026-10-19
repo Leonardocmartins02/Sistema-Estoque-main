@@ -11,6 +11,36 @@ function newEventId(): string {
 }
 
 /**
+ * Evento `webhook.test` (botão "Enviar teste"): uma entrega só para aquele
+ * destino, independente dos tipos inscritos — passa pela mesma fila, mesma
+ * assinatura e mesmo worker que um evento real, que é o ponto do teste.
+ * Um único `create` aninhado já é atômico; não precisa de transação aberta.
+ */
+export async function createTestEvent(
+  client: Prisma.TransactionClient,
+  endpointId: string,
+): Promise<{ deliveryId: string }> {
+  const occurredAt = new Date();
+  const payload: WebhookPayload = {
+    type: 'webhook.test',
+    timestamp: occurredAt.toISOString(),
+    data: { endpointId, message: 'Evento de teste enviado pelo SimpleStock.' },
+  };
+
+  const event = await client.webhookEvent.create({
+    data: {
+      id: newEventId(),
+      type: payload.type,
+      payload: payload as unknown as Prisma.InputJsonObject,
+      occurredAt,
+      deliveries: { create: { endpointId } },
+    },
+    select: { deliveries: { select: { id: true } } },
+  });
+  return { deliveryId: event.deliveries[0].id };
+}
+
+/**
  * Grava os eventos e as entregas DENTRO da transação do StockService
  * (outbox transacional, research.md Questão 1). Se a transação for desfeita
  * — saldo insuficiente, conflito de ajuste, qualquer erro — nada daqui
