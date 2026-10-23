@@ -1,4 +1,7 @@
+import { useState } from 'react';
+
 import { useAuth } from './auth/AuthContext';
+import { AccountDataModal } from './components/AccountDataModal';
 import { LoginPage } from './components/LoginPage';
 import ProductDashboard from './components/ProductDashboard';
 import ApiStatusBanner from './components/ui/ApiStatusBanner';
@@ -11,6 +14,7 @@ const SHELL_CONTAINER = 'mx-auto w-full max-w-screen-2xl px-4 md:px-6 xl:px-8';
 
 function App() {
   const { status, user, logout } = useAuth();
+  const [accountOpen, setAccountOpen] = useState(false);
 
   if (status === 'loading') {
     return (
@@ -44,12 +48,20 @@ function App() {
           </div>
           <div className="flex items-center gap-3">
             {user && <span className="hidden text-sm text-gray-600 sm:inline">{user.email}</span>}
+            <Button variant="secondary" size="sm" onClick={() => setAccountOpen(true)}>
+              Meus dados
+            </Button>
             <Button variant="secondary" size="sm" onClick={logout}>
               Sair
             </Button>
           </div>
         </div>
       </header>
+
+      {/* Montado só quando aberto: descarta a senha digitada ao fechar. */}
+      {accountOpen && (
+        <AccountDataModal open onOpenChange={setAccountOpen} onAccountDeleted={logout} />
+      )}
 
       <ApiStatusBanner />
 
