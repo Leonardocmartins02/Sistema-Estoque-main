@@ -13,6 +13,13 @@ import { logger } from './shared/logger';
 export function createServer() {
   const app = express();
 
+  app.disable('x-powered-by');
+
+  // Atrás do proxy do Render/Netlify o IP do cliente vem em X-Forwarded-For.
+  // Sem isto o rate limit enxerga o IP do proxy e todos os usuários dividem a
+  // mesma cota (ou, pior, o limite por IP pode ser burlado).
+  if (env.TRUST_PROXY > 0) app.set('trust proxy', env.TRUST_PROXY);
+
   app.use(helmet());
 
   const corsOptions: cors.CorsOptions = {
@@ -35,7 +42,7 @@ export function createServer() {
   };
 
   app.use(cors(corsOptions));
-  app.use(express.json());
+  app.use(express.json({ limit: '100kb' }));
   app.use(
     pinoHttp({
       logger,
@@ -77,6 +84,20 @@ export function createServer() {
       if (err instanceof HttpError) {
         res.status(err.status).json({ message: err.message });
         return;
+      }
+
+      // Erros do body-parser (JSON malformado, corpo grande demais) já trazem
+      // status 4xx; sem isto virariam 500 e poluiriam o log como falha interna.
+      if (typeof err === 'object' && err !== null && 'type' in err && 'status' in err) {
+        const { type, status } = err as { type: string; status: number };
+        if (type === 'entity.too.large') {
+          res.status(413).json({ message: 'Corpo da requisição grande demais.' });
+          return;
+        }
+        if (type === 'entity.parse.failed' && status === 400) {
+          res.status(400).json({ message: 'JSON inválido.' });
+          return;
+        }
       }
 
       // Erro não esperado: detalhe completo só no log do servidor, nunca na

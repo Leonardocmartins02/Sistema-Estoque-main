@@ -14,7 +14,7 @@ import { z } from 'zod';
  */
 
 /** Texto opcional, já trimado; ausente vira string vazia. */
-export const optionalTextParam = z.string().trim().optional().default('');
+export const optionalTextParam = z.string().trim().max(200).optional().default('');
 
 /**
  * Data opcional em ISO. Ausente ou string vazia viram `undefined`; qualquer

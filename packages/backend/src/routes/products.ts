@@ -258,9 +258,9 @@ router.get('/summary', async (_req, res, next) => {
 });
 
 const productSchema = z.object({
-  name: z.string().min(1),
-  sku: z.string().min(1),
-  description: z.string().optional().nullable(),
+  name: z.string().min(1).max(200),
+  sku: z.string().min(1).max(64),
+  description: z.string().max(2000).optional().nullable(),
   minStock: z.number().int().min(0).default(0),
   initialStock: z.number().int().min(0).optional().default(0),
 });
