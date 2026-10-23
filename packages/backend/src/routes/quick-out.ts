@@ -17,7 +17,7 @@ const router = Router();
 const quickOutSchema = z.object({
   productId: z.string().min(1, 'ID do produto é obrigatório'),
   quantity: z.number().int().positive('Quantidade deve ser maior que zero'),
-  note: z.string().optional(),
+  note: z.string().max(500).optional(),
 });
 
 router.post('/', async (req, res, next) => {

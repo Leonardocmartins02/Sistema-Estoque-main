@@ -17,7 +17,7 @@ const movementSchema = z.object({
   type: z.enum(['IN', 'OUT']),
   quantity: z.number().int().positive(),
   date: z.string().datetime().optional(),
-  note: z.string().optional().nullable(),
+  note: z.string().max(500).optional().nullable(),
 });
 
 // Query params validados na borda HTTP (antes eram `String()`/`Number()` na

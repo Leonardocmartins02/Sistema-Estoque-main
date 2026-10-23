@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import { useId } from 'react';
 
 import type { ProductSortKey, StatusKey } from '../../hooks/useProductsQuery';
 import { Button } from '../ui/Button';
@@ -45,11 +46,13 @@ export function ProductFiltersSheet({
   hasActiveFilters,
   onClearFilters,
 }: Props) {
+  const statusId = useId();
+  const sortId = useId();
   return (
     <Modal open={open} onClose={onClose} variant="sheet" size="lg" title="Filtrar e ordenar">
       <div className="flex flex-col gap-5">
-        <section aria-labelledby="sheet-status">
-          <h3 id="sheet-status" className="text-table-header uppercase tracking-wide text-gray-600">
+        <section aria-labelledby={statusId}>
+          <h3 id={statusId} className="text-table-header uppercase tracking-wide text-gray-600">
             Status
           </h3>
           <ul className="mt-2 flex flex-col gap-1">
@@ -73,8 +76,8 @@ export function ProductFiltersSheet({
           </ul>
         </section>
 
-        <section aria-labelledby="sheet-sort">
-          <h3 id="sheet-sort" className="text-table-header uppercase tracking-wide text-gray-600">
+        <section aria-labelledby={sortId}>
+          <h3 id={sortId} className="text-table-header uppercase tracking-wide text-gray-600">
             Ordenar por
           </h3>
           <ul className="mt-2 flex flex-col gap-1">

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowDownToLine, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
 import type { ProductWithBalance } from '../api/types';
 import { useConfirm } from '../hooks/useConfirm';
@@ -40,6 +40,7 @@ const STATUS_LABEL: Record<StatusKey, string> = Object.fromEntries(
  * quais diálogos estão abertos.
  */
 export function ProductDashboard() {
+  const headingId = useId();
   const products = useProductsQuery();
   const { removeProduct, zeroBalance, removeProducts, zeroBalances, invalidateProducts } = useProductMutations();
   const { confirm, confirmDialog } = useConfirm();
@@ -164,9 +165,9 @@ export function ProductDashboard() {
   };
 
   return (
-    <section aria-labelledby="products-heading" className="mt-8">
+    <section aria-labelledby={headingId} className="mt-8">
       <div>
-        <h2 id="products-heading" className="text-page-title text-text-primary">
+        <h2 id={headingId} className="text-page-title text-text-primary">
           Produtos
         </h2>
         <p className="text-sm text-gray-600">Gerencie o cadastro e o estoque</p>
